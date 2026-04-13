@@ -1,0 +1,179 @@
+'use client'
+
+import { useState, useEffect } from 'react'
+import { useParams, usePathname, useRouter } from 'next/navigation'
+import Link from 'next/link'
+import {
+  LayoutDashboard,
+  Users,
+  Ticket,
+  KeyRound,
+  CreditCard,
+  AlertTriangle,
+  Settings,
+  ChevronLeft,
+  ChevronRight,
+} from 'lucide-react'
+
+const NAV_BASE = [
+  { label: 'dashboard',    slug: 'dashboard',    icon: LayoutDashboard },
+  { label: 'members',      slug: 'members',      icon: Users },
+  { label: 'guest passes', slug: 'guest-passes', icon: Ticket },
+  { label: 'payments',     slug: 'payments',     icon: CreditCard },
+  { label: 'overdue',      slug: 'overdue',      icon: AlertTriangle, warn: true },
+]
+
+
+function gymInitials(name) {
+  return name
+    .split(/\s+/)
+    .map((w) => w[0] ?? '')
+    .join('')
+    .slice(0, 2)
+    .toUpperCase()
+}
+
+export default function GymLayout({ children }) {
+  const router   = useRouter()
+  const params   = useParams()
+  const pathname = usePathname()
+  const gymSlug  = params.gymSlug
+
+  const [collapsed, setCollapsed] = useState(false)
+  const [gymName,   setGymName]   = useState('')
+  const [hasSeam,   setHasSeam]   = useState(false)
+
+  useEffect(() => {
+    const token = localStorage.getItem('ik_token')
+    if (!token) { router.replace('/login'); return }
+
+    // Gym name from localStorage (immediate, no flash)
+    try {
+      const gym = JSON.parse(localStorage.getItem('ik_gym') || '{}')
+      const name = gym.name || gymSlug
+      setGymName(name)
+      document.title = `${name} - staff portal`
+    } catch {
+      setGymName(gymSlug)
+      document.title = `${gymSlug} - staff portal`
+    }
+
+    // Fetch gym config to conditionally show door access nav item
+    fetch(`/api/${gymSlug}/gym`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.json())
+      .then(({ gym }) => { if (gym?.hasSeam) setHasSeam(true) })
+      .catch(() => {})
+  }, [gymSlug, router])
+
+  const isActive = (slug) => pathname === `/${gymSlug}/${slug}`
+
+  return (
+    <div className="flex h-screen overflow-hidden bg-[#292929]">
+
+      {/* ── Sidebar ──────────────────────────────────────────────────────── */}
+      <aside
+        className={`
+          relative flex flex-col shrink-0 bg-[#1c1c1c] border-r border-neutral-800
+          transition-all duration-200
+          ${collapsed ? 'w-[60px]' : 'w-56'}
+        `}
+      >
+        {/* Header: badge + gym name + collapse toggle */}
+        <div className="flex items-center border-b border-neutral-800 h-14 px-3 gap-2.5">
+          {!collapsed && (
+            <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-white shrink-0">
+              <span className="text-[#1c1c1c] font-black text-[11px] tracking-tighter select-none">
+                {gymInitials(gymName) || '??'}
+              </span>
+            </div>
+          )}
+
+          {!collapsed && (
+            <div className="min-w-0 flex-1">
+              <p className="text-white font-semibold text-sm truncate leading-tight">{gymName}</p>
+              <p className="text-neutral-500 text-[11px] leading-tight">staff portal</p>
+            </div>
+          )}
+
+          {/* Collapse toggle — top-right corner of sidebar */}
+          <button
+            onClick={() => setCollapsed((c) => !c)}
+            title={collapsed ? 'expand sidebar' : 'collapse sidebar'}
+            className={`
+              shrink-0 flex items-center justify-center rounded-lg p-1.5
+              text-neutral-600 hover:text-neutral-300 hover:bg-white/5 transition-colors
+              ${collapsed ? 'mx-auto' : 'ml-auto'}
+            `}
+          >
+            {collapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
+          </button>
+        </div>
+
+        {/* Nav items */}
+        <nav className="flex-1 py-3 px-2 space-y-0.5 overflow-hidden">
+          {[
+              NAV_BASE[0],
+              ...(hasSeam ? [{ label: 'door access', slug: 'door-access', icon: KeyRound }] : []),
+              ...NAV_BASE.slice(1),
+            ].map(({ label, slug, icon: Icon, warn }) => {
+            const active = isActive(slug)
+            return (
+              <Link
+                key={slug}
+                href={`/${gymSlug}/${slug}`}
+                title={collapsed ? label : undefined}
+                className={`
+                  flex items-center gap-3 rounded-lg px-2.5 py-2 text-sm transition-colors
+                  ${collapsed ? 'justify-center' : ''}
+                  ${active
+                    ? 'bg-white/10 text-white'
+                    : warn
+                      ? 'text-amber-500/70 hover:text-amber-400 hover:bg-amber-500/5'
+                      : 'text-neutral-400 hover:text-white hover:bg-white/5'
+                  }
+                `}
+              >
+                <Icon size={16} className="shrink-0" />
+                {!collapsed && <span className="truncate">{label}</span>}
+              </Link>
+            )
+          })}
+        </nav>
+
+        {/* Settings link */}
+        <div className="px-2 pb-2">
+          <Link
+            href={`/${gymSlug}/settings`}
+            title={collapsed ? 'settings' : undefined}
+            className={`
+              flex items-center gap-3 rounded-lg px-2.5 py-2 text-sm transition-colors
+              ${collapsed ? 'justify-center' : ''}
+              ${isActive('settings')
+                ? 'bg-white/10 text-white'
+                : 'text-neutral-400 hover:text-white hover:bg-white/5'
+              }
+            `}
+          >
+            <Settings size={16} className="shrink-0" />
+            {!collapsed && <span className="truncate">settings</span>}
+          </Link>
+        </div>
+
+        {/* Footer */}
+        {!collapsed && (
+          <div className="border-t border-neutral-800 px-2 py-3">
+            <p className="text-center text-[11px] text-neutral-600">
+              powered by <span className="text-neutral-500 font-medium">ironkey</span>
+            </p>
+          </div>
+        )}
+      </aside>
+
+      {/* ── Main area ────────────────────────────────────────────────────── */}
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+        {children}
+      </div>
+
+    </div>
+  )
+}

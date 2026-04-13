@@ -1,0 +1,32 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install:*)",
+      "Bash(npm show:*)",
+      "Bash(python3 -c \"import sys,json; vs=[v for v in json.load\\(sys.stdin\\) if v.startswith\\('14.'\\)]; print\\(vs[-5:]\\)\")",
+      "Bash(python3 -c ':*)",
+      "Bash(npm audit:*)",
+      "Bash(npx prisma:*)",
+      "Bash(npx next:*)",
+      "Bash(npm run:*)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000/login)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3001/login)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3001/triumph-barbell/dashboard)",
+      "Bash(node:*)",
+      "Bash(curl:*)",
+      "Bash(pkill -f \"next dev\")",
+      "Read(//tmp/**)",
+      "Bash(ps -p 84831 -p 85395 -p 87923 -o pid,command)",
+      "Bash(kill 85395 87923)",
+      "Bash(pkill -f \"next-server\")",
+      "Bash(echo \"Starting on PID $!\")",
+      "Bash(echo \"restarted PID $!\")",
+      "Bash(mkdir -p /Users/olitranpham/ironkey/app/api/\\\\[gymSlug\\\\]/freeze)",
+      "Bash(mkdir -p /Users/olitranpham/ironkey/app/api/\\\\[gymSlug\\\\]/cancel)",
+      "Bash(mkdir -p /Users/olitranpham/ironkey/app/api/\\\\[gymSlug\\\\]/resume)",
+      "Bash(mkdir -p /Users/olitranpham/ironkey/app/\\\\[gymSlug\\\\]/members)",
+      "Bash(echo \"started PID $!\")",
+      "Bash(echo \"PID $!\")"
+    ]
+  }
+}

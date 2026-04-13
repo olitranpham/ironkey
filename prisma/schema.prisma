@@ -1,0 +1,143 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Gym ──────────────────────────────────────────────────────────────────────
+
+model Gym {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  timezone  String   @default("America/New_York")
+
+  // Stripe – one customer per gym
+  stripeCustomerId     String?
+  stripeSecretKey      String?
+  stripeWebhookSecret  String?
+  stripeAccountId      String?   // Stripe Connect – connected account ID (acct_...)
+
+  // Seam – smart-lock integration (optional)
+  seamConnectedAccountId String?
+  seamApiKey             String?
+  seamDeviceId           String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  members     Member[]
+  guestPasses GuestPass[]
+  users       GymUser[]
+}
+
+// ─── Member ───────────────────────────────────────────────────────────────────
+
+model Member {
+  id        String       @id @default(cuid())
+  gymId     String
+  gym       Gym          @relation(fields: [gymId], references: [id], onDelete: Cascade)
+
+  firstName String
+  lastName  String
+  email     String
+  phone     String?
+
+  status         MemberStatus   @default(ACTIVE)
+  membershipType MembershipType @default(GENERAL)
+
+  // Stripe
+  stripeCustomerId     String?
+  stripeSubscriptionId String?
+
+  // Seam / smart-lock access code
+  accessCode       String?
+  seamDeviceId     String?
+
+  // Freeze window (Ironkey-native)
+  freezeStartDate  DateTime?
+  freezeEndDate    DateTime?
+
+  // Legacy date fields preserved from old Triumph DB
+  dateAccessed DateTime?
+  dateFrozen   DateTime?
+  dateCanceled DateTime?
+  maxFreeze    DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  guestPasses GuestPass[]
+
+  @@unique([gymId, email])
+}
+
+enum MemberStatus {
+  ACTIVE
+  FROZEN
+  CANCELLED
+  OVERDUE
+}
+
+enum MembershipType {
+  FOUNDING
+  GENERAL
+  STUDENT
+}
+
+// ─── GuestPass ────────────────────────────────────────────────────────────────
+
+model GuestPass {
+  id        String  @id @default(cuid())
+  gymId     String
+  gym       Gym     @relation(fields: [gymId], references: [id], onDelete: Cascade)
+
+  memberId  String?
+  member    Member? @relation(fields: [memberId], references: [id], onDelete: SetNull)
+
+  guestName  String
+  guestEmail String?
+  guestPhone String?
+
+  passType   PassType  @default(SINGLE)
+  passesLeft Int?
+
+  usedAt    DateTime?
+  expiresAt DateTime
+
+  createdAt DateTime @default(now())
+}
+
+enum PassType {
+  SINGLE
+  THREE_PACK
+  FIVE_PACK
+  TEN_PACK
+}
+
+// ─── GymUser (staff / admin accounts) ────────────────────────────────────────
+
+model GymUser {
+  id       String      @id @default(cuid())
+  gymId    String
+  gym      Gym         @relation(fields: [gymId], references: [id], onDelete: Cascade)
+
+  email    String
+  password String      // bcrypt hash
+
+  role     GymUserRole @default(STAFF)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([gymId, email])
+}
+
+enum GymUserRole {
+  OWNER
+  ADMIN
+  STAFF
+}
