@@ -10,11 +10,17 @@ export async function POST(request, { params }) {
   try {
     let gymId = request.headers.get('x-gym-id')
 
+    console.log('[members POST] x-gym-id:', gymId)
+    console.log('[members POST] x-webhook:', request.headers.get('x-webhook'))
+    console.log('[members POST] x-webhook-gym-slug:', request.headers.get('x-webhook-gym-slug'))
+
     // Webhook path: no JWT, resolve gymId from slug
     if (!gymId && request.headers.get('x-webhook') === 'true') {
       const slug = (await params).gymSlug
+      console.log('[members POST] resolving gymId from slug:', slug)
       const gym  = await prisma.gym.findUnique({ where: { slug }, select: { id: true } })
       gymId = gym?.id ?? null
+      console.log('[members POST] resolved gymId:', gymId)
     }
 
     const { firstName, lastName, email, phone } = await request.json()

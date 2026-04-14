@@ -14,20 +14,26 @@ export async function middleware(request) {
   }
 
   // ── All other /api/* routes require a valid JWT ───────────────────────────
-  const token = extractBearerToken(request.headers.get('authorization'))
+  const rawAuthHeader = request.headers.get('authorization')
+  const token         = extractBearerToken(rawAuthHeader)
+  const webhookSecret = process.env.WEBHOOK_SECRET
+
+  console.log('[middleware] path:', pathname)
+  console.log('[middleware] raw Authorization header:', JSON.stringify(rawAuthHeader))
+  console.log('[middleware] extracted token (first 12):', token ? token.slice(0, 12) + '...' : 'null')
+  console.log('[middleware] WEBHOOK_SECRET set:', Boolean(webhookSecret), '| length:', webhookSecret?.length ?? 0, '| first 6:', webhookSecret?.slice(0, 6) ?? 'n/a')
+  console.log('[middleware] token matches secret:', token !== null && token === webhookSecret)
 
   if (!token) {
+    console.log('[middleware] 401 — no token extracted')
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
   // ── Webhook API key bypass (Zapier / external integrations) ──────────────
-  // If the token matches WEBHOOK_SECRET, extract gymSlug from the URL and
-  // inject x-gym-id by looking up the gym — skip JWT verification entirely.
-  const webhookSecret = process.env.WEBHOOK_SECRET
   if (webhookSecret && token === webhookSecret) {
-    // Extract gymSlug from path: /api/[gymSlug]/...
     const slugMatch = pathname.match(/^\/api\/([^/]+)/)
     const gymSlug   = slugMatch?.[1]
+    console.log('[middleware] webhook bypass matched, gymSlug:', gymSlug)
     if (gymSlug) {
       const requestHeaders = new Headers(request.headers)
       requestHeaders.set('x-webhook-gym-slug', gymSlug)
