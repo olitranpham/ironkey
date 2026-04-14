@@ -25,6 +25,11 @@ const CONFIRM_COPY = {
     bullets: ['stripe will attempt to charge the card on file', 'the member will be notified if payment succeeds'],
     cta: 'yes, retry', ctaCls: 'bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20',
   },
+  resolve: {
+    title:   'mark as active?',
+    bullets: ['this will remove the member from the overdue list', 'use this if the payment was resolved outside stripe'],
+    cta: 'yes, mark active', ctaCls: 'bg-sky-500/10 text-sky-400 hover:bg-sky-500/20',
+  },
   cancel: {
     title:   'cancel membership?',
     bullets: ['a 30-day notice policy applies', 'member retains access through notice period', 'this action cannot be easily undone'],
@@ -34,8 +39,8 @@ const CONFIRM_COPY = {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function avatarBg(id = '') {
-  const n = [...id].reduce((s, c) => s + c.charCodeAt(0), 0)
+function avatarBg(id) {
+  const n = [...(id ?? '')].reduce((s, c) => s + c.charCodeAt(0), 0)
   return AVATAR_COLORS[n % AVATAR_COLORS.length]
 }
 
@@ -43,6 +48,11 @@ function fmtAmount(cents, membershipType) {
   if (cents != null) return `$${(cents / 100).toFixed(2)}`
   const flat = PLAN_AMOUNT[membershipType]
   return flat ? `$${flat}.00` : '—'
+}
+
+function fmtDate(unix) {
+  if (!unix) return null
+  return new Date(unix * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
 // ── Page ──────────────────────────────────────────────────────────────────────
@@ -53,6 +63,7 @@ export default function OverduePage() {
   const [rows,         setRows]         = useState([])
   const [loading,      setLoading]      = useState(true)
   const [fetchErr,     setFetchErr]     = useState(null)
+  const [stripeErr,    setStripeErr]    = useState(null)
   const [confirmModal, setConfirmModal] = useState(null) // { action, row }
   const [actionLoading,setActionLoading]= useState(false)
   const [actionError,  setActionError]  = useState(null)
@@ -65,8 +76,9 @@ export default function OverduePage() {
         headers: { Authorization: `Bearer ${token}` },
       })
       if (!res.ok) throw new Error(`${res.status}`)
-      const { overdue } = await res.json()
-      setRows(overdue)
+      const data = await res.json()
+      setRows(data.overdue)
+      setStripeErr(data.stripeError ?? null)
       setFetchErr(null)
     } catch {
       setFetchErr('could not load overdue members')
@@ -78,8 +90,8 @@ export default function OverduePage() {
   useEffect(() => { fetchOverdue() }, [fetchOverdue])
 
   // Metrics
-  const pastDue   = rows.filter(r => r.invoiceStatus === 'open' || r.invoiceStatus === null).length
-  const unpaid    = rows.filter(r => r.amountDue != null).length
+  const pastDue   = rows.filter(r => r.invoiceStatus === 'past_due' || r.invoiceStatus === 'open').length
+  const unpaid    = rows.filter(r => r.invoiceStatus === 'unpaid').length
   const totalOwed = rows.reduce((s, r) => {
     return s + (r.amountDue != null ? r.amountDue / 100 : PLAN_AMOUNT[r.membershipType] ?? 0)
   }, 0)
@@ -104,6 +116,14 @@ export default function OverduePage() {
           throw new Error(body.error ?? 'Retry failed')
         }
         // Remove from list on success
+        setRows(prev => prev.filter(r => r.id !== row.id))
+      } else if (action === 'resolve') {
+        const res = await fetch(`/api/${gymSlug}/stripe/resolve`, {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body:    JSON.stringify({ memberId: row.id, invoiceId: row.invoiceId }),
+        })
+        if (!res.ok) throw new Error('Failed to resolve')
         setRows(prev => prev.filter(r => r.id !== row.id))
       } else if (action === 'cancel') {
         const res = await fetch(`/api/${gymSlug}/cancel`, {
@@ -142,18 +162,26 @@ export default function OverduePage() {
       <main className="flex-1 flex flex-col p-5 gap-4 overflow-hidden min-h-0">
 
         {/* Metric cards */}
-        <div className="shrink-0 grid grid-cols-3 gap-3">
+        <div className="shrink-0 grid grid-cols-1 sm:grid-cols-3 gap-3">
           {[
-            { label: 'past due',       value: loading ? '—' : pastDue },
-            { label: 'unpaid invoices',value: loading ? '—' : unpaid },
-            { label: 'total owed',     value: loading ? '—' : `$${totalOwed.toFixed(2)}` },
-          ].map(({ label, value }) => (
+            { label: 'past due',   value: loading ? '—' : pastDue,  sub: 'stripe is still retrying' },
+            { label: 'unpaid',     value: loading ? '—' : unpaid,   sub: 'retries exhausted — needs outreach' },
+            { label: 'total owed', value: loading ? '—' : `$${totalOwed.toFixed(2)}`, sub: null },
+          ].map(({ label, value, sub }) => (
             <div key={label} className="bg-[#1c1c1c] rounded-xl border border-red-900/30 px-4 py-3">
               <p className="text-[11px] text-neutral-500 mb-1">{label}</p>
               <p className="text-xl font-semibold text-red-400 tabular-nums">{value}</p>
+              {sub && <p className="text-[10px] text-neutral-600 mt-1">{sub}</p>}
             </div>
           ))}
         </div>
+
+        {/* Stripe error banner */}
+        {stripeErr && (
+          <div className="shrink-0 bg-amber-500/10 border border-amber-900/50 rounded-lg px-4 py-3 text-xs text-amber-400">
+            stripe error: {stripeErr}
+          </div>
+        )}
 
         {/* Table card */}
         <div className="flex-1 flex flex-col bg-[#1c1c1c] rounded-xl border border-neutral-800 overflow-hidden min-h-0">
@@ -181,8 +209,9 @@ export default function OverduePage() {
                   <tr className="border-b border-neutral-800 text-left">
                     <th className="px-5 py-3 text-[11px] font-semibold text-neutral-500 tracking-wider">member</th>
                     <th className="px-5 py-3 text-[11px] font-semibold text-neutral-500 tracking-wider">plan</th>
-                    <th className="px-5 py-3 text-[11px] font-semibold text-neutral-500 tracking-wider">amount owed</th>
+                    <th className="px-5 py-3 text-[11px] font-semibold text-neutral-500 tracking-wider">amount</th>
                     <th className="px-5 py-3 text-[11px] font-semibold text-neutral-500 tracking-wider">status</th>
+                    <th className="px-5 py-3 text-[11px] font-semibold text-neutral-500 tracking-wider">decline reason</th>
                     <th className="px-5 py-3 text-[11px] font-semibold text-neutral-500 tracking-wider">actions</th>
                   </tr>
                 </thead>
@@ -212,16 +241,30 @@ export default function OverduePage() {
                         </span>
                       </td>
 
-                      {/* Amount owed */}
+                      {/* Amount */}
                       <td className="px-5 py-3 text-red-400 text-xs font-medium tabular-nums">
                         {fmtAmount(r.amountDue, r.membershipType)}
                       </td>
 
                       {/* Status */}
                       <td className="px-5 py-3">
-                        <span className="inline-block text-[11px] font-medium px-2 py-0.5 rounded-full bg-red-500/15 text-red-400">
-                          {r.invoiceStatus === 'open' ? 'past due' : 'overdue'}
-                        </span>
+                        <div className="flex flex-col gap-0.5">
+                          <span className="inline-block text-[11px] font-medium px-2 py-0.5 rounded-full bg-red-500/15 text-red-400 w-fit">
+                            {r.invoiceStatus === 'unpaid' ? 'unpaid' : r.invoiceStatus === 'open' ? 'open invoice' : 'past due'}
+                          </span>
+                          {r.failedAt && (
+                            <span className="text-[10px] text-neutral-600 pl-1">{fmtDate(r.failedAt)}</span>
+                          )}
+                        </div>
+                      </td>
+
+                      {/* Decline reason */}
+                      <td className="px-5 py-3 max-w-[200px]">
+                        {r.declineReason ? (
+                          <span className="text-xs text-amber-400/80">{r.declineReason}</span>
+                        ) : (
+                          <span className="text-xs text-neutral-700">—</span>
+                        )}
                       </td>
 
                       {/* Actions */}
@@ -232,6 +275,12 @@ export default function OverduePage() {
                             className="text-[11px] font-medium px-2.5 py-1 rounded-md bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition-colors"
                           >
                             retry charge
+                          </button>
+                          <button
+                            onClick={() => { setActionError(null); setConfirmModal({ action: 'resolve', row: r }) }}
+                            className="text-[11px] font-medium px-2.5 py-1 rounded-md bg-sky-500/10 text-sky-400 hover:bg-sky-500/20 transition-colors"
+                          >
+                            mark resolved
                           </button>
                           <button
                             onClick={() => { setActionError(null); setConfirmModal({ action: 'cancel', row: r }) }}

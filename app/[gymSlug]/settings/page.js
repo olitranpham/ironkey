@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, Suspense } from 'react'
 import { useParams, useSearchParams } from 'next/navigation'
 import { Eye, EyeOff, CheckCircle2, Circle } from 'lucide-react'
 
@@ -40,7 +40,7 @@ function Section({ title, children }) {
   )
 }
 
-export default function SettingsPage() {
+function SettingsPage() {
   const { gymSlug }   = useParams()
   const searchParams  = useSearchParams()
 
@@ -173,7 +173,17 @@ export default function SettingsPage() {
                   </button>
                 ) : (
                   <a
-                    href={`/api/${gymSlug}/stripe/connect`}
+                    href={(() => {
+                      const clientId  = process.env.NEXT_PUBLIC_STRIPE_CLIENT_ID
+                      const appUrl    = process.env.NEXT_PUBLIC_APP_URL
+                      const url       = new URL('https://connect.stripe.com/oauth/authorize')
+                      url.searchParams.set('response_type', 'code')
+                      url.searchParams.set('client_id', clientId)
+                      url.searchParams.set('scope', 'read_write')
+                      url.searchParams.set('state', gymSlug)
+                      url.searchParams.set('redirect_uri', `${appUrl}/api/stripe/callback`)
+                      return url.toString()
+                    })()}
                     className="flex items-center justify-center w-full py-2 rounded-lg text-xs font-medium bg-[#635BFF] text-white hover:bg-[#4F46E5] transition-colors"
                   >
                     connect stripe
@@ -207,5 +217,13 @@ export default function SettingsPage() {
       </div>
 
     </div>
+  )
+}
+
+export default function SettingsPageWrapper() {
+  return (
+    <Suspense>
+      <SettingsPage />
+    </Suspense>
   )
 }

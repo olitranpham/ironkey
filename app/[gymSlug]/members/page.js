@@ -6,7 +6,7 @@ import { Search, RefreshCw, X, KeyRound, Phone, CreditCard, AlertTriangle } from
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const TABS = ['all', 'active', 'frozen', 'cancelled']
+const TABS = ['all', 'active', 'frozen', 'canceled', 'overdue']
 
 const STATUS_PILL = {
   ACTIVE:    'bg-emerald-500/15 text-emerald-400',
@@ -56,9 +56,22 @@ const CONFIRM_COPY = {
     cta:     'yes, resume',
     ctaCls:  'bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20',
   },
+  overdue: {
+    title:   'mark as overdue?',
+    bullets: [
+      'the member will appear on the overdue payments page',
+      'their access is not affected until you cancel',
+    ],
+    cta:     'yes, mark overdue',
+    ctaCls:  'bg-amber-500/10 text-amber-400 hover:bg-amber-500/20',
+  },
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+
+function fmtStatus(status) {
+  return status === 'CANCELLED' ? 'canceled' : status.toLowerCase()
+}
 
 function avatarBg(id = '') {
   const n = [...id].reduce((s, c) => s + c.charCodeAt(0), 0)
@@ -69,7 +82,7 @@ function fmtDate(iso) {
   if (!iso) return '—'
   const d = new Date(iso)
   if (isNaN(d.getTime())) return '—'
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })
 }
 
 // ── Page ──────────────────────────────────────────────────────────────────────
@@ -161,18 +174,20 @@ export default function MembersPage() {
 
   // ── Derived ──────────────────────────────────────────────────────────────
 
-  const STATUS_ORDER = { ACTIVE: 0, OVERDUE: 1, FROZEN: 2, CANCELLED: 3 }
+  const STATUS_ORDER = { ACTIVE: 0, FROZEN: 1, CANCELLED: 2, OVERDUE: 3 }
 
   const counts = {
     all:       members.length,
     active:    members.filter(m => m.status === 'ACTIVE').length,
+    overdue:   members.filter(m => m.status === 'OVERDUE').length,
     frozen:    members.filter(m => m.status === 'FROZEN').length,
-    cancelled: members.filter(m => m.status === 'CANCELLED').length,
+    canceled:  members.filter(m => m.status === 'CANCELLED').length,
   }
 
   const visible = members
     .filter(m => {
-      const matchTab = activeTab === 'all' || m.status.toLowerCase() === activeTab
+      const tabStatus = activeTab === 'canceled' ? 'cancelled' : activeTab
+      const matchTab = activeTab === 'all' || m.status.toLowerCase() === tabStatus.toLowerCase()
       const q = search.trim().toLowerCase()
       const matchSearch = !q ||
         `${m.firstName} ${m.lastName} ${m.email} ${m.phone ?? ''}`.toLowerCase().includes(q)
@@ -181,7 +196,7 @@ export default function MembersPage() {
     .sort((a, b) => {
       if (activeTab === 'all')       return (STATUS_ORDER[a.status] ?? 99) - (STATUS_ORDER[b.status] ?? 99)
       if (activeTab === 'frozen')    return new Date(b.dateFrozen   ?? 0) - new Date(a.dateFrozen   ?? 0)
-      if (activeTab === 'cancelled') return new Date(b.dateCanceled ?? 0) - new Date(a.dateCanceled ?? 0)
+      if (activeTab === 'canceled') return new Date(b.dateCanceled ?? 0) - new Date(a.dateCanceled ?? 0)
       return 0
     })
 
@@ -212,7 +227,7 @@ export default function MembersPage() {
       <main className="flex-1 flex flex-col p-5 gap-4 overflow-hidden min-h-0">
 
         {/* Search bar */}
-        <div className="shrink-0 relative w-80">
+        <div className="shrink-0 relative w-full sm:w-80">
           <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500 pointer-events-none" />
           <input
             type="text"
@@ -307,7 +322,7 @@ export default function MembersPage() {
                       {/* Status */}
                       <td className="px-5 py-3">
                         <span className={`inline-block text-[11px] font-medium px-2 py-0.5 rounded-full ${STATUS_PILL[m.status]}`}>
-                          {m.status.toLowerCase()}
+                          {fmtStatus(m.status)}
                         </span>
                       </td>
 
@@ -364,7 +379,7 @@ export default function MembersPage() {
       />
 
       {/* ── Member profile panel ──────────────────────────────────────────── */}
-      <div className={`fixed inset-y-0 right-0 w-[380px] bg-[#171717] border-l border-neutral-800 z-50 flex flex-col shadow-2xl transition-transform duration-200 ${panelOpen ? 'translate-x-0' : 'translate-x-full'}`}>
+      <div className={`fixed inset-y-0 right-0 w-full sm:w-[380px] bg-[#171717] border-l border-neutral-800 z-50 flex flex-col shadow-2xl transition-transform duration-200 ${panelOpen ? 'translate-x-0' : 'translate-x-full'}`}>
         {selectedMember && (
           <MemberPanel
             member={selectedMember}
@@ -515,7 +530,7 @@ function MemberPanel({ member, onClose, onAction, actionLoading }) {
           </div>
           <div className="flex items-center gap-2">
             <span className={`text-[11px] font-medium px-2.5 py-0.5 rounded-full ${STATUS_PILL[member.status]}`}>
-              {member.status.toLowerCase()}
+              {fmtStatus(member.status)}
             </span>
             <span className={`text-[11px] font-medium px-2.5 py-0.5 rounded-full ${TYPE_BADGE[member.membershipType] ?? TYPE_BADGE.GENERAL}`}>
               {(member.membershipType ?? 'GENERAL').toLowerCase()}
@@ -535,7 +550,7 @@ function MemberPanel({ member, onClose, onAction, actionLoading }) {
           <PanelField label="access id" value={member.accessCode} mono />
           <PanelField label="joined"    value={fmtDate(member.createdAt)} />
           {member.status === 'FROZEN'    && <PanelField label="frozen"    value={fmtDate(member.dateFrozen)} />}
-          {member.status === 'CANCELLED' && <PanelField label="cancelled" value={fmtDate(member.dateCanceled)} />}
+          {member.status === 'CANCELLED' && <PanelField label="canceled" value={fmtDate(member.dateCanceled)} />}
         </PanelSection>
 
         {/* Stripe */}

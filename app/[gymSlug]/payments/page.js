@@ -28,13 +28,13 @@ const AVATAR_COLORS = [
 
 const TYPE_FILTERS = ['all', 'founding', 'general', 'student']
 
-const STATUS_TABS = ['all', 'active', 'paused', 'cancelled']
+const STATUS_TABS = ['all', 'active', 'paused', 'canceled']
 // "paused" maps to FROZEN; "active" includes ACTIVE + OVERDUE
 const TAB_STATUSES = {
-  all:       null,
-  active:    ['ACTIVE', 'OVERDUE'],
-  paused:    ['FROZEN'],
-  cancelled: ['CANCELLED'],
+  all:      null,
+  active:   ['ACTIVE', 'OVERDUE'],
+  paused:   ['FROZEN'],
+  canceled: ['CANCELLED'],
 }
 
 const CONFIRM_COPY = {
@@ -103,7 +103,7 @@ export default function PaymentsPage() {
     all:       members.length,
     active:    members.filter(m => ['ACTIVE', 'OVERDUE'].includes(m.status)).length,
     paused:    members.filter(m => m.status === 'FROZEN').length,
-    cancelled: members.filter(m => m.status === 'CANCELLED').length,
+    canceled: members.filter(m => m.status === 'CANCELLED').length,
   }
 
   // ── Filtered list ─────────────────────────────────────────────────────────
@@ -163,8 +163,8 @@ export default function PaymentsPage() {
       <main className="flex-1 flex flex-col p-5 gap-4 overflow-hidden min-h-0">
 
         {/* Search + type filter */}
-        <div className="shrink-0 flex items-center gap-3">
-          <div className="relative w-80">
+        <div className="shrink-0 flex flex-wrap items-center gap-3">
+          <div className="relative w-full sm:w-80">
             <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500 pointer-events-none" />
             <input
               type="text"
@@ -276,7 +276,7 @@ export default function PaymentsPage() {
                       {/* Status */}
                       <td className="px-5 py-3">
                         <span className={`inline-block text-[11px] font-medium px-2 py-0.5 rounded-full ${STATUS_PILL[m.status]}`}>
-                          {m.status.toLowerCase()}
+                          {m.status === 'CANCELLED' ? 'canceled' : m.status.toLowerCase()}
                         </span>
                       </td>
 

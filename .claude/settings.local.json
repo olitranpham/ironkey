@@ -26,7 +26,10 @@
       "Bash(mkdir -p /Users/olitranpham/ironkey/app/api/\\\\[gymSlug\\\\]/resume)",
       "Bash(mkdir -p /Users/olitranpham/ironkey/app/\\\\[gymSlug\\\\]/members)",
       "Bash(echo \"started PID $!\")",
-      "Bash(echo \"PID $!\")"
+      "Bash(echo \"PID $!\")",
+      "Bash(kill %1)",
+      "Bash(wait)",
+      "Bash(grep -n \"overdue\\\\|OVERDUE\\\\|status\" /Users/olitranpham/ironkey/app/[gymSlug]/dashboard/page.js)"
     ]
   }
 }

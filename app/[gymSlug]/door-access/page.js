@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useParams } from 'next/navigation'
-import { RefreshCw, KeyRound, AlertTriangle, X } from 'lucide-react'
+import { RefreshCw, KeyRound, AlertTriangle, X, Search } from 'lucide-react'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -43,6 +43,7 @@ export default function DoorAccessPage() {
   const [loading,       setLoading]       = useState(true)
   const [fetchErr,      setFetchErr]      = useState(null)
   const [activeTab,     setActiveTab]     = useState('all')
+  const [search,        setSearch]        = useState('')
   const [changeModal,   setChangeModal]   = useState(null)
   const [removeModal,   setRemoveModal]   = useState(null)
   const [actionLoading, setActionLoading] = useState(false)
@@ -74,11 +75,17 @@ export default function DoorAccessPage() {
   const memberCodes   = codes.filter(c => c.type === 'member').length
   const guestCodes    = codes.filter(c => c.type === 'guest').length
 
-  // Tab filter
+  // Tab + search filter
   const visible = codes.filter(c => {
-    if (activeTab === 'active') return c.status === 'set'
-    if (activeTab === 'timed')  return c.codeType === 'time_bound'
+    if (activeTab === 'active' && (c.status !== 'set' || c.codeType === 'time_bound')) return false
+    if (activeTab === 'timed'  && c.codeType !== 'time_bound') return false
+    const q = search.trim().toLowerCase()
+    if (q) return `${c.name} ${c.code}`.toLowerCase().includes(q)
     return true
+  }).sort((a, b) => {
+    // guests first, then members; alphabetical within each group
+    if (a.type !== b.type) return a.type === 'guest' ? -1 : 1
+    return a.name.localeCompare(b.name)
   })
 
   const counts = {
@@ -96,7 +103,7 @@ export default function DoorAccessPage() {
       const res   = await fetch(`/api/${gymSlug}/seam/codes`, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body:    JSON.stringify({ memberId: changeModal.memberId, code: newCode || undefined }),
+        body:    JSON.stringify({ memberId: changeModal.memberId, codeId: changeModal.id, code: newCode || undefined }),
       })
       if (!res.ok) throw new Error('Request failed')
       setChangeModal(null)
@@ -148,11 +155,11 @@ export default function DoorAccessPage() {
       <main className="flex-1 flex flex-col p-5 gap-4 overflow-hidden min-h-0">
 
         {/* Metric cards */}
-        <div className="shrink-0 grid grid-cols-3 gap-3">
+        <div className="shrink-0 grid grid-cols-1 sm:grid-cols-3 gap-3">
           {[
-            { label: 'active codes',   value: activeCodes },
-            { label: 'active members', value: memberCodes },
-            { label: 'guest passes',   value: guestCodes  },
+            { label: 'total codes',  value: activeCodes },
+            { label: 'member codes', value: memberCodes },
+            { label: 'guest codes',  value: guestCodes  },
           ].map(({ label, value }) => (
             <div key={label} className="bg-[#1c1c1c] rounded-xl border border-neutral-800 px-4 py-3">
               <p className="text-[11px] text-neutral-500 mb-1">{label}</p>
@@ -161,6 +168,18 @@ export default function DoorAccessPage() {
               </p>
             </div>
           ))}
+        </div>
+
+        {/* Search bar */}
+        <div className="shrink-0 relative w-full sm:w-80">
+          <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500 pointer-events-none" />
+          <input
+            type="text"
+            placeholder="search name or code…"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            className="w-full bg-[#1c1c1c] border border-neutral-700 rounded-lg pl-9 pr-3 py-2 text-xs text-white placeholder-neutral-600 focus:outline-none focus:border-neutral-500 focus:ring-1 focus:ring-neutral-500 transition-colors"
+          />
         </div>
 
         {/* Table card */}
@@ -288,16 +307,25 @@ export default function DoorAccessPage() {
               </button>
             </div>
             <p className="text-xs text-neutral-500 mb-3">
-              enter a new 6-digit code, or leave blank to generate one automatically
+              enter a new 4-6 digit code, or randomly generate one automatically
             </p>
-            <input
-              type="text"
-              placeholder="e.g. 847291"
-              maxLength={6}
-              value={newCode}
-              onChange={e => setNewCode(e.target.value.replace(/\D/g, ''))}
-              className="w-full bg-[#292929] border border-neutral-700 rounded-lg px-3 py-2 text-sm text-white placeholder-neutral-600 focus:outline-none focus:border-neutral-500 mb-4 font-mono tracking-widest"
-            />
+            <div className="flex gap-2 mb-4">
+              <input
+                type="text"
+                placeholder="e.g. 8472"
+                maxLength={6}
+                value={newCode}
+                onChange={e => setNewCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                className="flex-1 bg-[#292929] border border-neutral-700 rounded-lg px-3 py-2 text-sm text-white placeholder-neutral-600 focus:outline-none focus:border-neutral-500 font-mono tracking-widest"
+              />
+              <button
+                type="button"
+                onClick={() => setNewCode(String(Math.floor(1000 + Math.random() * 9000)))}
+                className="px-3 py-2 rounded-lg text-xs font-medium bg-neutral-800 text-neutral-400 hover:text-white hover:bg-neutral-700 border border-neutral-700 transition-colors whitespace-nowrap"
+              >
+                generate
+              </button>
+            </div>
             {actionError && <p className="text-xs text-red-400 mb-3">{actionError}</p>}
             <div className="flex gap-2">
               <button

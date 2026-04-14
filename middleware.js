@@ -5,11 +5,15 @@ export async function middleware(request) {
   const { pathname } = request.nextUrl
 
   // ── Public routes ────────────────────────────────────────────────────────
-  if (pathname.startsWith('/api/auth') || pathname === '/api/stripe/callback') {
+  if (
+    pathname.startsWith('/api/auth') ||
+    pathname === '/api/stripe/callback' ||
+    pathname === '/api/admin/login'
+  ) {
     return NextResponse.next()
   }
 
-  // ── Protected /api/[gymSlug]/* routes ────────────────────────────────────
+  // ── All other /api/* routes require a valid JWT ───────────────────────────
   const token = extractBearerToken(request.headers.get('authorization'))
 
   if (!token) {
@@ -22,8 +26,15 @@ export async function middleware(request) {
     return NextResponse.json({ error: 'Invalid or expired token' }, { status: 401 })
   }
 
-  // Forward identity as request headers so route handlers can read them
-  // without re-decoding the token.
+  // ── Admin API routes require SUPERADMIN role ──────────────────────────────
+  if (pathname.startsWith('/api/admin/')) {
+    if (payload.role !== 'SUPERADMIN') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+    return NextResponse.next()
+  }
+
+  // ── Gym routes — forward identity headers ─────────────────────────────────
   const requestHeaders = new Headers(request.headers)
   requestHeaders.set('x-gym-user-id', payload.id)
   requestHeaders.set('x-gym-id',      payload.gymId)

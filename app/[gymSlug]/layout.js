@@ -11,8 +11,11 @@ import {
   CreditCard,
   AlertTriangle,
   Settings,
+  LogOut,
   ChevronLeft,
   ChevronRight,
+  Menu,
+  X,
 } from 'lucide-react'
 
 const NAV_BASE = [
@@ -39,9 +42,10 @@ export default function GymLayout({ children }) {
   const pathname = usePathname()
   const gymSlug  = params.gymSlug
 
-  const [collapsed, setCollapsed] = useState(false)
-  const [gymName,   setGymName]   = useState('')
-  const [hasSeam,   setHasSeam]   = useState(false)
+  const [collapsed,   setCollapsed]   = useState(false)
+  const [mobileOpen,  setMobileOpen]  = useState(false)
+  const [gymName,     setGymName]     = useState('')
+  const [hasSeam,     setHasSeam]     = useState(false)
 
   useEffect(() => {
     const token = localStorage.getItem('ik_token')
@@ -50,12 +54,12 @@ export default function GymLayout({ children }) {
     // Gym name from localStorage (immediate, no flash)
     try {
       const gym = JSON.parse(localStorage.getItem('ik_gym') || '{}')
-      const name = gym.name || gymSlug
+      const name = (gym.name || gymSlug).toLowerCase()
       setGymName(name)
       document.title = `${name} - staff portal`
     } catch {
-      setGymName(gymSlug)
-      document.title = `${gymSlug} - staff portal`
+      setGymName(gymSlug.toLowerCase())
+      document.title = `${gymSlug.toLowerCase()} - staff portal`
     }
 
     // Fetch gym config to conditionally show door access nav item
@@ -70,12 +74,23 @@ export default function GymLayout({ children }) {
   return (
     <div className="flex h-screen overflow-hidden bg-[#292929]">
 
+      {/* ── Mobile backdrop ───────────────────────────────────────────────── */}
+      {mobileOpen && (
+        <div
+          className="fixed inset-0 bg-black/60 z-40 md:hidden"
+          onClick={() => setMobileOpen(false)}
+        />
+      )}
+
       {/* ── Sidebar ──────────────────────────────────────────────────────── */}
       <aside
         className={`
-          relative flex flex-col shrink-0 bg-[#1c1c1c] border-r border-neutral-800
+          fixed inset-y-0 left-0 z-50 flex flex-col bg-[#1c1c1c] border-r border-neutral-800
           transition-all duration-200
-          ${collapsed ? 'w-[60px]' : 'w-56'}
+          md:relative md:z-auto md:translate-x-0
+          ${mobileOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
+          ${collapsed ? 'md:w-[60px]' : 'md:w-56'}
+          w-56
         `}
       >
         {/* Header: badge + gym name + collapse toggle */}
@@ -95,12 +110,20 @@ export default function GymLayout({ children }) {
             </div>
           )}
 
-          {/* Collapse toggle — top-right corner of sidebar */}
+          {/* Mobile close button */}
+          <button
+            onClick={() => setMobileOpen(false)}
+            className="md:hidden shrink-0 flex items-center justify-center rounded-lg p-1.5 text-neutral-600 hover:text-neutral-300 hover:bg-white/5 transition-colors ml-auto"
+          >
+            <X size={14} />
+          </button>
+
+          {/* Desktop collapse toggle */}
           <button
             onClick={() => setCollapsed((c) => !c)}
             title={collapsed ? 'expand sidebar' : 'collapse sidebar'}
             className={`
-              shrink-0 flex items-center justify-center rounded-lg p-1.5
+              hidden md:flex shrink-0 items-center justify-center rounded-lg p-1.5
               text-neutral-600 hover:text-neutral-300 hover:bg-white/5 transition-colors
               ${collapsed ? 'mx-auto' : 'ml-auto'}
             `}
@@ -140,8 +163,8 @@ export default function GymLayout({ children }) {
           })}
         </nav>
 
-        {/* Settings link */}
-        <div className="px-2 pb-2">
+        {/* Settings + Logout */}
+        <div className="px-2 pb-2 space-y-0.5">
           <Link
             href={`/${gymSlug}/settings`}
             title={collapsed ? 'settings' : undefined}
@@ -157,6 +180,23 @@ export default function GymLayout({ children }) {
             <Settings size={16} className="shrink-0" />
             {!collapsed && <span className="truncate">settings</span>}
           </Link>
+
+          <button
+            onClick={() => {
+              localStorage.removeItem('ik_token')
+              localStorage.removeItem('ik_gym')
+              router.replace('/login')
+            }}
+            title={collapsed ? 'log out' : undefined}
+            className={`
+              w-full flex items-center gap-3 rounded-lg px-2.5 py-2 text-sm transition-colors
+              ${collapsed ? 'justify-center' : ''}
+              text-neutral-400 hover:text-white hover:bg-white/5
+            `}
+          >
+            <LogOut size={16} className="shrink-0" />
+            {!collapsed && <span className="truncate">log out</span>}
+          </button>
         </div>
 
         {/* Footer */}
@@ -171,6 +211,16 @@ export default function GymLayout({ children }) {
 
       {/* ── Main area ────────────────────────────────────────────────────── */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+        {/* Mobile top bar */}
+        <div className="md:hidden sticky top-0 z-30 bg-[#1c1c1c] border-b border-neutral-800 h-14 flex items-center px-4 gap-3 shrink-0">
+          <button
+            onClick={() => setMobileOpen(true)}
+            className="p-1.5 rounded-lg text-neutral-400 hover:text-white hover:bg-white/5 transition-colors"
+          >
+            <Menu size={18} />
+          </button>
+          <span className="text-white text-sm font-semibold">{gymName}</span>
+        </div>
         {children}
       </div>
 

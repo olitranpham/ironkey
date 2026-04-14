@@ -50,6 +50,19 @@ function mapMember(gymId, row) {
   }
   const status = STATUS_MAP[(row.status ?? '').toLowerCase()] ?? 'ACTIVE'
 
+  // Normalise membership type — try common column names
+  const MEMBERSHIP_TYPE_MAP = {
+    founding:         'FOUNDING',
+    'founding member': 'FOUNDING',
+    founder:          'FOUNDING',
+    general:          'GENERAL',
+    regular:          'GENERAL',
+    standard:         'GENERAL',
+    student:          'STUDENT',
+  }
+  const rawType      = (row.membership_type ?? row.plan ?? row.type ?? row.tier ?? '').toLowerCase().trim()
+  const membershipType = MEMBERSHIP_TYPE_MAP[rawType] ?? 'GENERAL'
+
   return {
     gymId,
     firstName,
@@ -57,6 +70,7 @@ function mapMember(gymId, row) {
     email:                (row.email ?? '').toLowerCase().trim(),
     phone:                row.phone       ?? null,
     status,
+    membershipType,
     stripeCustomerId:     row.customer_id ?? null,
     stripeSubscriptionId: row.sub_id      ?? null,
     accessCode:           row.access_id   ?? null,
@@ -132,6 +146,9 @@ async function main() {
   const gymId = gymRes.rows[0].id
   console.log(`✓ Found gym  id=${gymId}\n`)
 
+  // NOTE: not wiping — active members were already imported from Stripe CSV
+  console.log('  skipping wipe — preserving existing active members from Stripe CSV\n')
+
   // ── Migrate members ─────────────────────────────────────────────────────
 
   let membersCreated = 0
@@ -140,18 +157,26 @@ async function main() {
   const { rows: oldMembers } = await oldDb.query('SELECT * FROM members ORDER BY id')
   console.log(`  old members found: ${oldMembers.length}`)
 
-  // ── Print 3 sample rows so we can verify raw date values ─────────────────
-  console.log('\n  sample raw rows (first 3):')
-  for (const row of oldMembers.slice(0, 3)) {
-    console.log({
-      name:          row.name,
-      date_accessed: row.date_accessed,
-      date_frozen:   row.date_frozen,
-      date_canceled: row.date_canceled,
-      max_freeze:    row.max_freeze,
-      // Show what toDate() resolves each to
-      _dateAccessed_parsed: String(toDate(row.date_accessed)),
-      _dateFrozen_parsed:   String(toDate(row.date_frozen)),
+  // ── Print column names + unique field values so we can verify mapping ────
+  if (oldMembers.length > 0) {
+    console.log('\n  columns in old members table:', Object.keys(oldMembers[0]))
+
+    const uniqueStatuses = [...new Set(oldMembers.map(r => r.status))]
+    const uniqueTypes    = [...new Set(oldMembers.map(r => r.membership_type ?? r.plan ?? r.type ?? r.tier ?? null))]
+    console.log('  unique status values:         ', uniqueStatuses)
+    console.log('  unique membership_type values:', uniqueTypes)
+
+    const sample = oldMembers[0]
+    console.log('  sample row:', {
+      name:            sample.name,
+      status:          sample.status,
+      membership_type: sample.membership_type,
+      plan:            sample.plan,
+      type:            sample.type,
+      tier:            sample.tier,
+      date_accessed:   sample.date_accessed,
+      date_frozen:     sample.date_frozen,
+      date_canceled:   sample.date_canceled,
     })
   }
   console.log()
@@ -161,13 +186,8 @@ async function main() {
 
     if (!m.email) { membersSkipped++; continue }
 
-    // Check for existing member by gymId + email
-    const exists = await newDb.query(
-      `SELECT id FROM "Member" WHERE "gymId" = $1 AND email = $2 LIMIT 1`,
-      [gymId, m.email],
-    )
-
-    if (exists.rows.length > 0) { membersSkipped++; continue }
+    // Skip active members — already imported from Stripe CSV
+    if (m.status === 'ACTIVE') { membersSkipped++; continue }
 
     // Use dateAccessed as the canonical join date (createdAt).
     // Fall back to NOW() only if the old row had no date_accessed.
@@ -176,19 +196,28 @@ async function main() {
     await newDb.query(
       `INSERT INTO "Member"
          ("id", "gymId", "firstName", "lastName", "email", "phone",
-          "status", "stripeCustomerId", "stripeSubscriptionId",
+          "status", "membershipType", "stripeCustomerId", "stripeSubscriptionId",
           "accessCode",
           "dateAccessed", "dateFrozen", "dateCanceled", "maxFreeze",
           "createdAt", "updatedAt")
        VALUES
          (gen_random_uuid()::text, $1, $2, $3, $4, $5,
-          $6, $7, $8,
-          $9,
-          $10, $11, $12, $13,
-          $14, $14)`,
+          $6, $7, $8, $9,
+          $10,
+          $11, $12, $13, $14,
+          $15, $15)
+       ON CONFLICT ("gymId", email) DO UPDATE SET
+         "status"       = EXCLUDED."status",
+         "membershipType" = EXCLUDED."membershipType",
+         "phone"        = COALESCE(EXCLUDED."phone",        "Member"."phone"),
+         "accessCode"   = COALESCE(EXCLUDED."accessCode",   "Member"."accessCode"),
+         "dateFrozen"   = COALESCE(EXCLUDED."dateFrozen",   "Member"."dateFrozen"),
+         "dateCanceled" = COALESCE(EXCLUDED."dateCanceled", "Member"."dateCanceled"),
+         "maxFreeze"    = COALESCE(EXCLUDED."maxFreeze",    "Member"."maxFreeze"),
+         "updatedAt"    = EXCLUDED."updatedAt"`,
       [
         m.gymId, m.firstName, m.lastName, m.email, m.phone,
-        m.status, m.stripeCustomerId, m.stripeSubscriptionId,
+        m.status, m.membershipType, m.stripeCustomerId, m.stripeSubscriptionId,
         m.accessCode,
         m.dateAccessed, m.dateFrozen, m.dateCanceled, m.maxFreeze,
         joinedAt,

@@ -26,7 +26,7 @@ import {
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const TABS = ['all', 'active', 'frozen', 'cancelled']
+const TABS = ['all', 'active', 'frozen', 'canceled', 'overdue']
 
 const STATUS_PILL = {
   ACTIVE:    'bg-emerald-500/15 text-emerald-400',
@@ -45,6 +45,10 @@ const AVATAR_COLORS = [
   'bg-violet-500', 'bg-blue-500', 'bg-emerald-500', 'bg-amber-500',
   'bg-rose-500',   'bg-cyan-500', 'bg-orange-500',  'bg-indigo-500',
 ]
+
+function fmtStatus(status) {
+  return status === 'CANCELLED' ? 'canceled' : status.toLowerCase()
+}
 
 function avatarBg(id = '') {
   const n = [...id].reduce((s, c) => s + c.charCodeAt(0), 0)
@@ -74,7 +78,7 @@ function fmtDate(iso) {
   if (!iso) return '—'
   const d = new Date(iso)
   if (isNaN(d.getTime())) return '—'
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })
 }
 
 // Returns the most relevant date for a member row based on status
@@ -87,7 +91,7 @@ function statusDate(m) {
 // Returns the column label for the date based on the active tab
 function dateLabelFor(tab) {
   if (tab === 'frozen')    return 'frozen'
-  if (tab === 'cancelled') return 'cancelled'
+  if (tab === 'canceled') return 'canceled'
   return 'joined'
 }
 
@@ -110,7 +114,7 @@ function buildChartData(members) {
       month:     d.toLocaleDateString('en-US', { month: 'short' }),
       active:    cohort.filter(m => m.status === 'ACTIVE').length,
       frozen:    cohort.filter(m => m.status === 'FROZEN').length,
-      cancelled: cohort.filter(m => m.status === 'CANCELLED').length,
+      canceled: cohort.filter(m => m.status === 'CANCELLED').length,
     }
   })
 }
@@ -229,7 +233,7 @@ export default function DashboardPage() {
     all:       members.length,
     active:    members.filter(m => m.status === 'ACTIVE').length,
     frozen:    members.filter(m => m.status === 'FROZEN').length,
-    cancelled: members.filter(m => m.status === 'CANCELLED').length,
+    canceled: members.filter(m => m.status === 'CANCELLED').length,
     overdue:   members.filter(m => m.status === 'OVERDUE').length,
   }
 
@@ -237,7 +241,8 @@ export default function DashboardPage() {
 
   const visible = members
     .filter(m => {
-      const matchTab = activeTab === 'all' || m.status.toLowerCase() === activeTab
+      const tabStatus = activeTab === 'canceled' ? 'cancelled' : activeTab
+      const matchTab = activeTab === 'all' || m.status.toLowerCase() === tabStatus
       const q = search.trim().toLowerCase()
       const matchSearch = !q ||
         `${m.firstName} ${m.lastName} ${m.email} ${m.phone ?? ''}`.toLowerCase().includes(q)
@@ -246,7 +251,7 @@ export default function DashboardPage() {
     .sort((a, b) => {
       if (activeTab === 'all')       return (STATUS_ORDER[a.status] ?? 99) - (STATUS_ORDER[b.status] ?? 99)
       if (activeTab === 'frozen')    return new Date(b.dateFrozen   ?? 0) - new Date(a.dateFrozen   ?? 0)
-      if (activeTab === 'cancelled') return new Date(b.dateCanceled ?? 0) - new Date(a.dateCanceled ?? 0)
+      if (activeTab === 'canceled') return new Date(b.dateCanceled ?? 0) - new Date(a.dateCanceled ?? 0)
       return 0
     })
 
@@ -285,7 +290,7 @@ export default function DashboardPage() {
       </header>
 
       {/* ── Body ─────────────────────────────────────────────────────────── */}
-      <main className="flex-1 flex flex-col p-5 gap-4 overflow-hidden min-h-0">
+      <main className="flex-1 flex flex-col p-4 md:p-5 pb-4 md:pb-5 gap-4 overflow-y-auto lg:overflow-hidden min-h-0">
 
         {loading ? (
           <LoadingState />
@@ -293,15 +298,16 @@ export default function DashboardPage() {
           <ErrorState message={fetchErr} onRetry={() => load({ manual: true })} />
         ) : (
           <>
-            {/* Metric cards */}
-            <div className="grid grid-cols-3 gap-4 shrink-0">
-              <MetricCard label="active members" value={counts.active}    color="text-emerald-400" />
-              <MetricCard label="frozen"         value={counts.frozen}    color="text-sky-400" />
-              <MetricCard label="cancelled"      value={counts.cancelled} color="text-neutral-400" />
+            {/* Metric cards — always 4 across, shrink proportionally */}
+            <div className="grid grid-cols-4 gap-4 shrink-0">
+              <MetricCard label="active members" value={counts.active}   color="text-emerald-400" border="border-emerald-900/30" />
+              <MetricCard label="frozen"         value={counts.frozen}   color="text-sky-400"     border="border-sky-900/30" />
+              <MetricCard label="canceled"       value={counts.canceled} color="text-neutral-400" border="border-neutral-700/50" />
+              <MetricCard label="overdue"        value={counts.overdue}  color="text-red-400"     border="border-red-900/30" />
             </div>
 
-            {/* Mid row — fixed height, side by side */}
-            <div className="flex gap-4 shrink-0 h-[340px]">
+            {/* Mid row — stacks vertically on mobile, side by side on lg+ */}
+            <div className="flex flex-col lg:flex-row gap-4 shrink-0 lg:h-[340px]">
               <MemberDirectory
                 members={visible}
                 counts={counts}
@@ -310,18 +316,18 @@ export default function DashboardPage() {
                 activeTab={activeTab}
                 setActiveTab={setActiveTab}
                 onRowClick={openPanel}
-                className="flex-1 h-full"
+                className="flex-1 h-[340px] lg:h-full"
               />
               <DoorActivity
                 events={doorEvents}
                 loading={doorEventsLoading}
                 error={doorEventsError}
-                className="w-72 h-full"
+                className="lg:w-72 h-[340px] lg:h-full"
               />
             </div>
 
             {/* Retention chart — fills remaining space */}
-            <RetentionChart data={buildChartData(members)} className="flex-1 min-h-0" />
+            <RetentionChart data={buildChartData(members)} className="flex-1 min-h-[200px]" />
           </>
         )}
 
@@ -334,7 +340,7 @@ export default function DashboardPage() {
       />
 
       {/* ── Member profile panel ─────────────────────────────────────────── */}
-      <div className={`fixed inset-y-0 right-0 w-[380px] bg-[#171717] border-l border-neutral-800 z-50 flex flex-col shadow-2xl transition-transform duration-200 ${panelOpen ? 'translate-x-0' : 'translate-x-full'}`}>
+      <div className={`fixed inset-y-0 right-0 w-full sm:w-[380px] bg-[#171717] border-l border-neutral-800 z-50 flex flex-col shadow-2xl transition-transform duration-200 ${panelOpen ? 'translate-x-0' : 'translate-x-full'}`}>
         {selectedMember && (
           <MemberPanel
             member={selectedMember}
@@ -376,14 +382,14 @@ function ErrorState({ message, onRetry }) {
 
 // ── Metric card ───────────────────────────────────────────────────────────────
 
-function MetricCard({ label, value, color, delta }) {
+function MetricCard({ label, value, color, delta, border = 'border-neutral-800' }) {
   return (
-    <div className="bg-[#1c1c1c] rounded-xl border border-neutral-800 px-5 py-4">
-      <p className="text-[11px] font-semibold tracking-widest text-neutral-500 mb-2">{label}</p>
+    <div className={`w-full min-w-0 overflow-hidden bg-[#1c1c1c] rounded-xl border ${border} px-3 py-3`}>
+      <p className="text-[9px] sm:text-[11px] font-semibold tracking-widest text-neutral-500 mb-1 sm:mb-2 truncate">{label}</p>
       <div className="flex items-end justify-between">
-        <p className={`text-4xl font-bold tracking-tight ${color}`}>{value}</p>
+        <p className={`text-xl sm:text-3xl font-bold tracking-tight ${color}`}>{value}</p>
         {delta && (
-          <span className="flex items-center gap-0.5 text-[11px] text-emerald-500 mb-1">
+          <span className="hidden sm:flex items-center gap-0.5 text-[11px] text-emerald-500 mb-1">
             <ArrowUpRight size={12} />
             {delta}
           </span>
@@ -469,7 +475,7 @@ function MemberDirectory({ members, counts, search, setSearch, activeTab, setAct
                   </td>
                   <td className="px-5 py-3">
                     <span className={`inline-block text-[11px] font-medium px-2 py-0.5 rounded-full ${STATUS_PILL[m.status]}`}>
-                      {m.status.toLowerCase()}
+                      {fmtStatus(m.status)}
                     </span>
                   </td>
                   <td className="px-5 py-3 text-neutral-600 text-xs whitespace-nowrap">
@@ -551,7 +557,7 @@ const CUSTOM_TOOLTIP = ({ active, payload, label }) => {
 
 function RetentionChart({ data, className = '' }) {
   return (
-    <div className={`bg-[#1c1c1c] rounded-xl border border-neutral-800 px-5 pt-4 pb-4 flex flex-col ${className}`}>
+    <div className={`min-w-0 overflow-hidden bg-[#1c1c1c] rounded-xl border border-neutral-800 px-5 pt-4 pb-4 flex flex-col ${className}`}>
       <div className="flex items-center justify-between mb-3 shrink-0">
         <div className="flex items-center gap-2">
           <TrendingUp size={13} className="text-neutral-400" />
@@ -560,13 +566,13 @@ function RetentionChart({ data, className = '' }) {
         <div className="flex items-center gap-4 text-[11px] text-neutral-500">
           <span className="flex items-center gap-1.5"><span className="w-2.5 h-0.5 rounded bg-emerald-500 inline-block" />active</span>
           <span className="flex items-center gap-1.5"><span className="w-2.5 h-0.5 rounded bg-sky-500 inline-block" />frozen</span>
-          <span className="flex items-center gap-1.5"><span className="w-2.5 h-0.5 rounded bg-neutral-600 inline-block" />cancelled</span>
+          <span className="flex items-center gap-1.5"><span className="w-2.5 h-0.5 rounded bg-neutral-600 inline-block" />canceled</span>
           <span className="text-neutral-700">last 6 months</span>
         </div>
       </div>
 
-      <div className="flex-1 min-h-0">
-      <ResponsiveContainer width="100%" height="100%">
+      <div className="flex-1 min-h-0 min-w-0 w-full overflow-hidden">
+      <ResponsiveContainer width="100%" height="100%" minWidth={0}>
         <AreaChart data={data} margin={{ top: 4, right: 4, left: -24, bottom: 0 }}>
           <defs>
             <linearGradient id="gActive" x1="0" y1="0" x2="0" y2="1">
@@ -599,7 +605,7 @@ function RetentionChart({ data, className = '' }) {
 
           <Area type="monotone" dataKey="active"    name="Active"    stroke="#10b981" strokeWidth={2} fill="url(#gActive)"    dot={false} />
           <Area type="monotone" dataKey="frozen"    name="Frozen"    stroke="#0ea5e9" strokeWidth={2} fill="url(#gFrozen)"    dot={false} />
-          <Area type="monotone" dataKey="cancelled" name="Cancelled" stroke="#525252" strokeWidth={1.5} fill="url(#gCancelled)" dot={false} />
+          <Area type="monotone" dataKey="canceled" name="Canceled" stroke="#525252" strokeWidth={1.5} fill="url(#gCancelled)" dot={false} />
         </AreaChart>
       </ResponsiveContainer>
       </div>
@@ -670,7 +676,7 @@ function MemberPanel({ member, onClose, onStatusChange, updating }) {
           </div>
           <div className="flex items-center gap-2">
             <span className={`text-[11px] font-medium px-2.5 py-0.5 rounded-full ${STATUS_PILL[member.status]}`}>
-              {member.status.toLowerCase()}
+              {fmtStatus(member.status)}
             </span>
             <span className={`text-[11px] font-medium px-2.5 py-0.5 rounded-full ${TYPE_BADGE[member.membershipType] ?? TYPE_BADGE.GENERAL}`}>
               {(member.membershipType ?? 'GENERAL').toLowerCase()}
@@ -690,7 +696,7 @@ function MemberPanel({ member, onClose, onStatusChange, updating }) {
           <PanelField label="access id" value={member.accessCode} mono />
           <PanelField label="joined"    value={fmtDate(member.createdAt)} />
           {member.status === 'FROZEN'    && <PanelField label="frozen"    value={fmtDate(member.dateFrozen)} />}
-          {member.status === 'CANCELLED' && <PanelField label="cancelled" value={fmtDate(member.dateCanceled)} />}
+          {member.status === 'CANCELLED' && <PanelField label="canceled" value={fmtDate(member.dateCanceled)} />}
         </PanelSection>
 
         {/* Stripe */}
