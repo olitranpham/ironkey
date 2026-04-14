@@ -28,22 +28,39 @@ export async function POST(request, { params }) {
       lastName  = (body.lastName  ?? '').trim() || ''
     }
 
-    const phone = body.phone ?? null
+    const phone          = body.phone      ?? null
+    const customerId     = body.customerId ?? null
+    const subId          = body.subId      ?? null
+
+    const MEMBERSHIP_TYPE_MAP = { founding: 'FOUNDING', general: 'GENERAL', student: 'STUDENT' }
+    const rawType        = (body.membershipType ?? '').toLowerCase().trim()
+    const membershipType = MEMBERSHIP_TYPE_MAP[rawType] ?? 'GENERAL'
 
     const gym = await prisma.gym.findUnique({ where: { slug: gymSlug }, select: { id: true } })
     if (!gym) {
       return NextResponse.json({ error: 'Gym not found' }, { status: 404 })
     }
 
-    const member = await prisma.member.create({
-      data: { gymId: gym.id, firstName, lastName, email, phone },
+    const member = await prisma.member.upsert({
+      where:  { gymId_email: { gymId: gym.id, email } },
+      create: {
+        gymId: gym.id, firstName, lastName, email,
+        phone, membershipType,
+        stripeCustomerId:     customerId,
+        stripeSubscriptionId: subId,
+      },
+      update: {
+        firstName,
+        lastName,
+        membershipType,
+        ...(phone      ? { phone }                                  : {}),
+        ...(customerId ? { stripeCustomerId:     customerId }       : {}),
+        ...(subId      ? { stripeSubscriptionId: subId }            : {}),
+      },
     })
 
-    return NextResponse.json({ member }, { status: 201 })
+    return NextResponse.json({ member }, { status: 200 })
   } catch (error) {
-    if (error.code === 'P2002') {
-      return NextResponse.json({ error: 'A member with that email already exists' }, { status: 409 })
-    }
     console.error('[members POST]', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
