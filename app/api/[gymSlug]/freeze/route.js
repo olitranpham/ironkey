@@ -27,8 +27,10 @@ export async function POST(request) {
     if (subId && stripeKey) {
       try {
         const stripeClient = new Stripe(stripeKey, { apiVersion: '2024-06-20' })
+        const sixMonthsFromNow = Math.floor(Date.now() / 1000) + (6 * 30 * 24 * 60 * 60)
         const result = await stripeClient.subscriptions.update(subId, {
           pause_collection: { behavior: 'void' },
+          cancel_at:        sixMonthsFromNow,
         })
         console.log('[freeze] Stripe result — status:', result.status, '| pause_collection:', JSON.stringify(result.pause_collection))
       } catch (stripeErr) {
