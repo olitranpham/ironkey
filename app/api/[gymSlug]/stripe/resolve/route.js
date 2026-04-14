@@ -19,21 +19,17 @@ export async function POST(request) {
     if (!memberId) return NextResponse.json({ error: 'memberId is required' }, { status: 400 })
 
     const [gym, member] = await Promise.all([
-      prisma.gym.findUnique({ where: { id: gymId }, select: { stripeAccountId: true } }),
+      prisma.gym.findUnique({ where: { id: gymId }, select: { stripeSecretKey: true } }),
       prisma.member.findFirst({ where: { id: memberId, gymId } }),
     ])
 
     if (!member) return NextResponse.json({ error: 'Member not found' }, { status: 404 })
 
     // Mark invoice as paid out-of-band in Stripe (clears past_due on the subscription)
-    if (invoiceId && gym?.stripeAccountId && process.env.STRIPE_SECRET_KEY) {
+    if (invoiceId && gym?.stripeSecretKey) {
       try {
-        const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2024-06-20' })
-        await stripe.invoices.pay(
-          invoiceId,
-          { paid_out_of_band: true },
-          { stripeAccount: gym.stripeAccountId },
-        )
+        const stripeClient = new Stripe(gym.stripeSecretKey, { apiVersion: '2024-06-20' })
+        await stripeClient.invoices.pay(invoiceId, { paid_out_of_band: true })
       } catch (stripeErr) {
         // Non-fatal — invoice may already be paid or voided; still update DB
         console.warn('[stripe/resolve] Could not mark invoice paid out-of-band:', stripeErr.message)

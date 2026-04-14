@@ -9,23 +9,19 @@ export async function GET(request) {
 
     const gym = await prisma.gym.findUnique({
       where:  { id: gymId },
-      select: { stripeAccountId: true, stripeSecretKey: true },
+      select: { stripeSecretKey: true },
     })
 
-    const stripeAccountId = gym?.stripeAccountId
-    const platformKey     = gym?.stripeSecretKey ?? process.env.STRIPE_SECRET_KEY
-    console.log('[stripe/overdue] gymId:', gymId, '| stripeAccountId:', stripeAccountId, '| key source:', gym?.stripeSecretKey ? 'db' : 'env', '| key prefix:', platformKey?.slice(0, 12))
-    const stripeOk        = Boolean(stripeAccountId && platformKey)
+    const stripeOk = Boolean(gym?.stripeSecretKey)
 
     if (stripeOk) {
       try {
-        const stripe = new Stripe(platformKey, { apiVersion: '2024-06-20' })
-        const opts   = { stripeAccount: stripeAccountId }
+        const stripeClient = new Stripe(gym.stripeSecretKey, { apiVersion: '2024-06-20' })
         const expand = ['data.customer', 'data.latest_invoice', 'data.latest_invoice.payment_intent']
 
         const [r1, r2] = await Promise.all([
-          stripe.subscriptions.list({ status: 'past_due', limit: 50, expand }, opts),
-          stripe.subscriptions.list({ status: 'unpaid',   limit: 50, expand }, opts),
+          stripeClient.subscriptions.list({ status: 'past_due', limit: 50, expand }),
+          stripeClient.subscriptions.list({ status: 'unpaid',   limit: 50, expand }),
         ])
 
         const overdue = [...r1.data, ...r2.data]
