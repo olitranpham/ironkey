@@ -9,11 +9,12 @@ export async function GET(request) {
 
     const gym = await prisma.gym.findUnique({
       where:  { id: gymId },
-      select: { stripeAccountId: true },
+      select: { stripeAccountId: true, stripeSecretKey: true },
     })
 
     const stripeAccountId = gym?.stripeAccountId
-    const platformKey     = process.env.STRIPE_SECRET_KEY
+    const platformKey     = gym?.stripeSecretKey ?? process.env.STRIPE_SECRET_KEY
+    console.log('[stripe/overdue] gymId:', gymId, '| stripeAccountId:', stripeAccountId, '| key source:', gym?.stripeSecretKey ? 'db' : 'env', '| key prefix:', platformKey?.slice(0, 12))
     const stripeOk        = Boolean(stripeAccountId && platformKey)
 
     if (stripeOk) {
