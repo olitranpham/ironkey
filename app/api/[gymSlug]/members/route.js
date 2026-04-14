@@ -17,13 +17,18 @@ export async function POST(request, { params }) {
       return NextResponse.json({ error: 'email is required' }, { status: 400 })
     }
 
-    const firstName = (body.firstName ?? '').trim()
-    const lastName  = (body.lastName  ?? '').trim()
-    const phone     = (body.phone     ?? null)
-
-    if (!firstName || !lastName) {
-      return NextResponse.json({ error: 'firstName and lastName are required' }, { status: 400 })
+    // Accept either name (single field) or firstName + lastName separately
+    let firstName, lastName
+    if (body.name) {
+      const parts = body.name.trim().split(/\s+/)
+      firstName = parts[0] ?? 'Unknown'
+      lastName  = parts.slice(1).join(' ') || ''
+    } else {
+      firstName = (body.firstName ?? '').trim() || 'Unknown'
+      lastName  = (body.lastName  ?? '').trim() || ''
     }
+
+    const phone = body.phone ?? null
 
     const gym = await prisma.gym.findUnique({ where: { slug: gymSlug }, select: { id: true } })
     if (!gym) {
