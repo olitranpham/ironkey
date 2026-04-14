@@ -8,7 +8,15 @@ import prisma from '@/lib/prisma'
  */
 export async function POST(request, { params }) {
   try {
-    const gymId = request.headers.get('x-gym-id')
+    let gymId = request.headers.get('x-gym-id')
+
+    // Webhook path: no JWT, resolve gymId from slug
+    if (!gymId && request.headers.get('x-webhook') === 'true') {
+      const slug = (await params).gymSlug
+      const gym  = await prisma.gym.findUnique({ where: { slug }, select: { id: true } })
+      gymId = gym?.id ?? null
+    }
+
     const { firstName, lastName, email, phone } = await request.json()
 
     if (!firstName || !lastName || !email) {
