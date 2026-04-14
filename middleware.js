@@ -13,33 +13,40 @@ export async function middleware(request) {
     return NextResponse.next()
   }
 
-  // ── All other /api/* routes require a valid JWT ───────────────────────────
   const rawAuthHeader = request.headers.get('authorization')
-  const token         = extractBearerToken(rawAuthHeader)
   const webhookSecret = process.env.WEBHOOK_SECRET
 
-  console.log('[middleware] path:', pathname)
-  console.log('[middleware] raw Authorization header:', JSON.stringify(rawAuthHeader))
-  console.log('[middleware] extracted token (first 12):', token ? token.slice(0, 12) + '...' : 'null')
-  console.log('[middleware] WEBHOOK_SECRET set:', Boolean(webhookSecret), '| length:', webhookSecret?.length ?? 0, '| first 6:', webhookSecret?.slice(0, 6) ?? 'n/a')
-  console.log('[middleware] token matches secret:', token !== null && token === webhookSecret)
+  // Log everything for all incoming requests — helps debug Railway/Zapier issues
+  console.log('[middleware] >>>',  request.method, pathname)
+  console.log('[middleware] Authorization header (raw):', JSON.stringify(rawAuthHeader))
+  console.log('[middleware] All headers:', JSON.stringify(Object.fromEntries(request.headers.entries())))
+  console.log('[middleware] WEBHOOK_SECRET present:', Boolean(webhookSecret), '| length:', webhookSecret?.length ?? 0, '| first8:', webhookSecret?.slice(0, 8) ?? 'n/a')
 
-  if (!token) {
-    console.log('[middleware] 401 — no token extracted')
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  // ── Webhook bypass — checked FIRST, independently of JWT extraction ───────
+  // Read the raw header directly so no helper function can interfere.
+  if (webhookSecret) {
+    const rawToken = rawAuthHeader?.replace(/^[Bb]earer\s+/, '').trim()
+    console.log('[middleware] rawToken (first 12):', rawToken ? rawToken.slice(0, 12) + '...' : 'null')
+    console.log('[middleware] rawToken === webhookSecret:', rawToken === webhookSecret)
+    if (rawToken === webhookSecret) {
+      const slugMatch = pathname.match(/^\/api\/([^/]+)/)
+      const gymSlug   = slugMatch?.[1]
+      console.log('[middleware] webhook bypass — gymSlug:', gymSlug)
+      if (gymSlug) {
+        const requestHeaders = new Headers(request.headers)
+        requestHeaders.set('x-webhook-gym-slug', gymSlug)
+        requestHeaders.set('x-webhook', 'true')
+        return NextResponse.next({ request: { headers: requestHeaders } })
+      }
+    }
   }
 
-  // ── Webhook API key bypass (Zapier / external integrations) ──────────────
-  if (webhookSecret && token === webhookSecret) {
-    const slugMatch = pathname.match(/^\/api\/([^/]+)/)
-    const gymSlug   = slugMatch?.[1]
-    console.log('[middleware] webhook bypass matched, gymSlug:', gymSlug)
-    if (gymSlug) {
-      const requestHeaders = new Headers(request.headers)
-      requestHeaders.set('x-webhook-gym-slug', gymSlug)
-      requestHeaders.set('x-webhook', 'true')
-      return NextResponse.next({ request: { headers: requestHeaders } })
-    }
+  // ── All other /api/* routes require a valid JWT ───────────────────────────
+  const token = extractBearerToken(rawAuthHeader)
+
+  if (!token) {
+    console.log('[middleware] 401 — no token extracted from:', JSON.stringify(rawAuthHeader))
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
   const payload = await verifyTokenEdge(token)
