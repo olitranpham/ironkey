@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useLayoutEffect } from 'react'
 import { useParams, usePathname, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import {
@@ -46,6 +46,22 @@ export default function GymLayout({ children }) {
   const [mobileOpen,  setMobileOpen]  = useState(false)
   const [gymName,     setGymName]     = useState('')
   const [hasSeam,     setHasSeam]     = useState(false)
+
+  // Set title synchronously before first paint — slug as immediate fallback,
+  // then overwrite with real gym name from localStorage if available
+  useLayoutEffect(() => {
+    const slugTitle = gymSlug
+      .split('-')
+      .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+      .join(' ')
+    try {
+      const gym  = JSON.parse(localStorage.getItem('ik_gym') || '{}')
+      const name = gym.name || slugTitle
+      document.title = `${name.toLowerCase()} - staff portal`
+    } catch {
+      document.title = `${slugTitle.toLowerCase()} - staff portal`
+    }
+  }, [gymSlug])
 
   useEffect(() => {
     const token = localStorage.getItem('ik_token')

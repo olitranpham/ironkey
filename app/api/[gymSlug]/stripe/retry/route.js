@@ -19,19 +19,17 @@ export async function POST(request) {
 
     const gym = await prisma.gym.findUnique({
       where:  { id: gymId },
-      select: { stripeAccountId: true },
+      select: { stripeSecretKey: true },
     })
 
-    if (!gym?.stripeAccountId) {
-      return NextResponse.json({ error: 'Stripe not connected for this gym' }, { status: 422 })
+    if (!gym?.stripeSecretKey) {
+      return NextResponse.json({ error: 'Stripe not configured for this gym' }, { status: 422 })
     }
 
-    const stripe          = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2024-06-20' })
-    const stripeAccount   = gym.stripeAccountId
-    const connectOpts     = { stripeAccount }
+    const stripeClient = new Stripe(gym.stripeSecretKey, { apiVersion: '2024-06-20' })
 
     // Verify the invoice belongs to a member in this gym before retrying
-    const invoice = await stripe.invoices.retrieve(invoiceId, {}, connectOpts)
+    const invoice = await stripeClient.invoices.retrieve(invoiceId)
     const member  = await prisma.member.findFirst({
       where: { gymId, stripeCustomerId: invoice.customer },
     })
@@ -40,7 +38,7 @@ export async function POST(request) {
       return NextResponse.json({ error: 'Invoice does not belong to a member in this gym' }, { status: 403 })
     }
 
-    const paid = await stripe.invoices.pay(invoiceId, {}, connectOpts)
+    const paid = await stripeClient.invoices.pay(invoiceId)
 
     // If payment succeeded, mark member active
     if (paid.status === 'paid') {
