@@ -2,63 +2,58 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams } from 'next/navigation'
-import { RefreshCw, X, Phone, KeyRound, CreditCard, Search, TrendingUp } from 'lucide-react'
 import {
-  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  RefreshCw,
+  Activity,
+  Search,
+  TrendingUp,
+  ArrowUpRight,
+  X,
+  Mail,
+  Phone,
+  KeyRound,
+  CreditCard,
+} from 'lucide-react'
+import {
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
 } from 'recharts'
-
-// ── Design tokens ─────────────────────────────────────────────────────────────
-
-const T = {
-  bg:      '#0f0f0f',
-  card:    '#1a1a1a',
-  border:  'rgba(255,255,255,0.08)',
-  text:    '#ffffff',
-  muted:   '#555555',
-  dim:     '#333333',
-  active:  '#22c97a',
-  overdue: '#ff5b5b',
-  frozen:  '#4a9eff',
-  cancel:  '#666666',
-  radius:  14,
-  radiusPill: 20,
-}
-
-const FONT_UI   = "'DM Sans', system-ui, sans-serif"
-const FONT_MONO = "'DM Mono', 'Courier New', monospace"
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const TABS = ['all', 'active', 'frozen', 'canceled', 'overdue']
 
-const STATUS_COLOR = {
-  ACTIVE:    T.active,
-  OVERDUE:   T.overdue,
-  FROZEN:    T.frozen,
-  CANCELLED: T.cancel,
+const STATUS_PILL = {
+  ACTIVE:    'bg-emerald-500/15 text-emerald-400',
+  FROZEN:    'bg-sky-500/15 text-sky-400',
+  CANCELLED: 'bg-neutral-500/15 text-neutral-400',
+  OVERDUE:   'bg-red-500/15 text-red-400',
 }
 
-const STATUS_BG = {
-  ACTIVE:    'rgba(34,201,122,0.12)',
-  OVERDUE:   'rgba(255,91,91,0.12)',
-  FROZEN:    'rgba(74,158,255,0.12)',
-  CANCELLED: 'rgba(102,102,102,0.12)',
+const TYPE_BADGE = {
+  FOUNDING: 'bg-blue-500/15 text-blue-400',
+  GENERAL:  'bg-neutral-500/15 text-neutral-400',
+  STUDENT:  'bg-amber-500/15 text-amber-400',
 }
 
-const TYPE_COLOR  = { FOUNDING: '#4a9eff', GENERAL: '#888', STUDENT: '#f59e0b' }
-const TYPE_BG     = { FOUNDING: 'rgba(74,158,255,0.12)', GENERAL: 'rgba(136,136,136,0.1)', STUDENT: 'rgba(245,158,11,0.12)' }
-
-const AVATAR_PALETTE = [
-  '#7c3aed','#2563eb','#059669','#d97706',
-  '#dc2626','#0891b2','#ea580c','#4f46e5',
+const AVATAR_COLORS = [
+  'bg-violet-500', 'bg-blue-500', 'bg-emerald-500', 'bg-amber-500',
+  'bg-rose-500',   'bg-cyan-500', 'bg-orange-500',  'bg-indigo-500',
 ]
 
-function avatarColor(id = '') {
-  const n = [...(id ?? '')].reduce((s, c) => s + c.charCodeAt(0), 0)
-  return AVATAR_PALETTE[n % AVATAR_PALETTE.length]
+function fmtStatus(status) {
+  return status === 'CANCELLED' ? 'canceled' : status.toLowerCase()
 }
 
-function fmtStatus(s) { return s === 'CANCELLED' ? 'canceled' : s.toLowerCase() }
+function avatarBg(id = '') {
+  const n = [...(id ?? '')].reduce((s, c) => s + c.charCodeAt(0), 0)
+  return AVATAR_COLORS[n % AVATAR_COLORS.length]
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -86,18 +81,28 @@ function fmtDate(iso) {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })
 }
 
+// Returns the most relevant date for a member row based on status
 function statusDate(m) {
   if (m.status === 'FROZEN')    return m.dateFrozen   ?? m.createdAt
   if (m.status === 'CANCELLED') return m.dateCanceled ?? m.createdAt
   return m.createdAt
 }
 
+// Returns the column label for the date based on the active tab
+function dateLabelFor(tab) {
+  if (tab === 'frozen')   return 'frozen'
+  if (tab === 'canceled') return 'canceled'
+  return 'joined'
+}
+
+// Builds last-7-months chart data from the loaded members array.
 function buildChartData(members) {
   const plotDate = (m) => {
     if (m.status === 'FROZEN')    return new Date(m.dateFrozen   ?? m.createdAt)
     if (m.status === 'CANCELLED') return new Date(m.dateCanceled ?? m.createdAt)
     return new Date(m.createdAt)
   }
+
   const now = new Date()
   return Array.from({ length: 7 }, (_, i) => {
     const d          = new Date(now.getFullYear(), now.getMonth() - (6 - i), 1)
@@ -110,13 +115,6 @@ function buildChartData(members) {
       canceled: cohort.filter(m => m.status === 'CANCELLED').length,
     }
   })
-}
-
-function eventDotColor(ev) {
-  const e = (ev.event ?? '').toLowerCase()
-  if (e.includes('unlocked') || e.includes('opened')) return T.active
-  if (e.includes('code') || e.includes('access_code')) return T.frozen
-  return T.muted
 }
 
 // ── Page ──────────────────────────────────────────────────────────────────────
@@ -145,7 +143,11 @@ export default function DashboardPage() {
   const doorTimerRef = useRef(null)
   const closeTimer   = useRef(null)
 
-  function openPanel(member) { setSelectedMember(member); setPanelOpen(true) }
+  function openPanel(member) {
+    setSelectedMember(member)
+    setPanelOpen(true)
+  }
+
   function closePanel() {
     setPanelOpen(false)
     clearTimeout(closeTimer.current)
@@ -165,14 +167,22 @@ export default function DashboardPage() {
       const { member: updated } = await res.json()
       setMembers(prev => prev.map(m => m.id === memberId ? { ...m, ...updated } : m))
       setSelectedMember(prev => prev?.id === memberId ? { ...prev, ...updated } : prev)
-    } catch { /* non-fatal */ } finally { setUpdatingStatus(false) }
+    } catch {
+      // non-fatal — leave UI as-is
+    } finally {
+      setUpdatingStatus(false)
+    }
   }
+
+  // ── Fetch ───────────────────────────────────────────────────────────────
 
   const load = useCallback(async ({ manual = false } = {}) => {
     if (manual) setSyncing(true)
     try {
       const token = localStorage.getItem('ik_token')
-      const res = await fetch(`/api/${gymSlug}/all`, { headers: { Authorization: `Bearer ${token}` } })
+      const res = await fetch(`/api/${gymSlug}/all`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
       if (!res.ok) throw new Error(`${res.status}`)
       const { members } = await res.json()
       setMembers(members)
@@ -180,7 +190,10 @@ export default function DashboardPage() {
       setFetchErr(null)
     } catch {
       setFetchErr('Could not load members — retrying in 30s')
-    } finally { setLoading(false); setSyncing(false) }
+    } finally {
+      setLoading(false)
+      setSyncing(false)
+    }
   }, [gymSlug])
 
   useEffect(() => {
@@ -192,13 +205,18 @@ export default function DashboardPage() {
   const loadDoorEvents = useCallback(async () => {
     try {
       const token = localStorage.getItem('ik_token')
-      const res = await fetch(`/api/${gymSlug}/seam/events`, { headers: { Authorization: `Bearer ${token}` } })
+      const res = await fetch(`/api/${gymSlug}/seam/events`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
       if (!res.ok) throw new Error(`${res.status}`)
       const { events } = await res.json()
       setDoorEvents(events)
       setDoorEventsError(null)
-    } catch { setDoorEventsError('could not load door events') }
-    finally { setDoorEventsLoading(false) }
+    } catch {
+      setDoorEventsError('could not load door events')
+    } finally {
+      setDoorEventsLoading(false)
+    }
   }, [gymSlug])
 
   useEffect(() => {
@@ -207,7 +225,7 @@ export default function DashboardPage() {
     return () => clearInterval(doorTimerRef.current)
   }, [loadDoorEvents])
 
-  // ── Derived ──────────────────────────────────────────────────────────────
+  // ── Derived ─────────────────────────────────────────────────────────────
 
   const counts = {
     all:      members.length,
@@ -222,9 +240,10 @@ export default function DashboardPage() {
   const visible = members
     .filter(m => {
       const tabStatus = activeTab === 'canceled' ? 'cancelled' : activeTab
-      const matchTab  = activeTab === 'all' || m.status.toLowerCase() === tabStatus
+      const matchTab = activeTab === 'all' || m.status.toLowerCase() === tabStatus
       const q = search.trim().toLowerCase()
-      const matchSearch = !q || `${m.firstName} ${m.lastName} ${m.email} ${m.phone ?? ''}`.toLowerCase().includes(q)
+      const matchSearch = !q ||
+        `${m.firstName} ${m.lastName} ${m.email} ${m.phone ?? ''}`.toLowerCase().includes(q)
       return matchTab && matchSearch
     })
     .sort((a, b) => {
@@ -234,107 +253,92 @@ export default function DashboardPage() {
       return 0
     })
 
-  // ── Render ────────────────────────────────────────────────────────────────
+  // ── Render ──────────────────────────────────────────────────────────────
 
   return (
-    <div style={{ fontFamily: FONT_UI, background: T.bg, minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+    <div className="flex flex-col h-full min-h-screen" style={{ fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif" }}>
 
-      {/* Top bar */}
-      <header style={{
-        height: 52, display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '0 16px', borderBottom: `1px solid ${T.border}`, background: T.card, flexShrink: 0,
-      }}>
-        <span style={{ fontWeight: 700, fontSize: 15, color: T.text, letterSpacing: '-0.02em' }}>
-          dashboard
-        </span>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <span style={{ fontFamily: FONT_MONO, fontSize: 11, color: T.muted }}>
-            {syncing ? 'syncing…' : `synced ${sinceLabel(lastSync)}`}
-          </span>
+      {/* ── Top bar ──────────────────────────────────────────────────────── */}
+      <header className="h-14 shrink-0 bg-[#1c1c1c] border-b border-neutral-800 flex items-center justify-between px-6">
+        <h1 className="text-sm font-semibold text-white">dashboard</h1>
+
+        <div className="flex items-center gap-4">
+          {/* Sync indicator */}
+          <div className="flex items-center gap-2">
+            <span
+              className={`w-2 h-2 rounded-full ${
+                syncing ? 'bg-amber-400 animate-pulse' : 'bg-emerald-500'
+              }`}
+            />
+            <span className="text-xs text-neutral-500">
+              {syncing ? 'syncing…' : `synced ${sinceLabel(lastSync)}`}
+            </span>
+          </div>
+
+          {/* Sync button */}
           <button
             onClick={() => load({ manual: true })}
             disabled={syncing || loading}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 5, background: 'transparent',
-              border: `1px solid ${T.border}`, borderRadius: 8, padding: '5px 10px',
-              fontSize: 11, color: T.muted, cursor: 'pointer', fontFamily: FONT_UI,
-            }}
+            className="flex items-center gap-1.5 rounded-lg border border-neutral-700 px-3 py-1.5 text-xs text-neutral-400 hover:text-white hover:border-neutral-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           >
-            <RefreshCw size={10} style={syncing ? { animation: 'spin 1s linear infinite' } : {}} />
+            <RefreshCw size={11} className={syncing ? 'animate-spin' : ''} />
             sync
           </button>
         </div>
       </header>
 
-      {/* Body */}
-      <main style={{ flex: 1, padding: '14px 14px 24px', display: 'flex', flexDirection: 'column', gap: 14, overflowY: 'auto' }}>
+      {/* ── Body ─────────────────────────────────────────────────────────── */}
+      <main className="flex-1 flex flex-col p-4 md:p-5 pb-4 md:pb-5 gap-4 overflow-y-auto lg:overflow-hidden min-h-0">
 
         {loading ? (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 200, gap: 10, color: T.muted }}>
-            <RefreshCw size={16} style={{ animation: 'spin 1s linear infinite' }} />
-            <span style={{ fontSize: 13 }}>loading…</span>
-          </div>
+          <LoadingState />
         ) : fetchErr ? (
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 200, gap: 10 }}>
-            <span style={{ fontSize: 13, color: T.overdue }}>{fetchErr}</span>
-            <button onClick={() => load({ manual: true })} style={{ fontSize: 11, color: T.muted, border: `1px solid ${T.border}`, borderRadius: 8, padding: '5px 12px', background: 'none', cursor: 'pointer' }}>
-              retry
-            </button>
-          </div>
+          <ErrorState message={fetchErr} onRetry={() => load({ manual: true })} />
         ) : (
           <>
-            {/* ── Stats 2×2 ── */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-              <StatCard label="active"   value={counts.active}   color={T.active}  sub="billing on time" />
-              <StatCard label="overdue"  value={counts.overdue}  color={T.overdue} sub="needs attention" />
-              <StatCard label="frozen"   value={counts.frozen}   color={T.frozen}  sub="paused billing" />
-              <StatCard label="canceled" value={counts.canceled} color={T.cancel}  sub="ended" />
+            {/* Metric cards — always 4 across, shrink proportionally */}
+            <div className="grid grid-cols-4 gap-4 shrink-0">
+              <MetricCard label="active members" value={counts.active}   color="text-emerald-400" border="border-emerald-900/30" />
+              <MetricCard label="frozen"         value={counts.frozen}   color="text-sky-400"     border="border-sky-900/30" />
+              <MetricCard label="canceled"       value={counts.canceled} color="text-neutral-400" border="border-neutral-700/50" />
+              <MetricCard label="overdue"        value={counts.overdue}  color="text-red-400"     border="border-red-900/30" />
             </div>
 
-            {/* ── Member directory ── */}
-            <MemberDirectory
-              members={visible}
-              counts={counts}
-              search={search}
-              setSearch={setSearch}
-              activeTab={activeTab}
-              setActiveTab={setActiveTab}
-              onRowClick={openPanel}
-            />
+            {/* Mid row — stacks vertically on mobile, side by side on lg+ */}
+            <div className="flex flex-col lg:flex-row gap-4 shrink-0 lg:h-[340px]">
+              <MemberDirectory
+                members={visible}
+                counts={counts}
+                search={search}
+                setSearch={setSearch}
+                activeTab={activeTab}
+                setActiveTab={setActiveTab}
+                onRowClick={openPanel}
+                className="flex-1 h-[340px] lg:h-full"
+              />
+              <DoorActivity
+                events={doorEvents}
+                loading={doorEventsLoading}
+                error={doorEventsError}
+                className="lg:w-72 h-[340px] lg:h-full"
+              />
+            </div>
 
-            {/* ── Door activity ── */}
-            <DoorActivity
-              events={doorEvents}
-              loading={doorEventsLoading}
-              error={doorEventsError}
-            />
-
-            {/* ── Retention chart ── */}
-            <RetentionChart data={buildChartData(members)} />
+            {/* Retention chart — fills remaining space */}
+            <RetentionChart data={buildChartData(members)} className="flex-1 min-h-[200px]" />
           </>
         )}
+
       </main>
 
-      {/* Overlay */}
+      {/* ── Slide-out overlay ────────────────────────────────────────────── */}
       <div
+        className={`fixed inset-0 bg-black/60 z-40 transition-opacity duration-200 ${panelOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
         onClick={closePanel}
-        style={{
-          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 40,
-          opacity: panelOpen ? 1 : 0, pointerEvents: panelOpen ? 'auto' : 'none',
-          transition: 'opacity 200ms',
-        }}
       />
 
-      {/* Member panel */}
-      <div style={{
-        position: 'fixed', top: 0, right: 0, bottom: 0,
-        width: '100%', maxWidth: 420,
-        background: '#141414', borderLeft: `1px solid ${T.border}`,
-        zIndex: 50, display: 'flex', flexDirection: 'column',
-        transform: panelOpen ? 'translateX(0)' : 'translateX(100%)',
-        transition: 'transform 200ms',
-        fontFamily: FONT_UI,
-      }}>
+      {/* ── Member profile panel ─────────────────────────────────────────── */}
+      <div className={`fixed inset-y-0 right-0 w-full sm:w-[380px] bg-[#171717] border-l border-neutral-800 z-50 flex flex-col shadow-2xl transition-transform duration-200 ${panelOpen ? 'translate-x-0' : 'translate-x-full'}`}>
         {selectedMember && (
           <MemberPanel
             member={selectedMember}
@@ -345,30 +349,49 @@ export default function DashboardPage() {
         )}
       </div>
 
-      <style>{`
-        @keyframes spin { to { transform: rotate(360deg); } }
-        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap');
-      `}</style>
     </div>
   )
 }
 
-// ── Stat card ─────────────────────────────────────────────────────────────────
+// ── Loading / error states ────────────────────────────────────────────────────
 
-function StatCard({ label, value, color, sub }) {
+function LoadingState() {
   return (
-    <div style={{
-      background: T.card, borderRadius: T.radius, border: `1px solid ${T.border}`,
-      padding: '14px 16px',
-    }}>
-      <div style={{ fontSize: 10, fontWeight: 600, color: T.muted, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>
-        {label}
-      </div>
-      <div style={{ fontFamily: FONT_MONO, fontSize: 36, fontWeight: 500, color, lineHeight: 1, marginBottom: 6 }}>
-        {value}
-      </div>
-      <div style={{ fontSize: 10, color: T.dim }}>
-        {sub}
+    <div className="flex flex-col items-center justify-center h-64 gap-3">
+      <RefreshCw size={20} className="text-neutral-600 animate-spin" />
+      <p className="text-sm text-neutral-600">loading members…</p>
+    </div>
+  )
+}
+
+function ErrorState({ message, onRetry }) {
+  return (
+    <div className="flex flex-col items-center justify-center h-64 gap-3">
+      <p className="text-sm text-red-400">{message}</p>
+      <button
+        onClick={onRetry}
+        className="text-xs text-neutral-400 hover:text-white border border-neutral-700 rounded-lg px-3 py-1.5 transition-colors"
+      >
+        retry now
+      </button>
+    </div>
+  )
+}
+
+// ── Metric card ───────────────────────────────────────────────────────────────
+
+function MetricCard({ label, value, color, delta, border = 'border-neutral-800' }) {
+  return (
+    <div className={`w-full min-w-0 overflow-hidden bg-[#1c1c1c] rounded-xl border ${border} px-3 py-3`}>
+      <p className="text-[9px] sm:text-[11px] font-semibold tracking-widest text-neutral-500 mb-1 sm:mb-2 truncate">{label}</p>
+      <div className="flex items-end justify-between">
+        <p className={`text-xl sm:text-3xl font-bold tracking-tight ${color}`}>{value}</p>
+        {delta && (
+          <span className="hidden sm:flex items-center gap-0.5 text-[11px] text-emerald-500 mb-1">
+            <ArrowUpRight size={12} />
+            {delta}
+          </span>
+        )}
       </div>
     </div>
   )
@@ -376,237 +399,211 @@ function StatCard({ label, value, color, sub }) {
 
 // ── Member directory ──────────────────────────────────────────────────────────
 
-function MemberDirectory({ members, counts, search, setSearch, activeTab, setActiveTab, onRowClick }) {
+function MemberDirectory({ members, counts, search, setSearch, activeTab, setActiveTab, onRowClick, className = '' }) {
   return (
-    <div style={{ background: T.card, borderRadius: T.radius, border: `1px solid ${T.border}`, overflow: 'hidden' }}>
+    <div className={`bg-[#1c1c1c] rounded-xl border border-neutral-800 overflow-hidden flex flex-col ${className}`}>
 
-      {/* Search */}
-      <div style={{ padding: '12px 14px 10px' }}>
-        <div style={{ position: 'relative' }}>
-          <Search size={12} style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', color: T.muted, pointerEvents: 'none' }} />
+      {/* Header row */}
+      <div className="flex items-center justify-between gap-4 px-5 py-3.5 border-b border-neutral-800">
+        <h2 className="text-sm font-semibold text-white shrink-0">member directory</h2>
+        <div className="relative w-56">
+          <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500 pointer-events-none" />
           <input
             type="text"
-            placeholder="search name or email…"
+            placeholder="search name, email…"
             value={search}
-            onChange={e => setSearch(e.target.value)}
-            style={{
-              width: '100%', background: '#111', border: `1px solid ${T.border}`,
-              borderRadius: 10, padding: '8px 12px 8px 30px',
-              fontSize: 13, color: T.text, fontFamily: FONT_UI,
-              outline: 'none', boxSizing: 'border-box',
-            }}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full bg-[#252525] border border-neutral-700 rounded-lg pl-8 pr-3 py-1.5 text-xs text-white placeholder-neutral-600 focus:outline-none focus:border-neutral-500 focus:ring-1 focus:ring-neutral-500 transition-colors"
           />
         </div>
       </div>
 
-      {/* Pill tabs */}
-      <div style={{ display: 'flex', gap: 6, overflowX: 'auto', padding: '0 14px 12px', scrollbarWidth: 'none' }}>
-        {TABS.map(tab => {
-          const active = tab === activeTab
-          return (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              style={{
-                flexShrink: 0, display: 'flex', alignItems: 'center', gap: 5,
-                padding: '5px 12px', borderRadius: T.radiusPill,
-                border: `1px solid ${active ? 'rgba(255,255,255,0.2)' : T.border}`,
-                background: active ? 'rgba(255,255,255,0.08)' : 'transparent',
-                fontSize: 12, fontWeight: active ? 600 : 400,
-                color: active ? T.text : T.muted,
-                cursor: 'pointer', fontFamily: FONT_UI, whiteSpace: 'nowrap',
-              }}
-            >
-              {tab}
-              <span style={{ fontFamily: FONT_MONO, fontSize: 10, color: active ? T.muted : T.dim }}>
-                {counts[tab]}
-              </span>
-            </button>
-          )
-        })}
+      {/* Tabs */}
+      <div className="flex border-b border-neutral-800 px-4">
+        {TABS.map((tab) => (
+          <button
+            key={tab}
+            onClick={() => setActiveTab(tab)}
+            className={`
+              py-2.5 px-2.5 mr-1 text-xs font-medium border-b-2 transition-colors
+              ${activeTab === tab
+                ? 'border-white text-white'
+                : 'border-transparent text-neutral-500 hover:text-neutral-300'
+              }
+            `}
+          >
+            {tab}
+            <span className={`ml-1.5 text-[10px] tabular-nums ${activeTab === tab ? 'text-neutral-400' : 'text-neutral-700'}`}>
+              {counts[tab]}
+            </span>
+          </button>
+        ))}
       </div>
 
-      {/* Member rows */}
-      <div style={{ borderTop: `1px solid ${T.border}` }}>
+      {/* Table */}
+      <div className="overflow-y-auto flex-1">
         {members.length === 0 ? (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 80, fontSize: 13, color: T.dim }}>
+          <div className="flex items-center justify-center h-32 text-sm text-neutral-600">
             no members match
           </div>
-        ) : members.map(m => {
-          const initials = (m.firstName?.[0] ?? '') + (m.lastName?.[0] ?? '')
-          const bg       = avatarColor(m.id)
-          return (
-            <div
-              key={m.id}
-              onClick={() => onRowClick(m)}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 12,
-                padding: '11px 14px', borderBottom: `1px solid ${T.border}`,
-                cursor: 'pointer',
-              }}
-            >
-              {/* Avatar */}
-              <div style={{
-                width: 36, height: 36, borderRadius: '50%', background: bg,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                flexShrink: 0,
-              }}>
-                <span style={{ fontWeight: 700, fontSize: 12, color: '#fff', letterSpacing: '-0.01em' }}>
-                  {initials || '?'}
-                </span>
-              </div>
-
-              {/* Name + type + email */}
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontWeight: 600, fontSize: 13, color: T.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  {m.firstName} {m.lastName}
-                </div>
-                <div style={{ fontSize: 11, color: T.muted, marginTop: 1, display: 'flex', alignItems: 'center', gap: 5, overflow: 'hidden' }}>
-                  <span style={{
-                    color: TYPE_COLOR[m.membershipType] ?? TYPE_COLOR.GENERAL,
-                    background: TYPE_BG[m.membershipType] ?? TYPE_BG.GENERAL,
-                    borderRadius: 6, padding: '1px 6px', fontSize: 10, fontWeight: 600, flexShrink: 0,
-                  }}>
-                    {(m.membershipType ?? 'general').toLowerCase()}
-                  </span>
-                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.email}</span>
-                </div>
-              </div>
-
-              {/* Status pill */}
-              <span style={{
-                flexShrink: 0, fontSize: 10, fontWeight: 600,
-                color: STATUS_COLOR[m.status], background: STATUS_BG[m.status],
-                borderRadius: T.radiusPill, padding: '3px 9px',
-              }}>
-                {fmtStatus(m.status)}
-              </span>
-            </div>
-          )
-        })}
+        ) : (
+          <table className="w-full text-sm">
+            <thead className="sticky top-0 bg-[#1c1c1c] z-10">
+              <tr className="text-left border-b border-neutral-800">
+                <th className="px-5 py-2.5 text-[11px] font-semibold text-neutral-500 tracking-wider">name</th>
+                <th className="px-5 py-2.5 text-[11px] font-semibold text-neutral-500 tracking-wider">type</th>
+                <th className="px-5 py-2.5 text-[11px] font-semibold text-neutral-500 tracking-wider">status</th>
+                <th className="px-5 py-2.5 text-[11px] font-semibold text-neutral-500 tracking-wider">{dateLabelFor(activeTab)}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {members.map((m) => (
+                <tr
+                  key={m.id}
+                  onClick={() => onRowClick(m)}
+                  className="border-b border-neutral-800/40 hover:bg-white/[0.025] transition-colors cursor-pointer"
+                >
+                  <td className="px-5 py-3 text-white font-medium whitespace-nowrap">
+                    {m.firstName} {m.lastName}
+                  </td>
+                  <td className="px-5 py-3">
+                    <span className={`inline-block text-[11px] font-medium px-2 py-0.5 rounded-full ${TYPE_BADGE[m.membershipType] ?? TYPE_BADGE.GENERAL}`}>
+                      {(m.membershipType ?? 'GENERAL').toLowerCase()}
+                    </span>
+                  </td>
+                  <td className="px-5 py-3">
+                    <span className={`inline-block text-[11px] font-medium px-2 py-0.5 rounded-full ${STATUS_PILL[m.status]}`}>
+                      {fmtStatus(m.status)}
+                    </span>
+                  </td>
+                  <td className="px-5 py-3 text-neutral-600 text-xs whitespace-nowrap">
+                    {fmtDate(statusDate(m))}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
     </div>
   )
 }
 
-// ── Door activity ─────────────────────────────────────────────────────────────
+// ── Door activity panel ───────────────────────────────────────────────────────
 
-function DoorActivity({ events, loading, error }) {
+function DoorActivity({ events, loading, error, className = '' }) {
   return (
-    <div style={{ background: T.card, borderRadius: T.radius, border: `1px solid ${T.border}`, overflow: 'hidden' }}>
-
+    <div className={`bg-[#1c1c1c] rounded-xl border border-neutral-800 overflow-hidden flex flex-col ${className}`}>
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '13px 16px', borderBottom: `1px solid ${T.border}` }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontWeight: 700, fontSize: 13, color: T.text }}>live feed</span>
-          <span style={{
-            display: 'flex', alignItems: 'center', gap: 4,
-            background: 'rgba(34,201,122,0.12)', borderRadius: T.radiusPill,
-            padding: '2px 8px',
-          }}>
-            <span style={{ width: 5, height: 5, borderRadius: '50%', background: T.active, display: 'inline-block', animation: 'pulse 2s infinite' }} />
-            <span style={{ fontFamily: FONT_MONO, fontSize: 10, fontWeight: 500, color: T.active }}>LIVE</span>
-          </span>
+      <div className="flex items-center gap-2 px-4 py-3.5 border-b border-neutral-800">
+        <Activity size={13} className="text-neutral-400" />
+        <h2 className="text-sm font-semibold text-white">door activity</h2>
+        <div className="ml-auto flex items-center gap-1.5">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+          <span className="text-[11px] text-emerald-500 font-medium">live</span>
         </div>
-        <span style={{ fontFamily: FONT_MONO, fontSize: 10, color: T.dim }}>last 24h</span>
       </div>
 
-      {/* Events */}
-      <div>
+      {/* Body */}
+      <div className="flex-1 overflow-auto divide-y divide-neutral-800/50">
         {loading ? (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 70, gap: 8, color: T.muted }}>
-            <RefreshCw size={13} style={{ animation: 'spin 1s linear infinite' }} />
+          <div className="flex items-center justify-center h-24">
+            <RefreshCw size={14} className="text-neutral-600 animate-spin" />
           </div>
         ) : error ? (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 70, fontSize: 12, color: T.dim }}>
-            {error}
+          <div className="flex items-center justify-center h-24 px-4 text-center">
+            <p className="text-[11px] text-neutral-600">{error}</p>
           </div>
         ) : events.length === 0 ? (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 70, fontSize: 12, color: T.dim }}>
-            no events yet
+          <div className="flex items-center justify-center h-24">
+            <p className="text-[11px] text-neutral-600">no events in the last 24h</p>
           </div>
-        ) : events.map(ev => (
-          <div key={ev.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 16px', borderBottom: `1px solid ${T.border}` }}>
-            {/* Dot */}
-            <span style={{ width: 7, height: 7, borderRadius: '50%', background: eventDotColor(ev), flexShrink: 0 }} />
-            {/* Name + event */}
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontWeight: 600, fontSize: 12, color: T.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                {ev.name || '—'}
+        ) : (
+          events.map((ev) => (
+            <div key={ev.id} className="flex items-center gap-3 px-4 py-2.5">
+              <span
+                className={`w-1.5 h-1.5 rounded-full shrink-0 ${ev.ok ? 'bg-emerald-500' : 'bg-red-500'}`}
+              />
+              <div className="min-w-0 flex-1">
+                <p className="text-xs text-white font-medium truncate">{ev.name}</p>
+                <p className="text-[11px] text-neutral-500">{ev.event}</p>
               </div>
-              <div style={{ fontSize: 11, color: T.muted, marginTop: 1 }}>{ev.event}</div>
+              <span className="text-[11px] text-neutral-600 shrink-0">{sinceISO(ev.createdAt)}</span>
             </div>
-            {/* Timestamp */}
-            <span style={{ fontFamily: FONT_MONO, fontSize: 10, color: T.dim, flexShrink: 0 }}>
-              {sinceISO(ev.createdAt)}
-            </span>
-          </div>
-        ))}
+          ))
+        )}
       </div>
-
-      <style>{`@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }`}</style>
     </div>
   )
 }
 
 // ── Retention chart ───────────────────────────────────────────────────────────
 
-const CustomTooltip = ({ active, payload, label }) => {
+const CUSTOM_TOOLTIP = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null
   return (
-    <div style={{ background: '#1e1e1e', border: `1px solid ${T.border}`, borderRadius: 10, padding: '8px 12px', fontSize: 11, fontFamily: FONT_UI }}>
-      <p style={{ color: T.muted, marginBottom: 4, fontWeight: 600 }}>{label}</p>
-      {payload.map(p => (
-        <p key={p.name} style={{ color: p.color, margin: '2px 0' }}>
-          {p.name}: <span style={{ color: T.text, fontWeight: 700 }}>{p.value}</span>
+    <div className="bg-[#1c1c1c] border border-neutral-800 rounded-lg px-3 py-2 text-xs shadow-xl">
+      <p className="text-neutral-400 mb-1.5 font-medium">{label}</p>
+      {payload.map((p) => (
+        <p key={p.name} style={{ color: p.color }} className="leading-5">
+          {p.name}: <span className="font-semibold text-white">{p.value}</span>
         </p>
       ))}
     </div>
   )
 }
 
-function RetentionChart({ data }) {
+function RetentionChart({ data, className = '' }) {
   return (
-    <div style={{ background: T.card, borderRadius: T.radius, border: `1px solid ${T.border}`, padding: '14px 14px 10px', overflow: 'hidden' }}>
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-          <TrendingUp size={12} color={T.muted} />
-          <span style={{ fontWeight: 700, fontSize: 13, color: T.text }}>membership retention</span>
+    <div className={`min-w-0 overflow-hidden bg-[#1c1c1c] rounded-xl border border-neutral-800 px-5 pt-4 pb-4 flex flex-col ${className}`}>
+      <div className="flex items-center justify-between mb-3 shrink-0">
+        <div className="flex items-center gap-2">
+          <TrendingUp size={13} className="text-neutral-400" />
+          <h2 className="text-sm font-semibold text-white">membership retention</h2>
         </div>
-        <div style={{ display: 'flex', gap: 10, fontSize: 10, color: T.muted }}>
-          {[['#22c97a','active'],['#4a9eff','frozen'],['#555','canceled']].map(([c,l]) => (
-            <span key={l} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-              <span style={{ width: 10, height: 2, background: c, borderRadius: 2, display: 'inline-block' }} />
-              {l}
-            </span>
-          ))}
+        <div className="flex items-center gap-4 text-[11px] text-neutral-500">
+          <span className="flex items-center gap-1.5"><span className="w-2.5 h-0.5 rounded bg-emerald-500 inline-block" />active</span>
+          <span className="flex items-center gap-1.5"><span className="w-2.5 h-0.5 rounded bg-sky-500 inline-block" />frozen</span>
+          <span className="flex items-center gap-1.5"><span className="w-2.5 h-0.5 rounded bg-neutral-600 inline-block" />canceled</span>
+          <span className="text-neutral-700">last 7 months</span>
         </div>
       </div>
-      <div style={{ height: 160 }}>
+
+      <div className="flex-1 min-h-0 min-w-0 w-full overflow-hidden">
         <ResponsiveContainer width="100%" height="100%" minWidth={0}>
           <AreaChart data={data} margin={{ top: 4, right: 4, left: -24, bottom: 0 }}>
             <defs>
-              <linearGradient id="gA" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%"  stopColor="#22c97a" stopOpacity={0.2} />
-                <stop offset="95%" stopColor="#22c97a" stopOpacity={0} />
+              <linearGradient id="gActive" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%"  stopColor="#10b981" stopOpacity={0.25} />
+                <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
               </linearGradient>
-              <linearGradient id="gF" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%"  stopColor="#4a9eff" stopOpacity={0.15} />
-                <stop offset="95%" stopColor="#4a9eff" stopOpacity={0} />
+              <linearGradient id="gFrozen" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%"  stopColor="#0ea5e9" stopOpacity={0.2} />
+                <stop offset="95%" stopColor="#0ea5e9" stopOpacity={0} />
               </linearGradient>
-              <linearGradient id="gC" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%"  stopColor="#555" stopOpacity={0.15} />
-                <stop offset="95%" stopColor="#555" stopOpacity={0} />
+              <linearGradient id="gCancelled" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%"  stopColor="#525252" stopOpacity={0.2} />
+                <stop offset="95%" stopColor="#525252" stopOpacity={0} />
               </linearGradient>
             </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
-            <XAxis dataKey="month" tick={{ fill: T.muted, fontSize: 10, fontFamily: FONT_MONO }} axisLine={false} tickLine={false} />
-            <YAxis tick={{ fill: T.muted, fontSize: 10, fontFamily: FONT_MONO }} axisLine={false} tickLine={false} />
-            <Tooltip content={<CustomTooltip />} cursor={{ stroke: T.border, strokeWidth: 1 }} />
-            <Area type="monotone" dataKey="active"   name="Active"   stroke="#22c97a" strokeWidth={1.5} fill="url(#gA)" dot={false} />
-            <Area type="monotone" dataKey="frozen"   name="Frozen"   stroke="#4a9eff" strokeWidth={1.5} fill="url(#gF)" dot={false} />
-            <Area type="monotone" dataKey="canceled" name="Canceled" stroke="#555555" strokeWidth={1}   fill="url(#gC)" dot={false} />
+
+            <CartesianGrid strokeDasharray="3 3" stroke="#262626" vertical={false} />
+            <XAxis
+              dataKey="month"
+              tick={{ fill: '#737373', fontSize: 11 }}
+              axisLine={false}
+              tickLine={false}
+            />
+            <YAxis
+              tick={{ fill: '#737373', fontSize: 11 }}
+              axisLine={false}
+              tickLine={false}
+            />
+            <Tooltip content={<CUSTOM_TOOLTIP />} cursor={{ stroke: '#404040', strokeWidth: 1 }} />
+
+            <Area type="monotone" dataKey="active"   name="Active"   stroke="#10b981" strokeWidth={2}   fill="url(#gActive)"    dot={false} />
+            <Area type="monotone" dataKey="frozen"   name="Frozen"   stroke="#0ea5e9" strokeWidth={2}   fill="url(#gFrozen)"    dot={false} />
+            <Area type="monotone" dataKey="canceled" name="Canceled" stroke="#525252" strokeWidth={1.5} fill="url(#gCancelled)" dot={false} />
           </AreaChart>
         </ResponsiveContainer>
       </div>
@@ -614,82 +611,93 @@ function RetentionChart({ data }) {
   )
 }
 
-// ── Member panel ──────────────────────────────────────────────────────────────
-
-function PanelField({ label, value, mono = false }) {
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', borderBottom: `1px solid ${T.border}` }}>
-      <span style={{ fontSize: 12, color: T.muted, flexShrink: 0 }}>{label}</span>
-      <span style={{ fontSize: 12, color: T.text, fontFamily: mono ? FONT_MONO : FONT_UI, textAlign: 'right', marginLeft: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 200 }}>
-        {value || '—'}
-      </span>
-    </div>
-  )
-}
+// ── Member profile panel ──────────────────────────────────────────────────────
 
 function PanelSection({ icon: Icon, title, children }) {
   return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
-        <Icon size={11} color={T.dim} />
-        <span style={{ fontSize: 10, fontWeight: 700, color: T.dim, textTransform: 'uppercase', letterSpacing: '0.08em' }}>{title}</span>
+      <div className="flex items-center gap-1.5 mb-2">
+        <Icon size={11} className="text-neutral-600" />
+        <p className="text-[11px] font-semibold tracking-widest text-neutral-600">{title}</p>
       </div>
-      <div style={{ background: '#1a1a1a', borderRadius: 10, border: `1px solid ${T.border}`, overflow: 'hidden' }}>
+      <div className="rounded-lg border border-neutral-800 divide-y divide-neutral-800 overflow-hidden">
         {children}
       </div>
     </div>
   )
 }
 
+function PanelField({ label, value, mono = false }) {
+  return (
+    <div className="flex items-center justify-between px-3 py-2.5 bg-[#1c1c1c]">
+      <span className="text-xs text-neutral-500 shrink-0">{label}</span>
+      <span className={`text-xs text-white text-right ml-4 truncate max-w-[200px] ${mono ? 'font-mono text-[11px]' : ''}`}>
+        {value || '—'}
+      </span>
+    </div>
+  )
+}
+
 function MemberPanel({ member, onClose, onStatusChange, updating }) {
   const initials = (member.firstName?.[0] ?? '') + (member.lastName?.[0] ?? '')
-  const bg       = avatarColor(member.id)
+  const color    = avatarBg(member.id)
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', fontFamily: FONT_UI }}>
+    <div className="flex flex-col h-full">
 
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 16px', height: 52, borderBottom: `1px solid ${T.border}`, flexShrink: 0 }}>
-        <span style={{ fontWeight: 700, fontSize: 14, color: T.text }}>member profile</span>
-        <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 6, color: T.muted }}>
-          <X size={16} />
+      <div className="flex items-center justify-between px-5 h-14 shrink-0 border-b border-neutral-800">
+        <p className="text-sm font-semibold text-white">member profile</p>
+        <button
+          onClick={onClose}
+          className="p-1.5 rounded-lg text-neutral-500 hover:text-white hover:bg-white/5 transition-colors"
+        >
+          <X size={15} />
         </button>
       </div>
 
-      {/* Body */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '20px 16px', display: 'flex', flexDirection: 'column', gap: 20 }}>
+      {/* Scrollable body */}
+      <div className="flex-1 overflow-y-auto p-5 space-y-5">
 
-        {/* Avatar + name */}
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, paddingBottom: 4 }}>
-          <div style={{ width: 64, height: 64, borderRadius: '50%', background: bg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <span style={{ fontWeight: 800, fontSize: 22, color: '#fff', letterSpacing: '-0.02em' }}>{initials || '?'}</span>
+        {/* Avatar + name + badges */}
+        <div className="flex flex-col items-center text-center gap-3 pt-1 pb-2">
+          <div className={`w-[60px] h-[60px] rounded-full flex items-center justify-center shrink-0 ${color}`}>
+            <span className="text-white font-bold text-lg tracking-tight select-none">
+              {initials || '?'}
+            </span>
           </div>
-          <div style={{ textAlign: 'center' }}>
-            <div style={{ fontWeight: 700, fontSize: 16, color: T.text }}>{member.firstName} {member.lastName}</div>
-            <div style={{ fontSize: 12, color: T.muted, marginTop: 3 }}>member</div>
+          <div>
+            <p className="text-white font-semibold text-base leading-tight">
+              {member.firstName} {member.lastName}
+            </p>
+            <p className="text-neutral-500 text-xs mt-0.5">member</p>
           </div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <span style={{ fontSize: 11, fontWeight: 600, color: STATUS_COLOR[member.status], background: STATUS_BG[member.status], borderRadius: T.radiusPill, padding: '3px 10px' }}>
+          <div className="flex items-center gap-2">
+            <span className={`text-[11px] font-medium px-2.5 py-0.5 rounded-full ${STATUS_PILL[member.status]}`}>
               {fmtStatus(member.status)}
             </span>
-            <span style={{ fontSize: 11, fontWeight: 600, color: TYPE_COLOR[member.membershipType] ?? TYPE_COLOR.GENERAL, background: TYPE_BG[member.membershipType] ?? TYPE_BG.GENERAL, borderRadius: T.radiusPill, padding: '3px 10px' }}>
-              {(member.membershipType ?? 'general').toLowerCase()}
+            <span className={`text-[11px] font-medium px-2.5 py-0.5 rounded-full ${TYPE_BADGE[member.membershipType] ?? TYPE_BADGE.GENERAL}`}>
+              {(member.membershipType ?? 'GENERAL').toLowerCase()}
             </span>
           </div>
         </div>
 
+        {/* Contact */}
         <PanelSection icon={Phone} title="contact">
           <PanelField label="email" value={member.email} />
           <PanelField label="phone" value={member.phone} />
         </PanelSection>
 
+        {/* Membership */}
         <PanelSection icon={KeyRound} title="membership">
+          <PanelField label="type"      value={(member.membershipType ?? 'GENERAL').toLowerCase()} />
           <PanelField label="access id" value={member.accessCode} mono />
           <PanelField label="joined"    value={fmtDate(member.createdAt)} />
           {member.status === 'FROZEN'    && <PanelField label="frozen"   value={fmtDate(member.dateFrozen)} />}
           {member.status === 'CANCELLED' && <PanelField label="canceled" value={fmtDate(member.dateCanceled)} />}
         </PanelSection>
 
+        {/* Stripe */}
         {(member.stripeCustomerId || member.stripeSubscriptionId) && (
           <PanelSection icon={CreditCard} title="stripe">
             <PanelField label="customer id"     value={member.stripeCustomerId}     mono />
@@ -699,26 +707,39 @@ function MemberPanel({ member, onClose, onStatusChange, updating }) {
 
       </div>
 
-      {/* Actions */}
+      {/* Action buttons */}
       {member.status !== 'CANCELLED' && (
-        <div style={{ flexShrink: 0, padding: '14px 16px', borderTop: `1px solid ${T.border}`, display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div className="shrink-0 px-5 py-4 border-t border-neutral-800 space-y-2">
           {member.status === 'ACTIVE' && (
             <>
-              <button onClick={() => onStatusChange(member.id, 'FROZEN')} disabled={updating} style={{ width: '100%', padding: '10px', borderRadius: 10, fontSize: 13, fontWeight: 600, color: T.frozen, background: 'rgba(74,158,255,0.1)', border: 'none', cursor: 'pointer', fontFamily: FONT_UI, opacity: updating ? 0.4 : 1 }}>
+              <button
+                onClick={() => onStatusChange(member.id, 'FROZEN')}
+                disabled={updating}
+                className="w-full py-2 rounded-lg text-sm font-medium bg-sky-500/10 text-sky-400 hover:bg-sky-500/20 disabled:opacity-40 transition-colors"
+              >
                 freeze membership
               </button>
-              <button onClick={() => onStatusChange(member.id, 'CANCELLED')} disabled={updating} style={{ width: '100%', padding: '10px', borderRadius: 10, fontSize: 13, fontWeight: 600, color: T.overdue, background: 'rgba(255,91,91,0.1)', border: 'none', cursor: 'pointer', fontFamily: FONT_UI, opacity: updating ? 0.4 : 1 }}>
+              <button
+                onClick={() => onStatusChange(member.id, 'CANCELLED')}
+                disabled={updating}
+                className="w-full py-2 rounded-lg text-sm font-medium bg-red-500/10 text-red-400 hover:bg-red-500/20 disabled:opacity-40 transition-colors"
+              >
                 cancel membership
               </button>
             </>
           )}
           {member.status === 'FROZEN' && (
-            <button onClick={() => onStatusChange(member.id, 'ACTIVE')} disabled={updating} style={{ width: '100%', padding: '10px', borderRadius: 10, fontSize: 13, fontWeight: 600, color: T.active, background: 'rgba(34,201,122,0.1)', border: 'none', cursor: 'pointer', fontFamily: FONT_UI, opacity: updating ? 0.4 : 1 }}>
+            <button
+              onClick={() => onStatusChange(member.id, 'ACTIVE')}
+              disabled={updating}
+              className="w-full py-2 rounded-lg text-sm font-medium bg-sky-500/10 text-sky-400 hover:bg-sky-500/20 disabled:opacity-40 transition-colors"
+            >
               resume membership
             </button>
           )}
         </div>
       )}
+
     </div>
   )
 }
