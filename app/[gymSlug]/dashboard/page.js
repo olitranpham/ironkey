@@ -99,8 +99,8 @@ function buildChartData(members) {
     return new Date(m.createdAt)
   }
   const now = new Date()
-  return Array.from({ length: 6 }, (_, i) => {
-    const d          = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1)
+  return Array.from({ length: 7 }, (_, i) => {
+    const d          = new Date(now.getFullYear(), now.getMonth() - (6 - i), 1)
     const endOfMonth = new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59, 999)
     const cohort     = members.filter(m => plotDate(m) <= endOfMonth)
     return {
