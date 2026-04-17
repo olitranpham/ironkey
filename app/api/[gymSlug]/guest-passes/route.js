@@ -114,7 +114,7 @@ export async function POST(request, { params }) {
         passType,
         passesLeft:     body.passesLeft != null ? Number(body.passesLeft) : null,
         usedAt:         new Date(),
-        expiresAt:      new Date(Date.now() + 30 * 86400 * 1000),
+        expiresAt:      new Date(Date.now() + 24 * 60 * 60 * 1000),
       },
     })
 
