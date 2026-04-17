@@ -3,6 +3,37 @@ import prisma from '@/lib/prisma'
 
 const SEAM_API = 'https://connect.getseam.com'
 
+/**
+ * Deletes the guest's Seam access code from the lock.
+ * Looks up the code by its value in the device's code list, then deletes by ID.
+ */
+async function deactivateSeamCode(accessCode, seamApiKey, seamDeviceId) {
+  try {
+    const seamHeaders = {
+      Authorization:  `Bearer ${seamApiKey}`,
+      'Content-Type': 'application/json',
+    }
+    const listRes = await fetch(`${SEAM_API}/access_codes/list`, {
+      method:  'POST',
+      headers: seamHeaders,
+      body:    JSON.stringify({ device_id: seamDeviceId }),
+    })
+    const { access_codes = [] } = await listRes.json()
+    const match = access_codes.find(
+      c => String(c.code).trim() === String(accessCode).trim()
+    )
+    if (match) {
+      await fetch(`${SEAM_API}/access_codes/delete`, {
+        method:  'POST',
+        headers: seamHeaders,
+        body:    JSON.stringify({ access_code_id: match.access_code_id }),
+      })
+    }
+  } catch (err) {
+    console.error('[checkin] Seam deactivate error:', err.message)
+  }
+}
+
 export async function POST(request, { params }) {
   try {
     const { gymSlug } = await params
@@ -55,10 +86,16 @@ export async function POST(request, { params }) {
           guestProfileId: profile?.id ?? existing.guestProfileId,
         },
       })
+
+      // ── Deactivate Seam code if pack is now exhausted ────────────────────
+      if (newCount === 0 && profile?.accessCode && gym.seamApiKey && gym.seamDeviceId) {
+        await deactivateSeamCode(profile.accessCode, gym.seamApiKey, gym.seamDeviceId)
+      }
+
       return NextResponse.json({ ok: true, passesLeft: updated.passesLeft, passType: updated.passType })
     }
 
-    // ── No pack found — create a single-use record ────────────────────────────
+    // ── No pack found — create a single-use record and deactivate immediately
     await prisma.guestPass.create({
       data: {
         gymId:          gym.id,
@@ -71,6 +108,11 @@ export async function POST(request, { params }) {
         expiresAt:      new Date(Date.now() + 30 * 86400 * 1000),
       },
     })
+
+    // Single pass — deactivate immediately after use
+    if (profile?.accessCode && gym.seamApiKey && gym.seamDeviceId) {
+      await deactivateSeamCode(profile.accessCode, gym.seamApiKey, gym.seamDeviceId)
+    }
 
     return NextResponse.json({ ok: true, passesLeft: null, passType: 'SINGLE' })
   } catch (error) {
