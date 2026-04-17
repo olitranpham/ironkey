@@ -92,7 +92,7 @@ export async function POST(request, { params }) {
         await deactivateSeamCode(profile.accessCode, gym.seamApiKey, gym.seamDeviceId)
       }
 
-      return NextResponse.json({ ok: true, passesLeft: updated.passesLeft, passType: updated.passType })
+      return NextResponse.json({ ok: true, passesLeft: updated.passesLeft, passType: updated.passType, accessCode: profile?.accessCode ?? null })
     }
 
     // ── No pack found — create a single-use record and deactivate immediately
@@ -114,7 +114,7 @@ export async function POST(request, { params }) {
       await deactivateSeamCode(profile.accessCode, gym.seamApiKey, gym.seamDeviceId)
     }
 
-    return NextResponse.json({ ok: true, passesLeft: null, passType: 'SINGLE' })
+    return NextResponse.json({ ok: true, passesLeft: null, passType: 'SINGLE', accessCode: profile?.accessCode ?? null })
   } catch (error) {
     console.error('[guest-passes/checkin]', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
