@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams } from 'next/navigation'
-import { Search, RefreshCw } from 'lucide-react'
+import { Search, RefreshCw, X, KeyRound, Phone } from 'lucide-react'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -38,16 +38,139 @@ function fmtDate(iso) {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
+const AVATAR_COLORS = [
+  'bg-violet-500', 'bg-blue-500', 'bg-emerald-500', 'bg-amber-500',
+  'bg-rose-500',   'bg-cyan-500', 'bg-orange-500',  'bg-indigo-500',
+]
+
+function avatarBg(id = '') {
+  const n = [...(id ?? '')].reduce((s, c) => s + c.charCodeAt(0), 0)
+  return AVATAR_COLORS[n % AVATAR_COLORS.length]
+}
+
+function normName(s) {
+  return (s ?? '').trim().toLowerCase().replace(/\s+/g, ' ')
+}
+
+function totalVisits(guest) {
+  return guest.passes.reduce((sum, p) => {
+    if (p.passType === 'SINGLE') return sum + 1
+    const initial = p.passType === 'THREE_PACK' ? 3 : p.passType === 'FIVE_PACK' ? 5 : 10
+    const used    = p.passesLeft != null ? initial - p.passesLeft : initial
+    return sum + used
+  }, 0)
+}
+
+function mostRecentPassType(guest) {
+  if (!guest.passes.length) return null
+  // passes sorted desc by createdAt from API; find most recent by date
+  const sorted = [...guest.passes].sort(
+    (a, b) => new Date(b.createdAt ?? b.usedAt) - new Date(a.createdAt ?? a.usedAt)
+  )
+  return sorted[0].passType
+}
+
+function passesLeftSummary(guest) {
+  const packs = guest.passes.filter(p => p.passesLeft != null && p.passesLeft > 0)
+  if (!packs.length) return null
+  return packs.reduce((sum, p) => sum + p.passesLeft, 0)
+}
+
+function lastSeenDate(guest) {
+  if (!guest.passes.length) return null
+  return guest.passes.reduce((latest, p) => {
+    const d = p.usedAt ?? p.createdAt
+    if (!latest) return d
+    return new Date(d) > new Date(latest) ? d : latest
+  }, null)
+}
+
+/**
+ * Find the best name match in a Map<normName, guest>.
+ * 1. Exact normalized match
+ * 2. Prefix match: "marc" ↔ "marc lhaubouet" (one is a word-prefix of the other)
+ */
+function findNameMatch(byName, norm) {
+  if (byName.has(norm)) return byName.get(norm)
+  for (const [key, g] of byName) {
+    if (key.startsWith(norm + ' ') || norm.startsWith(key + ' ')) return g
+  }
+  return null
+}
+
+/**
+ * Merge profiles + unlinked into a single deduplicated list.
+ * Priority: email match → exact name match → prefix name match → new name bucket.
+ */
+function buildUnifiedGuests(profiles, unlinked) {
+  const guests = profiles.map(p => ({
+    ...p,
+    passes:    [...p.passes],
+    _unlinked: false,
+  }))
+
+  const byEmail = new Map()
+  const byName  = new Map()
+  guests.forEach(g => {
+    if (g.email) byEmail.set(g.email.toLowerCase(), g)
+    byName.set(normName(g.name), g)
+  })
+
+  // Name buckets for unlinked passes that don't match any existing guest
+  const nameBuckets = new Map()
+
+  for (const pass of unlinked) {
+    const email = (pass.guestEmail ?? '').toLowerCase()
+    const norm  = normName(pass.guestName)
+
+    // 1. Email match
+    if (email && byEmail.has(email)) {
+      byEmail.get(email).passes.push(pass)
+      continue
+    }
+    // 2. Name match (exact or prefix) against existing profiles
+    const nameHit = findNameMatch(byName, norm)
+    if (nameHit) {
+      nameHit.passes.push(pass)
+      continue
+    }
+    // 3. Name match against already-created name buckets
+    const bucketHit = findNameMatch(nameBuckets, norm)
+    if (bucketHit) {
+      bucketHit.passes.push(pass)
+      continue
+    }
+    // 4. New name bucket
+    nameBuckets.set(norm, {
+      id:         `_name_${norm}`,
+      name:       pass.guestName,
+      email:      pass.guestEmail ?? null,
+      phone:      pass.guestPhone ?? null,
+      accessCode: null,
+      passes:     [pass],
+      _unlinked:  true,
+    })
+  }
+
+  return [...guests, ...nameBuckets.values()]
+}
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function GuestPassesPage() {
   const { gymSlug } = useParams()
 
-  const [passes,    setPasses]    = useState([])
+  const [profiles,  setProfiles]  = useState([])
+  const [unlinked,  setUnlinked]  = useState([])
   const [loading,   setLoading]   = useState(true)
   const [fetchErr,  setFetchErr]  = useState(null)
   const [search,    setSearch]    = useState('')
   const [activeTab, setActiveTab] = useState('all')
+
+  const [selectedProfile, setSelectedProfile] = useState(null)
+  const [panelOpen,       setPanelOpen]       = useState(false)
+  const [savingCode,      setSavingCode]      = useState(false)
+  const closeTimer = useRef(null)
 
   const fetchPasses = useCallback(async () => {
     setLoading(true)
@@ -57,8 +180,9 @@ export default function GuestPassesPage() {
         headers: { Authorization: `Bearer ${token}` },
       })
       if (!res.ok) throw new Error(`${res.status}`)
-      const { passes } = await res.json()
-      setPasses(passes)
+      const data = await res.json()
+      setProfiles(data.profiles ?? [])
+      setUnlinked(data.unlinked ?? [])
       setFetchErr(null)
     } catch {
       setFetchErr('could not load guest passes')
@@ -69,27 +193,79 @@ export default function GuestPassesPage() {
 
   useEffect(() => { fetchPasses() }, [fetchPasses])
 
-  // Metrics
-  const total  = passes.length
-  const single = passes.filter(p => p.passType === 'SINGLE').length
-  const three  = passes.filter(p => p.passType === 'THREE_PACK').length
-  const five   = passes.filter(p => p.passType === 'FIVE_PACK').length
-  const ten    = passes.filter(p => p.passType === 'TEN_PACK').length
+  function openPanel(profile) {
+    console.log('[guest-passes] row clicked, opening panel for:', profile.name, profile.email)
+    setSelectedProfile(profile)
+    setPanelOpen(true)
+  }
+  function closePanel() {
+    setPanelOpen(false)
+    clearTimeout(closeTimer.current)
+    closeTimer.current = setTimeout(() => setSelectedProfile(null), 220)
+  }
 
-  const counts = { all: total, single, '3-pack': three, '5-pack': five, '10-pack': ten }
+  async function saveAccessCode(profileId, code) {
+    setSavingCode(true)
+    try {
+      const token = localStorage.getItem('ik_token')
+      const res   = await fetch(`/api/${gymSlug}/guest-passes/profiles/${profileId}`, {
+        method:  'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body:    JSON.stringify({ accessCode: code }),
+      })
+      if (!res.ok) throw new Error('Failed')
+      const { profile: updated } = await res.json()
+      setProfiles(prev => prev.map(p => p.id === profileId ? { ...p, ...updated } : p))
+      setSelectedProfile(prev => prev?.id === profileId ? { ...prev, ...updated } : prev)
+    } catch {
+      // non-fatal
+    } finally {
+      setSavingCode(false)
+    }
+  }
 
-  const visible = passes
-    .filter(p => {
-      const typeKey     = PASS_TAB_TYPE[activeTab]
-      const matchTab    = !typeKey || p.passType === typeKey
+  // ── Derived ─────────────────────────────────────────────────────────────
+
+  const unified    = buildUnifiedGuests(profiles, unlinked)
+  const allPasses  = unified.flatMap(g => g.passes)
+  const typeFilter = PASS_TAB_TYPE[activeTab]
+
+  // Metric card counts — all pass record totals
+  const passCounts = {
+    total:     allPasses.length,
+    single:    allPasses.filter(p => p.passType === 'SINGLE').length,
+    '3-pack':  allPasses.filter(p => p.passType === 'THREE_PACK').length,
+    '5-pack':  allPasses.filter(p => p.passType === 'FIVE_PACK').length,
+    '10-pack': allPasses.filter(p => p.passType === 'TEN_PACK').length,
+  }
+
+  // Tab pill counts — unique guests per type
+  const counts = {
+    all:       unified.length,
+    single:    unified.filter(g => g.passes.some(p => p.passType === 'SINGLE')).length,
+    '3-pack':  unified.filter(g => g.passes.some(p => p.passType === 'THREE_PACK')).length,
+    '5-pack':  unified.filter(g => g.passes.some(p => p.passType === 'FIVE_PACK')).length,
+    '10-pack': unified.filter(g => g.passes.some(p => p.passType === 'TEN_PACK')).length,
+  }
+
+  const visible = unified
+    .filter(g => {
       const q           = search.trim().toLowerCase()
-      const matchSearch = !q || `${p.guestName} ${p.guestEmail ?? ''}`.toLowerCase().includes(q)
-      return matchTab && matchSearch
+      const matchSearch = !q || `${g.name} ${g.email ?? ''}`.toLowerCase().includes(q)
+      const matchTab    = !typeFilter || g.passes.some(p => p.passType === typeFilter)
+      return matchSearch && matchTab
     })
-    .sort((a, b) => new Date(b.usedAt ?? b.createdAt) - new Date(a.usedAt ?? a.createdAt))
+    .sort((a, b) => {
+      const da = lastSeenDate(a)
+      const db = lastSeenDate(b)
+      if (!da && !db) return 0
+      if (!da) return 1
+      if (!db) return -1
+      return new Date(db) - new Date(da)
+    })
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden">
+    <div className="flex-1 flex flex-col overflow-hidden" style={{ fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif" }}>
 
       {/* Top bar */}
       <header className="h-14 shrink-0 bg-[#1c1c1c] border-b border-neutral-800 flex items-center justify-between px-6">
@@ -109,11 +285,11 @@ export default function GuestPassesPage() {
         {/* Metric cards */}
         <div className="shrink-0 grid grid-cols-5 gap-3">
           {[
-            { label: 'total entries', value: total  },
-            { label: 'single',        value: single },
-            { label: '3-pack',        value: three  },
-            { label: '5-pack',        value: five   },
-            { label: '10-pack',       value: ten    },
+            { label: 'total passes', value: passCounts.total },
+            { label: 'single',       value: passCounts.single },
+            { label: '3-pack',       value: passCounts['3-pack'] },
+            { label: '5-pack',       value: passCounts['5-pack'] },
+            { label: '10-pack',      value: passCounts['10-pack'] },
           ].map(({ label, value }) => (
             <div key={label} className="bg-[#1c1c1c] rounded-xl border border-neutral-800 px-4 py-3">
               <p className="text-[11px] text-neutral-500 mb-1">{label}</p>
@@ -175,7 +351,7 @@ export default function GuestPassesPage() {
               </div>
             ) : visible.length === 0 ? (
               <div className="flex items-center justify-center h-48">
-                <p className="text-sm text-neutral-600">no passes match</p>
+                <p className="text-sm text-neutral-600">no guests match</p>
               </div>
             ) : (
               <table className="w-full text-sm">
@@ -183,33 +359,188 @@ export default function GuestPassesPage() {
                   <tr className="border-b border-neutral-800 text-left">
                     <th className="px-5 py-3 text-[11px] font-semibold text-neutral-500 tracking-wider">name</th>
                     <th className="px-5 py-3 text-[11px] font-semibold text-neutral-500 tracking-wider">email</th>
-                    <th className="px-5 py-3 text-[11px] font-semibold text-neutral-500 tracking-wider">pass type</th>
+                    <th className="px-5 py-3 text-[11px] font-semibold text-neutral-500 tracking-wider">last pass type</th>
                     <th className="px-5 py-3 text-[11px] font-semibold text-neutral-500 tracking-wider">passes left</th>
-                    <th className="px-5 py-3 text-[11px] font-semibold text-neutral-500 tracking-wider">date purchased</th>
+                    <th className="px-5 py-3 text-[11px] font-semibold text-neutral-500 tracking-wider">visits</th>
+                    <th className="px-5 py-3 text-[11px] font-semibold text-neutral-500 tracking-wider">access code</th>
+                    <th className="px-5 py-3 text-[11px] font-semibold text-neutral-500 tracking-wider">last seen</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {visible.map(p => (
-                    <tr key={p.id} className="border-b border-neutral-800/40 hover:bg-white/[0.025] transition-colors">
-                      <td className="px-5 py-3 text-white text-sm">{p.guestName}</td>
-                      <td className="px-5 py-3 text-neutral-500 text-xs">{p.guestEmail || '—'}</td>
-                      <td className="px-5 py-3">
-                        <span className={`inline-block text-[11px] font-medium px-2 py-0.5 rounded-full ${PASS_TYPE_BADGE[p.passType] ?? PASS_TYPE_BADGE.SINGLE}`}>
-                          {PASS_TYPE_LABEL[p.passType] ?? p.passType.toLowerCase()}
+                  {visible.map(g => {
+                    const left     = passesLeftSummary(g)
+                    const lastType = mostRecentPassType(g)
+                    return (
+                      <tr
+                        key={g.id}
+                        onClick={() => openPanel(g)}
+                        className="border-b border-neutral-800/40 hover:bg-white/[0.025] transition-colors cursor-pointer"
+                      >
+                        <td className="px-5 py-3 text-white text-sm font-medium">{g.name}</td>
+                        <td className="px-5 py-3 text-neutral-500 text-xs">{g.email || '—'}</td>
+                        <td className="px-5 py-3">
+                          {lastType ? (
+                            <span className={`inline-block text-[11px] font-medium px-2 py-0.5 rounded-full ${PASS_TYPE_BADGE[lastType]}`}>
+                              {PASS_TYPE_LABEL[lastType]}
+                            </span>
+                          ) : <span className="text-neutral-600 text-xs">—</span>}
+                        </td>
+                        <td className="px-5 py-3">
+                          {left === null ? (
+                            <span className="text-neutral-600 text-xs">—</span>
+                          ) : left === 0 ? (
+                            <span className="text-red-400 text-xs font-medium">used out</span>
+                          ) : (
+                            <span className="text-white text-xs">{left} left</span>
+                          )}
+                        </td>
+                        <td className="px-5 py-3 text-neutral-400 text-xs tabular-nums">{totalVisits(g)}</td>
+                        <td className="px-5 py-3 font-mono text-xs text-neutral-400">{g.accessCode || '—'}</td>
+                        <td className="px-5 py-3 text-neutral-600 text-xs whitespace-nowrap">
+                          {fmtDate(lastSeenDate(g))}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+
+      </main>
+
+      {/* ── Overlay ───────────────────────────────────────────────────────── */}
+      <div
+        className={`fixed inset-0 bg-black/60 z-[100] transition-opacity duration-200 ${panelOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+        onClick={closePanel}
+      />
+
+      {/* ── Profile panel ─────────────────────────────────────────────────── */}
+      <div className={`fixed inset-y-0 right-0 w-full sm:w-[420px] bg-[#171717] border-l border-neutral-800 z-[110] flex flex-col shadow-2xl transition-transform duration-200 ${panelOpen ? 'translate-x-0' : 'translate-x-full'}`}>
+        {selectedProfile && (
+          <GuestProfilePanel
+            profile={selectedProfile}
+            onClose={closePanel}
+            onSaveCode={saveAccessCode}
+            saving={savingCode}
+          />
+        )}
+      </div>
+
+    </div>
+  )
+}
+
+// ── Guest Profile Panel ───────────────────────────────────────────────────────
+
+function GuestProfilePanel({ profile, onClose, onSaveCode, saving }) {
+  const [codeInput, setCodeInput] = useState(profile.accessCode ?? '')
+  const visits     = totalVisits(profile)
+  const isUnlinked = profile._unlinked === true
+  const nameParts  = profile.name.trim().split(/\s+/)
+  const initials   = (nameParts[0]?.[0] ?? '') + (nameParts[1]?.[0] ?? '')
+  const color      = avatarBg(profile.id)
+
+  function handleSave() {
+    onSaveCode(profile.id, codeInput.trim())
+  }
+
+  return (
+    <div className="flex flex-col h-full">
+
+      {/* Header */}
+      <div className="flex items-center justify-between px-5 h-14 shrink-0 border-b border-neutral-800">
+        <p className="text-sm font-semibold text-white">guest profile</p>
+        <button
+          onClick={onClose}
+          className="p-1.5 rounded-lg text-neutral-500 hover:text-white hover:bg-white/5 transition-colors"
+        >
+          <X size={15} />
+        </button>
+      </div>
+
+      <div className="flex-1 overflow-y-auto p-5 space-y-5">
+
+        {/* Identity */}
+        <div className="flex flex-col items-center text-center gap-3 pt-1 pb-2">
+          <div className={`w-[60px] h-[60px] rounded-full flex items-center justify-center shrink-0 ${color}`}>
+            <span className="text-white font-bold text-lg tracking-tight select-none">
+              {initials.toUpperCase() || '?'}
+            </span>
+          </div>
+          <div>
+            <p className="text-white font-semibold text-base leading-tight">{profile.name}</p>
+            <p className="text-neutral-500 text-xs mt-0.5">{profile.email}</p>
+          </div>
+          <div className="flex items-center gap-3 text-xs text-neutral-500">
+            <span><span className="text-white font-semibold">{visits}</span> total visits</span>
+            <span><span className="text-white font-semibold">{profile.passes.length}</span> passes</span>
+          </div>
+        </div>
+
+        {/* Contact */}
+        <Section icon={Phone} title="contact">
+          <Field label="email" value={profile.email} />
+          <Field label="phone" value={profile.phone} />
+        </Section>
+
+        {/* Access code */}
+        <Section icon={KeyRound} title="access code">
+          <div className="flex items-center gap-2 px-3 py-2.5 bg-[#1c1c1c]">
+            <input
+              type="text"
+              value={codeInput}
+              onChange={e => setCodeInput(e.target.value)}
+              placeholder={isUnlinked ? 'no profile linked' : 'enter PIN…'}
+              disabled={isUnlinked}
+              className="flex-1 bg-transparent text-xs font-mono text-white placeholder-neutral-600 focus:outline-none disabled:opacity-40"
+            />
+            {!isUnlinked && (
+              <button
+                onClick={handleSave}
+                disabled={saving || codeInput.trim() === (profile.accessCode ?? '')}
+                className="text-[11px] px-2.5 py-1 rounded-md bg-white/10 text-white hover:bg-white/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shrink-0"
+              >
+                {saving ? 'saving…' : 'save'}
+              </button>
+            )}
+          </div>
+        </Section>
+
+        {/* Pass history */}
+        <div>
+          <div className="flex items-center gap-1.5 mb-2">
+            <p className="text-[11px] font-semibold tracking-widest text-neutral-600">PASS HISTORY</p>
+          </div>
+          <div className="rounded-lg border border-neutral-800 overflow-hidden">
+            {profile.passes.length === 0 ? (
+              <p className="px-3 py-3 text-xs text-neutral-600">no passes yet</p>
+            ) : (
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-neutral-800 text-left bg-[#1c1c1c]">
+                    <th className="px-3 py-2 text-[10px] font-semibold text-neutral-600 tracking-wider">type</th>
+                    <th className="px-3 py-2 text-[10px] font-semibold text-neutral-600 tracking-wider">left</th>
+                    <th className="px-3 py-2 text-[10px] font-semibold text-neutral-600 tracking-wider">purchased</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-neutral-800">
+                  {profile.passes.map(p => (
+                    <tr key={p.id} className="bg-[#1c1c1c]">
+                      <td className="px-3 py-2.5">
+                        <span className={`inline-block text-[10px] font-medium px-1.5 py-0.5 rounded-full ${PASS_TYPE_BADGE[p.passType]}`}>
+                          {PASS_TYPE_LABEL[p.passType]}
                         </span>
                       </td>
-                      <td className="px-5 py-3">
-                        {p.passesLeft === null || p.passesLeft === undefined ? (
-                          <span className="text-neutral-600 text-xs">—</span>
-                        ) : p.passesLeft === 0 ? (
-                          <span className="text-red-400 text-xs font-medium">used out</span>
-                        ) : (
-                          <span className="text-white text-xs">{p.passesLeft} left</span>
-                        )}
+                      <td className="px-3 py-2.5 text-neutral-400 tabular-nums">
+                        {p.passesLeft === null || p.passesLeft === undefined
+                          ? '—'
+                          : p.passesLeft === 0
+                            ? <span className="text-red-400">used</span>
+                            : p.passesLeft}
                       </td>
-                      <td className="px-5 py-3 text-neutral-600 text-xs whitespace-nowrap">
-                        {fmtDate(p.usedAt)}
-                      </td>
+                      <td className="px-3 py-2.5 text-neutral-500 whitespace-nowrap">{fmtDate(p.usedAt ?? p.createdAt)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -218,7 +549,30 @@ export default function GuestPassesPage() {
           </div>
         </div>
 
-      </main>
+      </div>
+    </div>
+  )
+}
+
+function Section({ icon: Icon, title, children }) {
+  return (
+    <div>
+      <div className="flex items-center gap-1.5 mb-2">
+        <Icon size={11} className="text-neutral-600" />
+        <p className="text-[11px] font-semibold tracking-widest text-neutral-600">{title.toUpperCase()}</p>
+      </div>
+      <div className="rounded-lg border border-neutral-800 divide-y divide-neutral-800 overflow-hidden">
+        {children}
+      </div>
+    </div>
+  )
+}
+
+function Field({ label, value }) {
+  return (
+    <div className="flex items-center justify-between px-3 py-2.5 bg-[#1c1c1c]">
+      <span className="text-xs text-neutral-500 shrink-0">{label}</span>
+      <span className="text-xs text-white text-right ml-4 truncate max-w-[240px]">{value || '—'}</span>
     </div>
   )
 }

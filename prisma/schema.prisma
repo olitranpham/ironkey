@@ -29,9 +29,10 @@ model Gym {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  members     Member[]
-  guestPasses GuestPass[]
-  users       GymUser[]
+  members       Member[]
+  guestPasses   GuestPass[]
+  guestProfiles GuestProfile[]
+  users         GymUser[]
 }
 
 // ─── Member ───────────────────────────────────────────────────────────────────
@@ -88,6 +89,26 @@ enum MembershipType {
   STUDENT
 }
 
+// ─── GuestProfile ─────────────────────────────────────────────────────────────
+
+model GuestProfile {
+  id         String   @id @default(cuid())
+  gymId      String
+  gym        Gym      @relation(fields: [gymId], references: [id], onDelete: Cascade)
+
+  name       String
+  email      String
+  phone      String?
+  accessCode String?
+
+  passes    GuestPass[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([gymId, email])
+}
+
 // ─── GuestPass ────────────────────────────────────────────────────────────────
 
 model GuestPass {
@@ -97,6 +118,9 @@ model GuestPass {
 
   memberId  String?
   member    Member? @relation(fields: [memberId], references: [id], onDelete: SetNull)
+
+  guestProfileId String?
+  guestProfile   GuestProfile? @relation(fields: [guestProfileId], references: [id], onDelete: SetNull)
 
   guestName  String
   guestEmail String?
