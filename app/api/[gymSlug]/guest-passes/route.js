@@ -13,6 +13,22 @@ const PASS_TYPE_MAP = {
   ten_pack:   'TEN_PACK',
 }
 
+const PASS_TYPE_LABEL = {
+  SINGLE:     'Day Pass',
+  THREE_PACK: '3-Pack',
+  FIVE_PACK:  '5-Pack',
+  TEN_PACK:   '10-Pack',
+}
+
+/**
+ * POST /api/[gymSlug]/guest-passes
+ * Public route — called by Zapier when a guest purchases a pass.
+ * Body: { name, email?, phone?, passType?, passesLeft?, accessCode? }
+ *
+ * Access code logic:
+ *  - Returning guest (profile.accessCode exists) → reuse stored code, ignore body.accessCode
+ *  - New guest (no accessCode yet) → save body.accessCode to profile and create Seam code
+ */
 export async function POST(request, { params }) {
   try {
     const { gymSlug } = await params
@@ -58,7 +74,8 @@ export async function POST(request, { params }) {
       }
 
       if (profile.accessCode) {
-
+        // ── Returning guest — reuse their existing code ──────────────────────
+        // Ignore body.accessCode entirely; reprogram the stored code on the lock
         if (gym.seamApiKey && gym.seamDeviceId) {
           try {
             await fetch(`${SEAM_API}/access_codes/create`, {
@@ -75,10 +92,10 @@ export async function POST(request, { params }) {
           }
         }
       } else {
-
+        // ── New guest — persist the code Zapier generated and create Seam code
         const incomingCode = body.accessCode ? String(body.accessCode).trim() : null
         if (incomingCode) {
-          
+          // Save to profile so it's reused on future purchases
           profile = await prisma.guestProfile.update({
             where: { id: profile.id },
             data:  { accessCode: incomingCode },
@@ -118,7 +135,12 @@ export async function POST(request, { params }) {
       },
     })
 
-    return NextResponse.json({ pass }, { status: 201 })
+    const accessCode = profile?.accessCode ?? null
+    return NextResponse.json({
+      pass,
+      accessCode,
+      passTypeLabel: PASS_TYPE_LABEL[passType] ?? passType,
+    }, { status: 201 })
   } catch (error) {
     console.error('[guest-passes POST]', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
