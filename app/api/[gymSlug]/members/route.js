@@ -53,6 +53,7 @@ export async function POST(request, { params }) {
         firstName,
         lastName,
         membershipType,
+        status: 'ACTIVE',
         ...(phone      ? { phone }                                  : {}),
         ...(customerId ? { stripeCustomerId:     customerId }       : {}),
         ...(subId      ? { stripeSubscriptionId: subId }            : {}),
