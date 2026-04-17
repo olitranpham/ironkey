@@ -13,11 +13,6 @@ const PASS_TYPE_MAP = {
   ten_pack:   'TEN_PACK',
 }
 
-/**
- * POST /api/[gymSlug]/guest-passes
- * Public route — called by Zapier when a guest purchases a pass.
- * Body: { name, email?, phone?, passType?, passesLeft? }
- */
 export async function POST(request, { params }) {
   try {
     const { gymSlug } = await params
@@ -57,24 +52,53 @@ export async function POST(request, { params }) {
         },
       })
 
-      // ── Recreate Seam access code if profile already has one ─────────────
-      if (profile.accessCode && gym.seamApiKey && gym.seamDeviceId) {
-        try {
-          const seamHeaders = {
-            Authorization:  `Bearer ${gym.seamApiKey}`,
-            'Content-Type': 'application/json',
+      const seamHeaders = {
+        Authorization:  `Bearer ${gym.seamApiKey}`,
+        'Content-Type': 'application/json',
+      }
+
+      if (profile.accessCode) {
+
+        if (gym.seamApiKey && gym.seamDeviceId) {
+          try {
+            await fetch(`${SEAM_API}/access_codes/create`, {
+              method:  'POST',
+              headers: seamHeaders,
+              body:    JSON.stringify({
+                device_id: gym.seamDeviceId,
+                name:      profile.name,
+                code:      profile.accessCode,
+              }),
+            })
+          } catch (seamErr) {
+            console.error('[guest-passes POST] Seam reprogram error:', seamErr.message)
           }
-          await fetch(`${SEAM_API}/access_codes/create`, {
-            method:  'POST',
-            headers: seamHeaders,
-            body:    JSON.stringify({
-              device_id: gym.seamDeviceId,
-              name:      profile.name,
-              code:      profile.accessCode,
-            }),
+        }
+      } else {
+
+        const incomingCode = body.accessCode ? String(body.accessCode).trim() : null
+        if (incomingCode) {
+          
+          profile = await prisma.guestProfile.update({
+            where: { id: profile.id },
+            data:  { accessCode: incomingCode },
           })
-        } catch (seamErr) {
-          console.error('[guest-passes POST] Seam error:', seamErr.message)
+
+          if (gym.seamApiKey && gym.seamDeviceId) {
+            try {
+              await fetch(`${SEAM_API}/access_codes/create`, {
+                method:  'POST',
+                headers: seamHeaders,
+                body:    JSON.stringify({
+                  device_id: gym.seamDeviceId,
+                  name:      profile.name,
+                  code:      incomingCode,
+                }),
+              })
+            } catch (seamErr) {
+              console.error('[guest-passes POST] Seam create error:', seamErr.message)
+            }
+          }
         }
       }
     }
