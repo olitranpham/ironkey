@@ -22,12 +22,12 @@ const PASS_TYPE_LABEL = {
 
 /**
  * POST /api/[gymSlug]/guest-passes
- * Public route — called by Zapier when a guest purchases a pass.
+ * Public route  called by Zapier when a guest purchases a pass.
  * Body: { name, email?, phone?, passType?, passesLeft?, accessCode? }
  *
  * Access code logic:
- *  - Returning guest (profile.accessCode exists) → reuse stored code, ignore body.accessCode
- *  - New guest (no accessCode yet) → save body.accessCode to profile and create Seam code
+ *  - Returning guest (profile.accessCode exists)  reuse stored code, ignore body.accessCode
+ *  - New guest (no accessCode yet)  save body.accessCode to profile and create Seam code
  */
 export async function POST(request, { params }) {
   try {
@@ -51,7 +51,7 @@ export async function POST(request, { params }) {
     const passType = PASS_TYPE_MAP[rawType] ?? 'SINGLE'
     const email    = (body.email ?? '').trim().toLowerCase() || null
 
-    // ── Upsert guest profile ─────────────────────────────────────────────────
+    //  Upsert guest profile 
     let profile = null
     if (email) {
       profile = await prisma.guestProfile.upsert({
@@ -74,7 +74,7 @@ export async function POST(request, { params }) {
       }
 
       if (profile.accessCode) {
-        // ── Returning guest — reuse their existing code ──────────────────────
+        //  Returning guest  reuse their existing code 
         // Ignore body.accessCode entirely; reprogram the stored code on the lock
         if (gym.seamApiKey && gym.seamDeviceId) {
           try {
@@ -92,7 +92,7 @@ export async function POST(request, { params }) {
           }
         }
       } else {
-        // ── New guest — persist the code Zapier generated and create Seam code
+        //  New guest  persist the code Zapier generated and create Seam code
         const incomingCode = body.accessCode ? String(body.accessCode).trim() : null
         if (incomingCode) {
           // Save to profile so it's reused on future purchases
@@ -120,7 +120,7 @@ export async function POST(request, { params }) {
       }
     }
 
-    // ── Create the pass ──────────────────────────────────────────────────────
+    //  Create the pass 
     const pass = await prisma.guestPass.create({
       data: {
         gymId:          gym.id,
