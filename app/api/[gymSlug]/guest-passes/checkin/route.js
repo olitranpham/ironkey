@@ -3,6 +3,13 @@ import prisma from '@/lib/prisma'
 
 const SEAM_API = 'https://connect.getseam.com'
 
+const PASS_TYPE_LABEL = {
+  SINGLE:     'Day Pass',
+  THREE_PACK: '3-Pack',
+  FIVE_PACK:  '5-Pack',
+  TEN_PACK:   '10-Pack',
+}
+
 /**
  * Deletes the guest's Seam access code from the lock.
  * Looks up the code by its value in the device's code list, then deletes by ID.
@@ -92,7 +99,7 @@ export async function POST(request, { params }) {
         await deactivateSeamCode(profile.accessCode, gym.seamApiKey, gym.seamDeviceId)
       }
 
-      return NextResponse.json({ ok: true, passesLeft: updated.passesLeft, passType: updated.passType, accessCode: profile?.accessCode ?? null })
+      return NextResponse.json({ ok: true, passesLeft: updated.passesLeft, passType: updated.passType, passTypeLabel: PASS_TYPE_LABEL[updated.passType] ?? updated.passType, accessCode: profile?.accessCode ?? null })
     }
 
     // ── No pack found — create a single-use record and deactivate immediately
@@ -114,7 +121,7 @@ export async function POST(request, { params }) {
       await deactivateSeamCode(profile.accessCode, gym.seamApiKey, gym.seamDeviceId)
     }
 
-    return NextResponse.json({ ok: true, passesLeft: null, passType: 'SINGLE', accessCode: profile?.accessCode ?? null })
+    return NextResponse.json({ ok: true, passesLeft: null, passType: 'SINGLE', passTypeLabel: 'Day Pass', accessCode: profile?.accessCode ?? null })
   } catch (error) {
     console.error('[guest-passes/checkin]', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
