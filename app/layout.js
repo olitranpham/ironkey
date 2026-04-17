@@ -1,8 +1,8 @@
 import './globals.css'
 
 export const metadata = {
-  title: 'Ironkey',
-  description: 'Gym management platform',
+  title: 'staff portal',
+  description: 'gym management platform',
 }
 
 export default function RootLayout({ children }) {
