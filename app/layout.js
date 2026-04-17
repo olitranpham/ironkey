@@ -1,7 +1,7 @@
 import './globals.css'
 
 export const metadata = {
-  title: 'triumph barbell - staff portal',
+  title: 'staff portal',
   description: 'gym management platform',
 }
 
