@@ -174,6 +174,23 @@ export default function DashboardPage() {
     }
   }
 
+  async function handleAccessCodeSave(memberId, code) {
+    try {
+      const token = localStorage.getItem('ik_token')
+      const res = await fetch(`/api/${gymSlug}/members/${memberId}`, {
+        method:  'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body:    JSON.stringify({ accessCode: code }),
+      })
+      if (!res.ok) throw new Error('Failed')
+      const { member: updated } = await res.json()
+      setMembers(prev => prev.map(m => m.id === memberId ? { ...m, ...updated } : m))
+      setSelectedMember(prev => prev?.id === memberId ? { ...prev, ...updated } : prev)
+    } catch {
+      // non-fatal
+    }
+  }
+
   // ── Fetch ───────────────────────────────────────────────────────────────
 
   const load = useCallback(async ({ manual = false } = {}) => {
@@ -345,6 +362,7 @@ export default function DashboardPage() {
             onClose={closePanel}
             onStatusChange={handleStatusChange}
             updating={updatingStatus}
+            onAccessCodeSave={handleAccessCodeSave}
           />
         )}
       </div>
@@ -638,9 +656,17 @@ function PanelField({ label, value, mono = false }) {
   )
 }
 
-function MemberPanel({ member, onClose, onStatusChange, updating }) {
-  const initials = (member.firstName?.[0] ?? '') + (member.lastName?.[0] ?? '')
-  const color    = avatarBg(member.id)
+function MemberPanel({ member, onClose, onStatusChange, updating, onAccessCodeSave }) {
+  const initials      = (member.firstName?.[0] ?? '') + (member.lastName?.[0] ?? '')
+  const color         = avatarBg(member.id)
+  const [codeInput,   setCodeInput]   = useState(member.accessCode ?? '')
+  const [savingCode,  setSavingCode]  = useState(false)
+
+  async function handleCodeSave() {
+    setSavingCode(true)
+    await onAccessCodeSave(member.id, codeInput.trim())
+    setSavingCode(false)
+  }
 
   return (
     <div className="flex flex-col h-full">
@@ -690,9 +716,35 @@ function MemberPanel({ member, onClose, onStatusChange, updating }) {
 
         {/* Membership */}
         <PanelSection icon={KeyRound} title="membership">
-          <PanelField label="type"      value={(member.membershipType ?? 'GENERAL').toLowerCase()} />
-          <PanelField label="access id" value={member.accessCode} mono />
-          <PanelField label="joined"    value={fmtDate(member.createdAt)} />
+          <PanelField label="type"   value={(member.membershipType ?? 'GENERAL').toLowerCase()} />
+          <div className="flex items-center justify-between px-3 py-2.5 bg-[#1c1c1c]">
+            <span className="text-xs text-neutral-500 shrink-0">code</span>
+            <div className="flex items-center gap-2 ml-4">
+              <input
+                type="text"
+                value={codeInput}
+                onChange={e => setCodeInput(e.target.value)}
+                placeholder="——"
+                maxLength={6}
+                className="bg-[#252525] border border-neutral-700 rounded px-2 py-1 text-xs text-white text-right placeholder-neutral-600 focus:outline-none focus:border-neutral-500 w-20"
+              />
+              <button
+                onClick={() => setCodeInput(String(Math.floor(1000 + Math.random() * 9000)))}
+                title="generate random 4-digit code"
+                className="text-[10px] px-2 py-1 rounded bg-white/5 text-neutral-400 hover:text-white hover:bg-white/10 transition-colors shrink-0"
+              >
+                gen
+              </button>
+              <button
+                onClick={handleCodeSave}
+                disabled={savingCode || codeInput.trim() === (member.accessCode ?? '')}
+                className="text-[10px] px-2 py-1 rounded bg-white/10 text-white hover:bg-white/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shrink-0"
+              >
+                {savingCode ? '…' : 'save'}
+              </button>
+            </div>
+          </div>
+          <PanelField label="joined" value={fmtDate(member.createdAt)} />
           {member.status === 'FROZEN'    && <PanelField label="frozen"   value={fmtDate(member.dateFrozen)} />}
           {member.status === 'CANCELLED' && <PanelField label="canceled" value={fmtDate(member.dateCanceled)} />}
         </PanelSection>

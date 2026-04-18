@@ -395,7 +395,7 @@ export default function GuestPassesPage() {
                           )}
                         </td>
                         <td className="px-5 py-3 text-neutral-400 text-xs tabular-nums">{totalVisits(g)}</td>
-                        <td className="px-5 py-3 font-mono text-xs text-neutral-400">{g.accessCode || '—'}</td>
+                        <td className="px-5 py-3 text-xs text-neutral-400">{g.accessCode || '—'}</td>
                         <td className="px-5 py-3 text-neutral-600 text-xs whitespace-nowrap">
                           {fmtDate(lastSeenDate(g))}
                         </td>
@@ -417,7 +417,7 @@ export default function GuestPassesPage() {
       />
 
       {/* ── Profile panel ─────────────────────────────────────────────────── */}
-      <div className={`fixed inset-y-0 right-0 w-full sm:w-[420px] bg-[#171717] border-l border-neutral-800 z-[110] flex flex-col shadow-2xl transition-transform duration-200 ${panelOpen ? 'translate-x-0' : 'translate-x-full'}`}>
+      <div style={{ fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif" }} className={`fixed inset-y-0 right-0 w-full sm:w-[420px] bg-[#171717] border-l border-neutral-800 z-[110] flex flex-col shadow-2xl transition-transform duration-200 ${panelOpen ? 'translate-x-0' : 'translate-x-full'}`}>
         {selectedProfile && (
           <GuestProfilePanel
             profile={selectedProfile}
@@ -494,7 +494,7 @@ function GuestProfilePanel({ profile, onClose, onSaveCode, saving }) {
               onChange={e => setCodeInput(e.target.value)}
               placeholder={isUnlinked ? 'no profile linked' : 'enter PIN…'}
               disabled={isUnlinked}
-              className="flex-1 bg-transparent text-xs font-mono text-white placeholder-neutral-600 focus:outline-none disabled:opacity-40"
+              className="flex-1 bg-transparent text-xs text-white placeholder-neutral-600 focus:outline-none disabled:opacity-40"
             />
             {!isUnlinked && (
               <button

@@ -11,7 +11,8 @@ export async function middleware(request) {
     pathname === '/api/admin/login' ||
     (request.method === 'POST' && /^\/api\/[^/]+\/members$/.test(pathname)) ||
     (request.method === 'POST' && /^\/api\/[^/]+\/guest-passes$/.test(pathname)) ||
-    (request.method === 'POST' && /^\/api\/[^/]+\/guest-passes\/checkin$/.test(pathname))
+    (request.method === 'POST' && /^\/api\/[^/]+\/guest-passes\/checkin$/.test(pathname)) ||
+    (request.method === 'POST' && /^\/api\/[^/]+\/stripe\/webhook$/.test(pathname))
   ) {
     return NextResponse.next()
   }

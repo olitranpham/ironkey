@@ -97,7 +97,7 @@ model GuestProfile {
   gym        Gym      @relation(fields: [gymId], references: [id], onDelete: Cascade)
 
   name       String
-  email      String
+  email      String?
   phone      String?
   accessCode String?
 

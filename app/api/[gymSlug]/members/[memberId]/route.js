@@ -5,19 +5,14 @@ const VALID_STATUSES = ['ACTIVE', 'FROZEN', 'CANCELLED']
 
 /**
  * PATCH /api/[gymSlug]/members/[memberId]
- * Updates a member's status. Sets dateFrozen / dateCanceled if transitioning
- * into that status and the field isn't already set.
+ * Updates a member's status and/or accessCode.
  */
 export async function PATCH(request, { params }) {
   try {
-    const gymId     = request.headers.get('x-gym-id')
+    const gymId        = request.headers.get('x-gym-id')
     const { memberId } = params
-    const body      = await request.json()
-    const { status } = body
-
-    if (!VALID_STATUSES.includes(status)) {
-      return NextResponse.json({ error: 'Invalid status' }, { status: 400 })
-    }
+    const body         = await request.json()
+    const { status, accessCode } = body
 
     const existing = await prisma.member.findFirst({
       where: { id: memberId, gymId },
@@ -28,20 +23,27 @@ export async function PATCH(request, { params }) {
     }
 
     const now  = new Date()
-    const data = { status, updatedAt: now }
+    const data = { updatedAt: now }
 
-    if (status === 'FROZEN'    && !existing.dateFrozen)   data.dateFrozen   = now
-    if (status === 'CANCELLED' && !existing.dateCanceled) data.dateCanceled = now
-    if (status === 'ACTIVE') {
-      // Resuming — clear freeze date so it resets if frozen again later
-      data.dateFrozen = null
+    if (status !== undefined) {
+      if (!VALID_STATUSES.includes(status)) {
+        return NextResponse.json({ error: 'Invalid status' }, { status: 400 })
+      }
+      data.status = status
+      if (status === 'FROZEN'    && !existing.dateFrozen)   data.dateFrozen   = now
+      if (status === 'CANCELLED' && !existing.dateCanceled) data.dateCanceled = now
+      if (status === 'ACTIVE')                              data.dateFrozen   = null
+    }
+
+    if (accessCode !== undefined) {
+      data.accessCode = accessCode === '' ? null : String(accessCode).trim()
     }
 
     const member = await prisma.member.update({
       where: { id: memberId },
       data,
       select: {
-        id: true, status: true,
+        id: true, status: true, accessCode: true,
         dateFrozen: true, dateCanceled: true, updatedAt: true,
       },
     })
