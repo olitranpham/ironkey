@@ -18,24 +18,32 @@ export async function DELETE(request, { params }) {
     const apiKey = gym.seamApiKey ?? process.env.SEAM_API_KEY
     if (!apiKey) return NextResponse.json({ error: 'Seam not configured' }, { status: 422 })
 
-    // ── Seam API call ────────────────────────────────────────────────────────
-    // const deleteRes = await fetch(`${SEAM_API}/access_codes/delete`, {
-    //   method: 'POST',
-    //   headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-    //   body: JSON.stringify({ access_code_id: codeId }),
-    // })
-    // if (!deleteRes.ok) {
-    //   const text = await deleteRes.text()
-    //   console.error('[seam/codes DELETE]', deleteRes.status, text)
-    //   return NextResponse.json({ error: 'Seam API error' }, { status: 502 })
-    // }
-    // ─────────────────────────────────────────────────────────────────────────
-
-    // Clear the code from any matching member row
-    await prisma.member.updateMany({
-      where: { gymId, seamDeviceId: codeId },
-      data:  { accessCode: null, seamDeviceId: null },
+    // ── Seam API call ─────────────────────────────────────────────────────────
+    const deleteRes = await fetch(`${SEAM_API}/access_codes/delete`, {
+      method:  'POST',
+      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ access_code_id: codeId }),
     })
+    if (!deleteRes.ok) {
+      const text = await deleteRes.text()
+      console.error('[seam/codes DELETE]', deleteRes.status, text)
+      return NextResponse.json({ error: 'Seam API error' }, { status: 502 })
+    }
+
+    // ── Clear from DB by PIN (passed as ?code=) ───────────────────────────────
+    const pin = new URL(request.url).searchParams.get('code')
+    if (pin) {
+      await Promise.all([
+        prisma.member.updateMany({
+          where: { gymId, accessCode: pin },
+          data:  { accessCode: null },
+        }),
+        prisma.guestProfile.updateMany({
+          where: { gymId, accessCode: pin },
+          data:  { accessCode: null },
+        }),
+      ])
+    }
 
     console.log(`[seam/codes DELETE] codeId=${codeId} gymId=${gymId}`)
     return NextResponse.json({ ok: true })

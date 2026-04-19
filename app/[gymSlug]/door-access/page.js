@@ -122,7 +122,8 @@ export default function DoorAccessPage() {
     setActionError(null)
     try {
       const token = localStorage.getItem('ik_token')
-      const res   = await fetch(`/api/${gymSlug}/seam/codes/${removeModal.id}`, {
+      const qs  = removeModal.code ? `?code=${encodeURIComponent(removeModal.code)}` : ''
+      const res = await fetch(`/api/${gymSlug}/seam/codes/${removeModal.id}${qs}`, {
         method:  'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       })
