@@ -69,11 +69,20 @@ export async function GET(request) {
       return true
     })
 
-    // ── 3. Cross-reference with DB members ────────────────────────────────────
-    const members = await prisma.member.findMany({
-      where: { gymId },
-      select: { id: true, firstName: true, lastName: true, accessCode: true, status: true },
-    })
+    // ── 3. Cross-reference with DB members and guest profiles ───────────────
+    const [members, guestProfiles] = await Promise.all([
+      prisma.member.findMany({
+        where: { gymId },
+        select: { id: true, firstName: true, lastName: true, accessCode: true, status: true },
+      }),
+      prisma.guestProfile.findMany({
+        where: { gymId, accessCode: { not: null } },
+        select: { id: true, accessCode: true },
+      }),
+    ])
+
+    // Build guest code lookup — PIN takes priority over member name matching
+    const guestCodeSet = new Set(guestProfiles.map(g => String(g.accessCode).trim()))
 
     // Normalize a name: lowercase, collapse whitespace, drop middle initials
     function normalizeName(name) {
@@ -127,6 +136,22 @@ export async function GET(request) {
     }
 
     const codes = access_codes.map(c => {
+      // 0. If PIN matches a guest profile — always classify as guest
+      const isGuest = c.code && guestCodeSet.has(String(c.code).trim())
+      if (isGuest) {
+        return {
+          id:           c.access_code_id,
+          name:         c.name ?? '—',
+          code:         c.code,
+          status:       c.status,
+          type:         'guest',
+          codeType:     c.type,
+          endsAt:       c.ends_at ?? null,
+          memberStatus: null,
+          memberId:     null,
+        }
+      }
+
       // 1. Match by PIN (exact)
       let member = c.code ? memberByCode[String(c.code).trim()] : undefined
 
