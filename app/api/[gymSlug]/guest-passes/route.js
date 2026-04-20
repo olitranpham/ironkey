@@ -68,6 +68,9 @@ export async function POST(request, { params }) {
         },
       })
 
+      const seamNow     = new Date()
+      const seamExpires = new Date(seamNow.getTime() + 24 * 60 * 60 * 1000)
+
       const seamHeaders = {
         Authorization:  `Bearer ${gym.seamApiKey}`,
         'Content-Type': 'application/json',
@@ -85,6 +88,8 @@ export async function POST(request, { params }) {
                 device_id: gym.seamDeviceId,
                 name:      profile.name,
                 code:      profile.accessCode,
+                starts_at: seamNow.toISOString(),
+                ends_at:   seamExpires.toISOString(),
               }),
             })
           } catch (seamErr) {
@@ -110,6 +115,8 @@ export async function POST(request, { params }) {
                   device_id: gym.seamDeviceId,
                   name:      profile.name,
                   code:      incomingCode,
+                  starts_at: seamNow.toISOString(),
+                  ends_at:   seamExpires.toISOString(),
                 }),
               })
             } catch (seamErr) {
