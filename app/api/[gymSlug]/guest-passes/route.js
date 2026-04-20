@@ -88,7 +88,6 @@ export async function POST(request, { params }) {
                 device_id: gym.seamDeviceId,
                 name:      profile.name,
                 code:      profile.accessCode,
-                starts_at: seamNow.toISOString(),
                 ends_at:   seamExpires.toISOString(),
               }),
             })
@@ -115,7 +114,6 @@ export async function POST(request, { params }) {
                   device_id: gym.seamDeviceId,
                   name:      profile.name,
                   code:      incomingCode,
-                  starts_at: seamNow.toISOString(),
                   ends_at:   seamExpires.toISOString(),
                 }),
               })
