@@ -1,8 +1,6 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 
-const SEAM_API = 'https://connect.getseam.com'
-
 const PASS_TYPE_MAP = {
   single:     'SINGLE',
   '3-pack':   'THREE_PACK',
@@ -41,7 +39,7 @@ export async function POST(request, { params }) {
 
     const gym = await prisma.gym.findUnique({
       where:  { slug: gymSlug },
-      select: { id: true, seamApiKey: true, seamDeviceId: true },
+      select: { id: true },
     })
     if (!gym) {
       return NextResponse.json({ error: 'Gym not found' }, { status: 404 })
@@ -68,59 +66,16 @@ export async function POST(request, { params }) {
         },
       })
 
-      const seamNow     = new Date()
-      const seamExpires = new Date(seamNow.getTime() + 24 * 60 * 60 * 1000)
-
-      const seamHeaders = {
-        Authorization:  `Bearer ${gym.seamApiKey}`,
-        'Content-Type': 'application/json',
-      }
-
       if (profile.accessCode) {
-        //  Returning guest  reuse their existing code 
-        // Ignore body.accessCode entirely; reprogram the stored code on the lock
-        if (gym.seamApiKey && gym.seamDeviceId) {
-          try {
-            await fetch(`${SEAM_API}/access_codes/create`, {
-              method:  'POST',
-              headers: seamHeaders,
-              body:    JSON.stringify({
-                device_id: gym.seamDeviceId,
-                name:      profile.name,
-                code:      profile.accessCode,
-                ends_at:   seamExpires.toISOString(),
-              }),
-            })
-          } catch (seamErr) {
-            console.error('[guest-passes POST] Seam reprogram error:', seamErr.message)
-          }
-        }
+        // Returning guest -- accessCode already stored, Zapier will reprogram Seam
       } else {
-        //  New guest  persist the code Zapier generated and create Seam code
+        // New guest -- save incoming code to profile
         const incomingCode = body.accessCode ? String(body.accessCode).trim() : null
         if (incomingCode) {
-          // Save to profile so it's reused on future purchases
           profile = await prisma.guestProfile.update({
             where: { id: profile.id },
             data:  { accessCode: incomingCode },
           })
-
-          if (gym.seamApiKey && gym.seamDeviceId) {
-            try {
-              await fetch(`${SEAM_API}/access_codes/create`, {
-                method:  'POST',
-                headers: seamHeaders,
-                body:    JSON.stringify({
-                  device_id: gym.seamDeviceId,
-                  name:      profile.name,
-                  code:      incomingCode,
-                  ends_at:   seamExpires.toISOString(),
-                }),
-              })
-            } catch (seamErr) {
-              console.error('[guest-passes POST] Seam create error:', seamErr.message)
-            }
-          }
         }
       }
     }
