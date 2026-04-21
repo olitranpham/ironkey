@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams } from 'next/navigation'
 import { Search, RefreshCw, X, KeyRound, Phone } from 'lucide-react'
+import { getAllowedPassTypes } from '@/lib/gymPassTypes'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -11,6 +12,8 @@ const PASS_TYPE_LABEL = {
   THREE_PACK: '3-pack',
   FIVE_PACK:  '5-pack',
   TEN_PACK:   '10-pack',
+  VALUE:      'value',
+  DELUXE:     'deluxe',
 }
 
 const PASS_TYPE_BADGE = {
@@ -18,16 +21,21 @@ const PASS_TYPE_BADGE = {
   THREE_PACK: 'bg-violet-500/15 text-violet-400',
   FIVE_PACK:  'bg-blue-500/15 text-blue-400',
   TEN_PACK:   'bg-emerald-500/15 text-emerald-400',
+  VALUE:      'bg-amber-500/15 text-amber-400',
+  DELUXE:     'bg-rose-500/15 text-rose-400',
 }
 
-const PASS_TABS     = ['all', 'single', '3-pack', '5-pack', '10-pack']
+const PASS_TABS     = ['all', 'single', '3-pack', '5-pack', '10-pack', 'value', 'deluxe']
 const PASS_TAB_TYPE = {
   all:       null,
   single:    'SINGLE',
   '3-pack':  'THREE_PACK',
   '5-pack':  'FIVE_PACK',
   '10-pack': 'TEN_PACK',
+  value:     'VALUE',
+  deluxe:    'DELUXE',
 }
+
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -52,20 +60,29 @@ function normName(s) {
   return (s ?? '').trim().toLowerCase().replace(/\s+/g, ' ')
 }
 
+const PASS_TYPE_INITIAL = {
+  SINGLE:     1,
+  VALUE:      1,
+  DELUXE:     1,
+  THREE_PACK: 3,
+  FIVE_PACK:  5,
+  TEN_PACK:   10,
+}
+
 function totalVisits(guest) {
   return guest.passes.reduce((sum, p) => {
-    if (p.passType === 'SINGLE') return sum + 1
-    const initial = p.passType === 'THREE_PACK' ? 3 : p.passType === 'FIVE_PACK' ? 5 : 10
-    const used    = p.passesLeft != null ? initial - p.passesLeft : initial
+    const initial = PASS_TYPE_INITIAL[p.passType] ?? 1
+    if (initial === 1) return sum + 1
+    const used = p.passesLeft != null ? initial - p.passesLeft : initial
     return sum + used
   }, 0)
 }
 
 function mostRecentPassType(guest) {
   if (!guest.passes.length) return null
-  // passes sorted desc by createdAt from API; find most recent by date
+  // passes sorted desc by usedAt from API; find most recent by date
   const sorted = [...guest.passes].sort(
-    (a, b) => new Date(b.createdAt ?? b.usedAt) - new Date(a.createdAt ?? a.usedAt)
+    (a, b) => new Date(b.usedAt ?? b.createdAt) - new Date(a.usedAt ?? a.createdAt)
   )
   return sorted[0].passType
 }
@@ -226,9 +243,14 @@ export default function GuestPassesPage() {
 
   // ── Derived ─────────────────────────────────────────────────────────────
 
-  const unified    = buildUnifiedGuests(profiles, unlinked)
-  const allPasses  = unified.flatMap(g => g.passes)
-  const typeFilter = PASS_TAB_TYPE[activeTab]
+  const unified     = buildUnifiedGuests(profiles, unlinked)
+  const allPasses   = unified.flatMap(g => g.passes)
+  const typeFilter  = PASS_TAB_TYPE[activeTab]
+
+  // Map allowed enum values (e.g. 'THREE_PACK') back to tab keys (e.g. '3-pack')
+  const TYPE_TO_TAB = Object.fromEntries(Object.entries(PASS_TAB_TYPE).map(([k, v]) => [v, k]))
+  const allowedTypes = getAllowedPassTypes(gymSlug)
+  const visibleTabs  = ['all', ...allowedTypes.map(t => TYPE_TO_TAB[t]).filter(Boolean)]
 
   // Metric card counts — all pass record totals
   const passCounts = {
@@ -237,6 +259,8 @@ export default function GuestPassesPage() {
     '3-pack':  allPasses.filter(p => p.passType === 'THREE_PACK').length,
     '5-pack':  allPasses.filter(p => p.passType === 'FIVE_PACK').length,
     '10-pack': allPasses.filter(p => p.passType === 'TEN_PACK').length,
+    value:     allPasses.filter(p => p.passType === 'VALUE').length,
+    deluxe:    allPasses.filter(p => p.passType === 'DELUXE').length,
   }
 
   // Tab pill counts — unique guests per type
@@ -246,6 +270,8 @@ export default function GuestPassesPage() {
     '3-pack':  unified.filter(g => g.passes.some(p => p.passType === 'THREE_PACK')).length,
     '5-pack':  unified.filter(g => g.passes.some(p => p.passType === 'FIVE_PACK')).length,
     '10-pack': unified.filter(g => g.passes.some(p => p.passType === 'TEN_PACK')).length,
+    value:     unified.filter(g => g.passes.some(p => p.passType === 'VALUE')).length,
+    deluxe:    unified.filter(g => g.passes.some(p => p.passType === 'DELUXE')).length,
   }
 
   const visible = unified
@@ -283,21 +309,26 @@ export default function GuestPassesPage() {
       <main className="flex-1 flex flex-col p-5 gap-4 overflow-hidden min-h-0">
 
         {/* Metric cards */}
-        <div className="shrink-0 grid grid-cols-5 gap-3">
+        <div className="shrink-0 grid gap-3" style={{ gridTemplateColumns: `repeat(${visibleTabs.length}, minmax(0, 1fr))` }}>
           {[
-            { label: 'total passes', value: passCounts.total },
-            { label: 'single',       value: passCounts.single },
-            { label: '3-pack',       value: passCounts['3-pack'] },
-            { label: '5-pack',       value: passCounts['5-pack'] },
-            { label: '10-pack',      value: passCounts['10-pack'] },
-          ].map(({ label, value }) => (
+            { label: 'total passes', key: 'all' },
+            { label: 'single',       key: 'single' },
+            { label: '3-pack',       key: '3-pack' },
+            { label: '5-pack',       key: '5-pack' },
+            { label: '10-pack',      key: '10-pack' },
+            { label: 'value',        key: 'value' },
+            { label: 'deluxe',       key: 'deluxe' },
+          ].filter(c => c.key === 'all' || visibleTabs.includes(c.key))
+           .map(({ label, key }) => {
+            const value = key === 'all' ? passCounts.total : passCounts[key]
+            return (
             <div key={label} className="bg-[#1c1c1c] rounded-xl border border-neutral-800 px-4 py-3">
               <p className="text-[11px] text-neutral-500 mb-1">{label}</p>
               <p className="text-xl font-semibold text-white tabular-nums">
                 {loading ? '—' : value}
               </p>
             </div>
-          ))}
+          )})}
         </div>
 
         {/* Search */}
@@ -317,7 +348,7 @@ export default function GuestPassesPage() {
 
           {/* Tabs */}
           <div className="flex border-b border-neutral-800 px-4 shrink-0">
-            {PASS_TABS.map(tab => (
+            {visibleTabs.map(tab => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
@@ -540,7 +571,7 @@ function GuestProfilePanel({ profile, onClose, onSaveCode, saving }) {
                             ? <span className="text-red-400">used</span>
                             : p.passesLeft}
                       </td>
-                      <td className="px-3 py-2.5 text-neutral-500 whitespace-nowrap">{fmtDate(p.usedAt ?? p.createdAt)}</td>
+                      <td className="px-3 py-2.5 text-neutral-500 whitespace-nowrap">{fmtDate(p.usedAt)}</td>
                     </tr>
                   ))}
                 </tbody>

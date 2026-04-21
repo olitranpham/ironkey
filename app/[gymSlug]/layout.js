@@ -56,7 +56,8 @@ export default function GymLayout({ children }) {
       .join(' ')
     try {
       const gym  = JSON.parse(localStorage.getItem('ik_gym') || '{}')
-      const name = gym.name || slugTitle
+      // Only trust stored gym name if its slug matches the current URL
+      const name = (gym.slug === gymSlug && gym.name) ? gym.name : slugTitle
       document.title = `${name.toLowerCase()} - staff portal`
     } catch {
       document.title = `${slugTitle.toLowerCase()} - staff portal`
@@ -67,22 +68,24 @@ export default function GymLayout({ children }) {
     const token = localStorage.getItem('ik_token')
     if (!token) { router.replace('/login'); return }
 
-    // Gym name from localStorage (immediate, no flash)
-    try {
-      const gym = JSON.parse(localStorage.getItem('ik_gym') || '{}')
-      const name = (gym.name || gymSlug).toLowerCase()
-      setGymName(name)
-      document.title = `${name} - staff portal`
-    } catch {
-      setGymName(gymSlug.toLowerCase())
-      document.title = `${gymSlug.toLowerCase()} - staff portal`
-    }
-
-    // Fetch gym config to conditionally show door access nav item
+    // Fetch gym config from API — authoritative source for name and Seam flag.
+    // This also avoids showing a stale gym name if localStorage belongs to a
+    // different gym (e.g. after admin opens a portal for a different gym).
     fetch(`/api/${gymSlug}/gym`, { headers: { Authorization: `Bearer ${token}` } })
       .then(r => r.json())
-      .then(({ gym }) => { if (gym?.hasSeam) setHasSeam(true) })
-      .catch(() => {})
+      .then(({ gym }) => {
+        if (!gym) return
+        const name = gym.name.toLowerCase()
+        setGymName(name)
+        setHasSeam(Boolean(gym.hasSeam))
+        document.title = `${name} - staff portal`
+        // Keep localStorage in sync with what the API says
+        localStorage.setItem('ik_gym', JSON.stringify({ id: gym.id, name: gym.name, slug: gym.slug }))
+      })
+      .catch(() => {
+        // Fall back to URL slug on error
+        setGymName(gymSlug.toLowerCase())
+      })
   }, [gymSlug, router])
 
   const isActive = (slug) => pathname === `/${gymSlug}/${slug}`

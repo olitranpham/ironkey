@@ -29,7 +29,11 @@
       "Bash(echo \"PID $!\")",
       "Bash(kill %1)",
       "Bash(wait)",
-      "Bash(grep -n \"overdue\\\\|OVERDUE\\\\|status\" /Users/olitranpham/ironkey/app/[gymSlug]/dashboard/page.js)"
+      "Bash(grep -n \"overdue\\\\|OVERDUE\\\\|status\" /Users/olitranpham/ironkey/app/[gymSlug]/dashboard/page.js)",
+      "Bash(wc:*)",
+      "Bash(ls /Users/olitranpham/ironkey/.env*)",
+      "Bash(npx --yes dotenv-cli -e .env node -e ':*)",
+      "Bash(GYM_SLUG=triumph-barbell node import-oasis.js)"
     ]
   }
 }

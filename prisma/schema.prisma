@@ -53,6 +53,7 @@ model Member {
   // Stripe
   stripeCustomerId     String?
   stripeSubscriptionId String?
+  priceId              String?
 
   // Seam / smart-lock access code
   accessCode       String?
@@ -87,6 +88,8 @@ enum MembershipType {
   FOUNDING
   GENERAL
   STUDENT
+  WEEKEND
+  FLEX
 }
 
 // ─── GuestProfile ─────────────────────────────────────────────────────────────
@@ -140,6 +143,8 @@ enum PassType {
   THREE_PACK
   FIVE_PACK
   TEN_PACK
+  VALUE
+  DELUXE
 }
 
 // ─── GymUser (staff / admin accounts) ────────────────────────────────────────

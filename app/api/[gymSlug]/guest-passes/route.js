@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
+import { getAllowedPassTypes } from '@/lib/gymPassTypes'
 
 const PASS_TYPE_MAP = {
   single:     'SINGLE',
@@ -9,6 +10,8 @@ const PASS_TYPE_MAP = {
   three_pack: 'THREE_PACK',
   five_pack:  'FIVE_PACK',
   ten_pack:   'TEN_PACK',
+  value:      'VALUE',
+  deluxe:     'DELUXE',
 }
 
 const PASS_TYPE_LABEL = {
@@ -16,6 +19,8 @@ const PASS_TYPE_LABEL = {
   THREE_PACK: '3-Pack',
   FIVE_PACK:  '5-Pack',
   TEN_PACK:   '10-Pack',
+  VALUE:      'Value',
+  DELUXE:     'Deluxe',
 }
 
 /**
@@ -47,6 +52,14 @@ export async function POST(request, { params }) {
 
     const rawType  = (body.passType ?? '').toLowerCase().trim()
     const passType = PASS_TYPE_MAP[rawType] ?? 'SINGLE'
+
+    const allowed = getAllowedPassTypes(gymSlug)
+    if (!allowed.includes(passType)) {
+      return NextResponse.json(
+        { error: `Pass type "${passType}" is not available for this gym` },
+        { status: 400 },
+      )
+    }
     const email    = (body.email ?? '').trim().toLowerCase() || null
 
     //  Upsert guest profile 
@@ -111,13 +124,18 @@ export async function POST(request, { params }) {
  * GET /api/[gymSlug]/guest-passes
  * Returns guest profiles with their full pass history, sorted by most recent activity.
  */
-export async function GET(request) {
+export async function GET(request, { params }) {
   try {
-    const gymId = request.headers.get('x-gym-id')
+    const { gymSlug } = await params
 
-    if (!gymId) {
-      return NextResponse.json({ error: 'Gym identity missing from request' }, { status: 400 })
+    const gym = await prisma.gym.findUnique({
+      where:  { slug: gymSlug },
+      select: { id: true },
+    })
+    if (!gym) {
+      return NextResponse.json({ error: 'Gym not found' }, { status: 404 })
     }
+    const gymId = gym.id
 
     // Profiles with all passes
     const profiles = await prisma.guestProfile.findMany({
@@ -130,7 +148,7 @@ export async function GET(request) {
         phone:      true,
         accessCode: true,
         passes: {
-          orderBy: { createdAt: 'desc' },
+          orderBy: { usedAt: { sort: 'desc', nulls: 'last' } },
           select: {
             id:         true,
             passType:   true,

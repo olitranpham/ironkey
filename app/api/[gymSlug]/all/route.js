@@ -3,16 +3,21 @@ import prisma from '@/lib/prisma'
 
 export async function GET(request, { params }) {
   try {
-    const gymId = request.headers.get('x-gym-id')
-
-    if (!gymId) {
-      console.error('[all] x-gym-id header missing — middleware may not have run')
-      return NextResponse.json({ error: 'Gym identity missing from request' }, { status: 400 })
-    }
-
+    const { gymSlug } = await params
     const { searchParams } = new URL(request.url)
     const status = searchParams.get('status')
     const search = searchParams.get('search')
+
+    const gymRow = await prisma.gym.findUnique({
+      where:  { slug: gymSlug },
+      select: { id: true },
+    })
+    if (!gymRow) {
+      return NextResponse.json({ error: 'Gym not found' }, { status: 404 })
+    }
+    const gymId = gymRow.id
+
+    console.log(`[all] gymSlug=${gymSlug} gymId=${gymId} status=${status ?? 'any'} search=${search ?? ''}`)
 
     const where = {
       gymId,
@@ -28,8 +33,6 @@ export async function GET(request, { params }) {
           }
         : {}),
     }
-
-    console.log(`[all] gymId=${gymId} status=${status ?? 'any'} search=${search ?? ''}`)
 
     const members = await prisma.member.findMany({
       where,
@@ -50,6 +53,7 @@ export async function GET(request, { params }) {
         dateCanceled:         true,
         stripeCustomerId:     true,
         stripeSubscriptionId: true,
+        priceId:              true,
         createdAt:            true,
       },
     })

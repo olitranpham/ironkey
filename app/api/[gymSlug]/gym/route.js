@@ -6,12 +6,12 @@ import prisma from '@/lib/prisma'
  * Returns basic gym info for the authenticated gym.
  * Never exposes raw secrets — seamApiKey is returned as a boolean flag.
  */
-export async function GET(request) {
+export async function GET(request, { params }) {
   try {
-    const gymId = request.headers.get('x-gym-id')
+    const { gymSlug } = await params
 
     const gym = await prisma.gym.findUnique({
-      where: { id: gymId },
+      where: { slug: gymSlug },
       select: {
         id:                    true,
         name:                  true,

@@ -6,8 +6,6 @@ import { Search, RefreshCw, AlertTriangle } from 'lucide-react'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const PLAN_AMOUNT = { FOUNDING: 50, GENERAL: 65, STUDENT: 55 }
-
 const PLAN_BADGE = {
   FOUNDING: 'bg-blue-500/15 text-blue-400',
   GENERAL:  'bg-neutral-500/15 text-neutral-400',
@@ -68,6 +66,7 @@ export default function PaymentsPage() {
   const { gymSlug } = useParams()
 
   const [members,    setMembers]    = useState([])
+  const [priceMap,   setPriceMap]   = useState({})
   const [loading,    setLoading]    = useState(true)
   const [fetchErr,   setFetchErr]   = useState(null)
   const [search,     setSearch]     = useState('')
@@ -270,7 +269,10 @@ export default function PaymentsPage() {
 
                       {/* Amount */}
                       <td className="px-5 py-3 text-white text-xs tabular-nums">
-                        ${PLAN_AMOUNT[m.membershipType] ?? '—'}<span className="text-neutral-600">/mo</span>
+                        {m.stripeAmount != null
+                          ? <>${m.stripeAmount}<span className="text-neutral-600">/{m.stripeInterval}</span></>
+                          : <span className="text-neutral-600">—</span>
+                        }
                       </td>
 
                       {/* Status */}
