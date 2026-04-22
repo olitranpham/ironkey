@@ -29,10 +29,11 @@ model Gym {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  members       Member[]
-  guestPasses   GuestPass[]
-  guestProfiles GuestProfile[]
-  users         GymUser[]
+  members          Member[]
+  guestPasses      GuestPass[]
+  guestProfiles    GuestProfile[]
+  users            GymUser[]
+  financialEntries FinancialEntry[]
 }
 
 // ─── Member ───────────────────────────────────────────────────────────────────
@@ -169,4 +170,22 @@ enum GymUserRole {
   OWNER
   ADMIN
   STAFF
+}
+
+// ─── FinancialEntry ───────────────────────────────────────────────────────────
+
+model FinancialEntry {
+  id          String   @id @default(cuid())
+  gymId       String
+  gym         Gym      @relation(fields: [gymId], references: [id], onDelete: Cascade)
+
+  type        String   // 'income' | 'expense'
+  category    String
+  amount      Float
+  description String?
+  date        DateTime
+
+  createdAt   DateTime @default(now())
+
+  @@index([gymId, date])
 }
