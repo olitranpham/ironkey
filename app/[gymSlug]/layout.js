@@ -9,6 +9,7 @@ import {
   Ticket,
   KeyRound,
   CreditCard,
+  TrendingUp,
   AlertTriangle,
   Settings,
   LogOut,
@@ -23,6 +24,7 @@ const NAV_BASE = [
   { label: 'members',      slug: 'members',      icon: Users },
   { label: 'guest passes', slug: 'guest-passes', icon: Ticket },
   { label: 'payments',     slug: 'payments',     icon: CreditCard },
+  { label: 'revenue',      slug: 'revenue',      icon: TrendingUp },
   { label: 'overdue',      slug: 'overdue',      icon: AlertTriangle, warn: true },
 ]
 

@@ -81,12 +81,19 @@ export default function PaymentsPage() {
     setLoading(true)
     try {
       const token = localStorage.getItem('ik_token')
-      const res   = await fetch(`/api/${gymSlug}/all`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      if (!res.ok) throw new Error(`${res.status}`)
-      const { members } = await res.json()
+      const headers = { Authorization: `Bearer ${token}` }
+
+      const [membersRes, subsRes] = await Promise.all([
+        fetch(`/api/${gymSlug}/all`,                    { headers }),
+        fetch(`/api/${gymSlug}/stripe/subscriptions`,   { headers }),
+      ])
+
+      if (!membersRes.ok) throw new Error(`${membersRes.status}`)
+      const { members }       = await membersRes.json()
+      const { subscriptions } = subsRes.ok ? await subsRes.json() : { subscriptions: {} }
+
       setMembers(members)
+      setPriceMap(subscriptions ?? {})
       setFetchErr(null)
     } catch {
       setFetchErr('could not load members')
@@ -269,10 +276,12 @@ export default function PaymentsPage() {
 
                       {/* Amount */}
                       <td className="px-5 py-3 text-white text-xs tabular-nums">
-                        {m.stripeAmount != null
-                          ? <>${m.stripeAmount}<span className="text-neutral-600">/{m.stripeInterval}</span></>
-                          : <span className="text-neutral-600">—</span>
-                        }
+                        {(() => {
+                          const sub = priceMap[m.stripeSubscriptionId]
+                          return sub
+                            ? <>${sub.amount}<span className="text-neutral-600">/{sub.interval}</span></>
+                            : <span className="text-neutral-600">—</span>
+                        })()}
                       </td>
 
                       {/* Status */}

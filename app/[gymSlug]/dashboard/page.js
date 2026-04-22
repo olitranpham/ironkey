@@ -341,8 +341,8 @@ export default function DashboardPage() {
               />
             </div>
 
-            {/* Retention chart — fills remaining space */}
-            <RetentionChart data={buildChartData(members)} className="flex-1 min-h-[200px]" />
+            {/* Retention chart */}
+            <RetentionChart data={buildChartData(members)} />
           </>
         )}
 
@@ -571,9 +571,9 @@ const CUSTOM_TOOLTIP = ({ active, payload, label }) => {
   )
 }
 
-function RetentionChart({ data, className = '' }) {
+function RetentionChart({ data }) {
   return (
-    <div className={`min-w-0 overflow-hidden bg-[#1c1c1c] rounded-xl border border-neutral-800 px-5 pt-4 pb-4 flex flex-col ${className}`}>
+    <div className="min-w-0 overflow-hidden bg-[#1c1c1c] rounded-xl border border-neutral-800 px-5 pt-4 pb-4 flex flex-col">
       <div className="flex items-center justify-between mb-3 shrink-0">
         <div className="flex items-center gap-2">
           <TrendingUp size={13} className="text-neutral-400" />
@@ -587,7 +587,7 @@ function RetentionChart({ data, className = '' }) {
         </div>
       </div>
 
-      <div className="flex-1 min-h-0 min-w-0 w-full overflow-hidden">
+      <div className="h-[280px] min-w-0 w-full overflow-hidden">
         <ResponsiveContainer width="100%" height="100%" minWidth={0}>
           <AreaChart data={data} margin={{ top: 4, right: 4, left: -24, bottom: 0 }}>
             <defs>

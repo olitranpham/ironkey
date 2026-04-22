@@ -33,7 +33,9 @@
       "Bash(wc:*)",
       "Bash(ls /Users/olitranpham/ironkey/.env*)",
       "Bash(npx --yes dotenv-cli -e .env node -e ':*)",
-      "Bash(GYM_SLUG=triumph-barbell node import-oasis.js)"
+      "Bash(GYM_SLUG=triumph-barbell node import-oasis.js)",
+      "Bash(mkdir -p /Users/olitranpham/ironkey/app/api/\\\\[gymSlug\\\\]/stripe/revenue)",
+      "Bash(mkdir -p /Users/olitranpham/ironkey/app/\\\\[gymSlug\\\\]/revenue)"
     ]
   }
 }
