@@ -67,6 +67,7 @@ export default function PaymentsPage() {
 
   const [members,    setMembers]    = useState([])
   const [priceMap,   setPriceMap]   = useState({})
+  const [priceIdMap, setPriceIdMap] = useState({})
   const [loading,    setLoading]    = useState(true)
   const [fetchErr,   setFetchErr]   = useState(null)
   const [search,     setSearch]     = useState('')
@@ -89,11 +90,12 @@ export default function PaymentsPage() {
       ])
 
       if (!membersRes.ok) throw new Error(`${membersRes.status}`)
-      const { members }       = await membersRes.json()
-      const { subscriptions } = subsRes.ok ? await subsRes.json() : { subscriptions: {} }
+      const { members } = await membersRes.json()
+      const subsJson    = subsRes.ok ? await subsRes.json() : {}
 
       setMembers(members)
-      setPriceMap(subscriptions ?? {})
+      setPriceMap(subsJson.subscriptions ?? {})
+      setPriceIdMap(subsJson.prices      ?? {})
       setFetchErr(null)
     } catch {
       setFetchErr('could not load members')
@@ -274,12 +276,12 @@ export default function PaymentsPage() {
                         </span>
                       </td>
 
-                      {/* Amount */}
+                      {/* Amount — sub map first, then priceId fallback */}
                       <td className="px-5 py-3 text-white text-xs tabular-nums">
                         {(() => {
-                          const sub = priceMap[m.stripeSubscriptionId]
-                          return sub
-                            ? <>${sub.amount}<span className="text-neutral-600">/{sub.interval}</span></>
+                          const entry = priceMap[m.stripeSubscriptionId] ?? priceIdMap[m.priceId]
+                          return entry
+                            ? <>${entry.amount}<span className="text-neutral-600">/{entry.interval}</span></>
                             : <span className="text-neutral-600">—</span>
                         })()}
                       </td>
