@@ -33,7 +33,7 @@ export async function POST(request, { params }) {
       return NextResponse.json({ error: body?.error?.message ?? 'Seam API error' }, { status: 502 })
     }
 
-    return NextResponse.json(body)
+    return NextResponse.json({ ok: true })
   } catch (error) {
     console.error('[seam/codes/delete]', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

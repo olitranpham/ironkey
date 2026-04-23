@@ -528,13 +528,22 @@ function GuestProfilePanel({ profile, onClose, onSaveCode, saving }) {
               className="flex-1 bg-transparent text-xs text-white placeholder-neutral-600 focus:outline-none disabled:opacity-40"
             />
             {!isUnlinked && (
-              <button
-                onClick={handleSave}
-                disabled={saving || codeInput.trim() === (profile.accessCode ?? '')}
-                className="text-[11px] px-2.5 py-1 rounded-md bg-white/10 text-white hover:bg-white/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shrink-0"
-              >
-                {saving ? 'saving…' : 'save'}
-              </button>
+              <>
+                <button
+                  type="button"
+                  onClick={() => setCodeInput(String(Math.floor(1000 + Math.random() * 9000)))}
+                  className="px-2.5 py-1 rounded-lg text-[11px] font-medium bg-neutral-800 text-neutral-400 hover:text-white hover:bg-neutral-700 border border-neutral-700 transition-colors shrink-0"
+                >
+                  randomize
+                </button>
+                <button
+                  onClick={handleSave}
+                  disabled={saving || codeInput.trim() === (profile.accessCode ?? '')}
+                  className="text-[11px] px-2.5 py-1 rounded-md bg-white/10 text-white hover:bg-white/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shrink-0"
+                >
+                  {saving ? 'saving…' : 'save'}
+                </button>
+              </>
             )}
           </div>
         </Section>

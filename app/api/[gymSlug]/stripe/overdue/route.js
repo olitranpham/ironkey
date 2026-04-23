@@ -2,17 +2,18 @@ import { NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import prisma from '@/lib/prisma'
 
-export async function GET(request) {
+export async function GET(request, { params }) {
   try {
-    const gymId = request.headers.get('x-gym-id')
-    if (!gymId) return NextResponse.json({ error: 'Gym identity missing' }, { status: 400 })
+    const { gymSlug } = await params
 
     const gym = await prisma.gym.findUnique({
-      where:  { id: gymId },
-      select: { stripeSecretKey: true },
+      where:  { slug: gymSlug },
+      select: { id: true, stripeSecretKey: true },
     })
+    if (!gym) return NextResponse.json({ error: 'Gym not found' }, { status: 404 })
 
-    const stripeOk = Boolean(gym?.stripeSecretKey)
+    const gymId    = gym.id
+    const stripeOk = Boolean(gym.stripeSecretKey)
 
     if (stripeOk) {
       try {
@@ -68,9 +69,7 @@ export async function GET(request) {
         })
 
         // Sync DB status to OVERDUE for matched members so dashboard + members page reflect correctly
-        const memberIdsToMark = rows
-          .map(r => r.id)
-          .filter(Boolean)
+        const memberIdsToMark = rows.map(r => r.id).filter(Boolean)
         if (memberIdsToMark.length > 0) {
           await prisma.member.updateMany({
             where: {
@@ -111,11 +110,18 @@ export async function GET(request) {
   }
 }
 
-export async function POST(request) {
+export async function POST(request, { params }) {
   try {
-    const gymId = request.headers.get('x-gym-id')
-    const body  = await request.json()
+    const { gymSlug } = await params
+    const body = await request.json()
 
+    const gym = await prisma.gym.findUnique({
+      where:  { slug: gymSlug },
+      select: { id: true },
+    })
+    if (!gym) return NextResponse.json({ error: 'Gym not found' }, { status: 404 })
+
+    const gymId = gym.id
     let member
 
     if (body.memberId) {
