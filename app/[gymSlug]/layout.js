@@ -61,11 +61,22 @@ function gymInitials(name) {
     .toUpperCase()
 }
 
+// Exported layout — routes /join through a bare shell, everything else through the portal
 export default function GymLayout({ children }) {
-  const router   = useRouter()
   const params   = useParams()
   const pathname = usePathname()
   const gymSlug  = params.gymSlug
+
+  if (pathname.startsWith(`/${gymSlug}/join`) || pathname.startsWith(`/${gymSlug}/guest`)) {
+    return <div className="min-h-screen bg-[#292929]">{children}</div>
+  }
+
+  return <PortalLayout gymSlug={gymSlug}>{children}</PortalLayout>
+}
+
+function PortalLayout({ gymSlug, children }) {
+  const router   = useRouter()
+  const pathname = usePathname()
 
   const [collapsed,   setCollapsed]   = useState(false)
   const [mobileOpen,  setMobileOpen]  = useState(false)
