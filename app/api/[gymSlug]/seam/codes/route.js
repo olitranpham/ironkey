@@ -9,14 +9,15 @@ const SEAM_API = 'https://connect.getseam.com'
  * Strategy: list devices first (required by Seam API), then fetch codes per device.
  * Cross-references with DB members to add type (member vs guest) and memberId.
  */
-export async function GET(request) {
+export async function GET(request, { params }) {
   try {
-    const gymId = request.headers.get('x-gym-id')
+    const { gymSlug } = await params
 
-    const gym = await prisma.gym.findUnique({ where: { id: gymId } })
+    const gym = await prisma.gym.findUnique({ where: { slug: gymSlug } })
     if (!gym) return NextResponse.json({ error: 'Gym not found' }, { status: 404 })
 
-    const apiKey = gym.seamApiKey ?? process.env.SEAM_API_KEY
+    const apiKey   = gym.seamApiKey   ?? process.env.SEAM_API_KEY
+    const deviceId = gym.seamDeviceId ?? process.env.SEAM_DEVICE_ID
     if (!apiKey) return NextResponse.json({ error: 'Seam not configured' }, { status: 422 })
 
     const seamHeaders = {
@@ -25,23 +26,32 @@ export async function GET(request) {
     }
 
     // ── 1. List devices ───────────────────────────────────────────────────────
-    const devicesRes = await fetch(`${SEAM_API}/devices/list`, {
-      method: 'POST',
-      headers: seamHeaders,
-      body: JSON.stringify(
-        gym.seamConnectedAccountId
-          ? { connected_account_id: gym.seamConnectedAccountId }
-          : {},
-      ),
-    })
+    // If the gym has a specific device ID configured, scope to that device only.
+    // Otherwise list all devices for the connected account.
+    let devices = []
 
-    if (!devicesRes.ok) {
-      const text = await devicesRes.text()
-      console.error('[seam/codes GET] devices error:', devicesRes.status, text)
-      return NextResponse.json({ error: 'Seam API error fetching devices' }, { status: 502 })
+    if (deviceId) {
+      devices = [{ device_id: deviceId }]
+    } else {
+      const devicesRes = await fetch(`${SEAM_API}/devices/list`, {
+        method: 'POST',
+        headers: seamHeaders,
+        body: JSON.stringify(
+          gym.seamConnectedAccountId
+            ? { connected_account_id: gym.seamConnectedAccountId }
+            : {},
+        ),
+      })
+
+      if (!devicesRes.ok) {
+        const text = await devicesRes.text()
+        console.error('[seam/codes GET] devices error:', devicesRes.status, text)
+        return NextResponse.json({ error: 'Seam API error fetching devices' }, { status: 502 })
+      }
+
+      const body = await devicesRes.json()
+      devices = body.devices ?? []
     }
-
-    const { devices = [] } = await devicesRes.json()
 
     if (devices.length === 0) {
       return NextResponse.json({ codes: [] })
@@ -70,6 +80,7 @@ export async function GET(request) {
     })
 
     // ── 3. Cross-reference with DB members and guest profiles ───────────────
+    const gymId = gym.id
     const [members, guestProfiles] = await Promise.all([
       prisma.member.findMany({
         where: { gymId },
@@ -212,23 +223,20 @@ export async function GET(request) {
  *
  * Sets or generates a Seam access code for a member.
  * Calls the Seam API to program the code onto the gym's smart lock(s).
- *
- * Requires SEAM_API_KEY in env.
  */
-export async function POST(request) {
+export async function POST(request, { params }) {
   try {
-    const gymId = request.headers.get('x-gym-id')
+    const { gymSlug } = await params
     const { memberId, codeId, code } = await request.json()
 
     if (!memberId) {
       return NextResponse.json({ error: 'memberId is required' }, { status: 400 })
     }
 
-    const [member, gym] = await Promise.all([
-      prisma.member.findFirst({ where: { id: memberId, gymId } }),
-      prisma.gym.findUnique({ where: { id: gymId } }),
-    ])
+    const gym = await prisma.gym.findUnique({ where: { slug: gymSlug } })
+    if (!gym) return NextResponse.json({ error: 'Gym not found' }, { status: 404 })
 
+    const member = await prisma.member.findFirst({ where: { id: memberId, gymId: gym.id } })
     if (!member) {
       return NextResponse.json({ error: 'Member not found' }, { status: 404 })
     }
@@ -240,7 +248,8 @@ export async function POST(request) {
       )
     }
 
-    const apiKey = gym?.seamApiKey ?? process.env.SEAM_API_KEY
+    const apiKey   = gym.seamApiKey   ?? process.env.SEAM_API_KEY
+    const deviceId = gym.seamDeviceId ?? process.env.SEAM_DEVICE_ID
     if (!apiKey) {
       return NextResponse.json({ error: 'Seam not configured' }, { status: 422 })
     }
@@ -266,32 +275,40 @@ export async function POST(request) {
         return NextResponse.json({ error: 'Failed to update code on lock' }, { status: 502 })
       }
     } else {
-      // ── Create new code on all devices ────────────────────────────────────
-      const devicesRes = await fetch(`${SEAM_API}/devices/list`, {
-        method:  'POST',
-        headers: seamHeaders,
-        body:    JSON.stringify(
-          gym?.seamConnectedAccountId
-            ? { connected_account_id: gym.seamConnectedAccountId }
-            : {},
-        ),
-      })
-      if (devicesRes.ok) {
-        const { devices = [] } = await devicesRes.json()
-        await Promise.all(
-          devices.map(device =>
-            fetch(`${SEAM_API}/access_codes/create`, {
-              method:  'POST',
-              headers: seamHeaders,
-              body:    JSON.stringify({
-                device_id: device.device_id,
-                name:      `${member.firstName} ${member.lastName}`,
-                code:      accessCode,
-              }),
-            }).catch(() => null)
-          )
-        )
+      // ── Create new code on device(s) ──────────────────────────────────────
+      let devices = []
+
+      if (deviceId) {
+        devices = [{ device_id: deviceId }]
+      } else {
+        const devicesRes = await fetch(`${SEAM_API}/devices/list`, {
+          method:  'POST',
+          headers: seamHeaders,
+          body:    JSON.stringify(
+            gym.seamConnectedAccountId
+              ? { connected_account_id: gym.seamConnectedAccountId }
+              : {},
+          ),
+        })
+        if (devicesRes.ok) {
+          const body = await devicesRes.json()
+          devices = body.devices ?? []
+        }
       }
+
+      await Promise.all(
+        devices.map(device =>
+          fetch(`${SEAM_API}/access_codes/create`, {
+            method:  'POST',
+            headers: seamHeaders,
+            body:    JSON.stringify({
+              device_id: device.device_id,
+              name:      `${member.firstName} ${member.lastName}`,
+              code:      accessCode,
+            }),
+          }).catch(() => null)
+        )
+      )
     }
 
     const updated = await prisma.member.update({

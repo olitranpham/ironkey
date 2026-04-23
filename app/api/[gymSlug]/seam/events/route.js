@@ -29,17 +29,17 @@ function isOkEvent(type) {
  * Returns the last 24 h of Seam door events for the gym, with member names
  * resolved from the access code name stored on each code in Seam.
  */
-export async function GET(request) {
+export async function GET(request, { params }) {
   try {
-    const gymId = request.headers.get('x-gym-id')
+    const { gymSlug } = await params
 
-    const gym = await prisma.gym.findUnique({ where: { id: gymId } })
+    const gym = await prisma.gym.findUnique({ where: { slug: gymSlug } })
     if (!gym) {
       return NextResponse.json({ error: 'Gym not found' }, { status: 404 })
     }
 
-    // Per-gym key takes precedence; fall back to global env key
-    const apiKey = gym.seamApiKey ?? process.env.SEAM_API_KEY
+    const apiKey   = gym.seamApiKey   ?? process.env.SEAM_API_KEY
+    const deviceId = gym.seamDeviceId ?? process.env.SEAM_DEVICE_ID
     if (!apiKey) {
       return NextResponse.json({ error: 'Seam API key not configured' }, { status: 422 })
     }
@@ -52,15 +52,18 @@ export async function GET(request) {
     const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
 
     // ── Fetch events ────────────────────────────────────────────────────────
+    // Scope by device ID if the gym has one, otherwise by connected account.
+    const eventsBody = { since }
+    if (deviceId) {
+      eventsBody.device_id = deviceId
+    } else if (gym.seamConnectedAccountId) {
+      eventsBody.connected_account_id = gym.seamConnectedAccountId
+    }
+
     const eventsRes = await fetch(`${SEAM_API}/events/list`, {
       method: 'POST',
       headers,
-      body: JSON.stringify({
-        since,
-        ...(gym.seamConnectedAccountId
-          ? { connected_account_id: gym.seamConnectedAccountId }
-          : {}),
-      }),
+      body: JSON.stringify(eventsBody),
     })
 
     if (!eventsRes.ok) {
@@ -80,14 +83,17 @@ export async function GET(request) {
     const codeIds = [...new Set(events.map((e) => e.access_code_id).filter(Boolean))]
 
     if (codeIds.length > 0) {
+      // Scope code lookup the same way events were scoped
+      const codesBody = deviceId
+        ? { device_id: deviceId }
+        : gym.seamConnectedAccountId
+          ? { connected_account_id: gym.seamConnectedAccountId }
+          : {}
+
       const codesRes = await fetch(`${SEAM_API}/access_codes/list`, {
         method: 'POST',
         headers,
-        body: JSON.stringify(
-          gym.seamConnectedAccountId
-            ? { connected_account_id: gym.seamConnectedAccountId }
-            : {},
-        ),
+        body: JSON.stringify(codesBody),
       })
 
       if (codesRes.ok) {

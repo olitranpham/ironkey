@@ -17,15 +17,38 @@ import {
   ChevronRight,
   Menu,
   X,
+  Package,
 } from 'lucide-react'
 
-const NAV_BASE = [
-  { label: 'dashboard',    slug: 'dashboard',    icon: LayoutDashboard },
-  { label: 'members',      slug: 'members',      icon: Users },
-  { label: 'guest passes', slug: 'guest-passes', icon: Ticket },
-  { label: 'payments',     slug: 'payments',     icon: CreditCard },
-  { label: 'revenue',      slug: 'revenue',      icon: TrendingUp },
-  { label: 'overdue',      slug: 'overdue',      icon: AlertTriangle, warn: true },
+const NAV_GROUPS = [
+  {
+    label: 'overview',
+    items: [
+      { label: 'dashboard', slug: 'dashboard', icon: LayoutDashboard },
+    ],
+  },
+  {
+    label: 'access',
+    seam: { label: 'door access', slug: 'door-access', icon: KeyRound },
+    items: [
+      { label: 'members',      slug: 'members',      icon: Users },
+      { label: 'guest passes', slug: 'guest-passes', icon: Ticket },
+    ],
+  },
+  {
+    label: 'billing',
+    items: [
+      { label: 'payments', slug: 'payments', icon: CreditCard },
+      { label: 'revenue',  slug: 'revenue',  icon: TrendingUp },
+      { label: 'overdue',  slug: 'overdue',  icon: AlertTriangle, warn: true },
+    ],
+  },
+  {
+    label: 'operations',
+    items: [
+      { label: 'inventory', slug: 'inventory', icon: Package },
+    ],
+  },
 ]
 
 
@@ -154,32 +177,45 @@ export default function GymLayout({ children }) {
         </div>
 
         {/* Nav items */}
-        <nav className="flex-1 py-3 px-2 space-y-0.5 overflow-hidden">
-          {[
-              NAV_BASE[0],
-              ...(hasSeam ? [{ label: 'door access', slug: 'door-access', icon: KeyRound }] : []),
-              ...NAV_BASE.slice(1),
-            ].map(({ label, slug, icon: Icon, warn }) => {
-            const active = isActive(slug)
+        <nav className="flex-1 py-3 px-2 overflow-y-auto overflow-x-hidden">
+          {NAV_GROUPS.map((group, gi) => {
+            const items = [
+              ...(group.seam && hasSeam ? [group.seam] : []),
+              ...group.items,
+            ]
             return (
-              <Link
-                key={slug}
-                href={`/${gymSlug}/${slug}`}
-                title={collapsed ? label : undefined}
-                className={`
-                  flex items-center gap-3 rounded-lg px-2.5 py-2 text-sm transition-colors
-                  ${collapsed ? 'justify-center' : ''}
-                  ${active
-                    ? 'bg-white/10 text-white'
-                    : warn
-                      ? 'text-amber-500/70 hover:text-amber-400 hover:bg-amber-500/5'
-                      : 'text-neutral-400 hover:text-white hover:bg-white/5'
-                  }
-                `}
-              >
-                <Icon size={16} className="shrink-0" />
-                {!collapsed && <span className="truncate">{label}</span>}
-              </Link>
+              <div key={group.label} className={gi > 0 ? 'mt-4' : ''}>
+                {!collapsed && (
+                  <p className="px-2.5 mb-1 text-[10px] font-semibold text-neutral-600 uppercase tracking-widest">
+                    {group.label}
+                  </p>
+                )}
+                <div className="space-y-0.5">
+                  {items.map(({ label, slug, icon: Icon, warn }) => {
+                    const active = isActive(slug)
+                    return (
+                      <Link
+                        key={slug}
+                        href={`/${gymSlug}/${slug}`}
+                        title={collapsed ? label : undefined}
+                        className={`
+                          flex items-center gap-3 rounded-lg px-2.5 py-2 text-sm transition-colors
+                          ${collapsed ? 'justify-center' : ''}
+                          ${active
+                            ? 'bg-white/10 text-white'
+                            : warn
+                              ? 'text-amber-500/70 hover:text-amber-400 hover:bg-amber-500/5'
+                              : 'text-neutral-400 hover:text-white hover:bg-white/5'
+                          }
+                        `}
+                      >
+                        <Icon size={16} className="shrink-0" />
+                        {!collapsed && <span className="truncate">{label}</span>}
+                      </Link>
+                    )
+                  })}
+                </div>
+              </div>
             )
           })}
         </nav>

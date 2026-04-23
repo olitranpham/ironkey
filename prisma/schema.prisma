@@ -34,6 +34,7 @@ model Gym {
   guestProfiles    GuestProfile[]
   users            GymUser[]
   financialEntries FinancialEntry[]
+  inventoryItems   InventoryItem[]
 }
 
 // ─── Member ───────────────────────────────────────────────────────────────────
@@ -188,4 +189,40 @@ model FinancialEntry {
   createdAt   DateTime @default(now())
 
   @@index([gymId, date])
+}
+
+// ─── Inventory ────────────────────────────────────────────────────────────────
+
+model InventoryItem {
+  id         String   @id @default(cuid())
+  gymId      String
+  gym        Gym      @relation(fields: [gymId], references: [id], onDelete: Cascade)
+
+  name       String
+  category   String
+  quantity   Int      @default(0)
+  lowStockAt Int      @default(5)
+  unitCost   Float?
+  notes      String?
+
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  logs       InventoryLog[]
+
+  @@index([gymId])
+}
+
+model InventoryLog {
+  id        String        @id @default(cuid())
+  gymId     String
+  itemId    String
+  item      InventoryItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  change    Int      // positive = restock, negative = sale/removal
+  reason    String   // 'sale' | 'restock' | 'correction' | 'manual'
+
+  createdAt DateTime @default(now())
+
+  @@index([itemId])
 }

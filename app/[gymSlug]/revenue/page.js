@@ -300,31 +300,22 @@ export default function RevenuePage() {
   const hasExpenses = chartData.some(d => d.expenses < 0)
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden">
+    <div className="flex-1 overflow-y-auto">
 
       {/* Top bar */}
-      <header className="h-14 shrink-0 bg-[#1c1c1c] border-b border-neutral-800 flex items-center justify-between px-6">
+      <header className="sticky top-0 z-20 h-14 bg-[#1c1c1c] border-b border-neutral-800 flex items-center justify-between px-6">
         <h1 className="text-sm font-semibold text-white">revenue</h1>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setModalOpen(true)}
-            className="flex items-center gap-1.5 rounded-lg bg-white/10 px-3 py-1.5 text-xs text-white hover:bg-white/15 transition-colors"
-          >
-            <Plus size={11} />
-            add entry
-          </button>
-          <button
-            onClick={load}
-            disabled={loading}
-            className="flex items-center gap-1.5 rounded-lg border border-neutral-700 px-3 py-1.5 text-xs text-neutral-400 hover:text-white hover:border-neutral-600 disabled:opacity-40 transition-colors"
-          >
-            <RefreshCw size={11} className={loading ? 'animate-spin' : ''} />
-            refresh
-          </button>
-        </div>
+        <button
+          onClick={load}
+          disabled={loading}
+          className="flex items-center gap-1.5 rounded-lg border border-neutral-700 px-3 py-1.5 text-xs text-neutral-400 hover:text-white hover:border-neutral-600 disabled:opacity-40 transition-colors"
+        >
+          <RefreshCw size={11} className={loading ? 'animate-spin' : ''} />
+          refresh
+        </button>
       </header>
 
-      <main className="flex-1 overflow-y-auto p-5 flex flex-col gap-5">
+      <main className="p-5 flex flex-col gap-5">
         {err ? (
           <div className="flex flex-col items-center justify-center h-48 gap-3">
             <p className="text-sm text-rose-400">{err}</p>
@@ -381,11 +372,14 @@ export default function RevenuePage() {
 
             {/* ── Recent Stripe transactions ─────────────────────────────────── */}
             <div className="bg-[#1c1c1c] border border-neutral-800 rounded-xl overflow-hidden">
-              <div className="px-5 py-3.5 border-b border-neutral-800">
-                <p className="text-xs font-semibold text-neutral-400">recent transactions</p>
+              <div className="px-5 py-4 border-b border-neutral-800 flex items-center justify-between">
+                <p className="text-sm font-semibold text-white">recent transactions</p>
+                {!loading && (data?.transactions ?? []).length > 0 && (
+                  <span className="text-xs text-neutral-500">{data.transactions.length}</span>
+                )}
               </div>
-              <div className="overflow-auto max-h-[220px]">
-                <table className="w-full text-sm">
+              <div>
+                <table className="w-full">
                   <thead>
                     <tr className="border-b border-neutral-800 text-left">
                       <th className="px-5 py-3 text-[11px] font-semibold text-neutral-500 tracking-wider">date</th>
@@ -396,26 +390,26 @@ export default function RevenuePage() {
                   </thead>
                   <tbody>
                     {loading ? (
-                      Array.from({ length: 5 }).map((_, i) => (
+                      Array.from({ length: 8 }).map((_, i) => (
                         <tr key={i} className="border-b border-neutral-800/40">
-                          <td className="px-5 py-3.5"><Bone className="h-3 w-24" /></td>
-                          <td className="px-5 py-3.5"><Bone className="h-3 w-32" /></td>
-                          <td className="px-5 py-3.5"><Bone className="h-3 w-14" /></td>
-                          <td className="px-5 py-3.5"><Bone className="h-5 w-16 rounded-full" /></td>
+                          <td className="px-5 py-4"><Bone className="h-3 w-24" /></td>
+                          <td className="px-5 py-4"><Bone className="h-3 w-32" /></td>
+                          <td className="px-5 py-4"><Bone className="h-3 w-14" /></td>
+                          <td className="px-5 py-4"><Bone className="h-5 w-16 rounded-full" /></td>
                         </tr>
                       ))
                     ) : (data?.transactions ?? []).length === 0 ? (
-                      <tr><td colSpan={4} className="px-5 py-8 text-center text-sm text-neutral-600">no transactions found</td></tr>
+                      <tr><td colSpan={4} className="px-5 py-16 text-center text-sm text-neutral-600">no transactions found</td></tr>
                     ) : (
-                      data.transactions.slice(0, 5).map(tx => (
+                      data.transactions.slice(0, 10).map(tx => (
                         <tr key={tx.id} className="border-b border-neutral-800/40 hover:bg-white/[0.025] transition-colors">
-                          <td className="px-5 py-3 text-neutral-400 text-xs tabular-nums whitespace-nowrap">{fmtDate(tx.date * 1000)}</td>
-                          <td className="px-5 py-3">
+                          <td className="px-5 py-4 text-neutral-400 text-xs tabular-nums whitespace-nowrap">{fmtDate(tx.date * 1000)}</td>
+                          <td className="px-5 py-4">
                             <p className="text-white text-xs font-medium">{tx.name ?? '—'}</p>
-                            {tx.email && <p className="text-neutral-500 text-[11px]">{tx.email}</p>}
+                            {tx.email && <p className="text-neutral-500 text-[11px] mt-0.5">{tx.email}</p>}
                           </td>
-                          <td className="px-5 py-3 text-white text-xs tabular-nums font-medium">{fmtExact(tx.amount)}</td>
-                          <td className="px-5 py-3">
+                          <td className="px-5 py-4 text-white text-xs tabular-nums font-medium">{fmtExact(tx.amount)}</td>
+                          <td className="px-5 py-4">
                             <span className="inline-block text-[11px] font-medium px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400">{tx.status}</span>
                           </td>
                         </tr>
@@ -428,14 +422,23 @@ export default function RevenuePage() {
 
             {/* ── Manual income & expenses ───────────────────────────────────── */}
             <div className="bg-[#1c1c1c] border border-neutral-800 rounded-xl overflow-hidden">
-              <div className="px-5 py-3.5 border-b border-neutral-800 flex items-center justify-between">
-                <p className="text-xs font-semibold text-neutral-400">other income & expenses</p>
-                {entries.length > 0 && (
-                  <span className="text-[11px] text-neutral-600">{entries.length} {entries.length === 1 ? 'entry' : 'entries'}</span>
-                )}
+              <div className="px-5 py-4 border-b border-neutral-800 flex items-center justify-between">
+                <p className="text-sm font-semibold text-white">
+                  other income & expenses
+                  {entries.length > 0 && (
+                    <span className="ml-2 text-xs font-normal text-neutral-500">({entries.length})</span>
+                  )}
+                </p>
+                <button
+                  onClick={() => setModalOpen(true)}
+                  className="flex items-center gap-1.5 rounded-lg bg-white/5 px-2.5 py-1.5 text-xs text-neutral-400 hover:text-white hover:bg-white/10 transition-colors"
+                >
+                  <Plus size={11} />
+                  add entry
+                </button>
               </div>
-              <div className="overflow-auto max-h-[320px]">
-                <table className="w-full text-sm">
+              <div>
+                <table className="w-full">
                   <thead>
                     <tr className="border-b border-neutral-800 text-left">
                       <th className="px-5 py-3 text-[11px] font-semibold text-neutral-500 tracking-wider">date</th>
@@ -448,26 +451,26 @@ export default function RevenuePage() {
                   </thead>
                   <tbody>
                     {entries.length === 0 ? (
-                      <tr><td colSpan={6} className="px-5 py-10 text-center text-sm text-neutral-600">no entries yet — click "add entry" to get started</td></tr>
+                      <tr><td colSpan={6} className="px-5 py-16 text-center text-sm text-neutral-600">no entries yet — click "add entry" to get started</td></tr>
                     ) : (
                       entries.map(e => (
                         <tr key={e.id} className="border-b border-neutral-800/40 hover:bg-white/[0.025] transition-colors">
-                          <td className="px-5 py-3 text-neutral-400 text-xs tabular-nums whitespace-nowrap">{fmtDate(e.date)}</td>
-                          <td className="px-5 py-3">
+                          <td className="px-5 py-4 text-neutral-400 text-xs tabular-nums whitespace-nowrap">{fmtDate(e.date)}</td>
+                          <td className="px-5 py-4">
                             <span className={`inline-block text-[11px] font-medium px-2 py-0.5 rounded-full ${
                               e.type === 'income' ? 'bg-emerald-500/15 text-emerald-400' : 'bg-rose-500/15 text-rose-400'
                             }`}>
                               {e.type}
                             </span>
                           </td>
-                          <td className="px-5 py-3 text-neutral-300 text-xs">{e.category}</td>
-                          <td className="px-5 py-3 text-neutral-500 text-xs max-w-[200px] truncate">{e.description ?? '—'}</td>
-                          <td className="px-5 py-3 text-xs tabular-nums font-medium">
+                          <td className="px-5 py-4 text-neutral-300 text-xs">{e.category}</td>
+                          <td className="px-5 py-4 text-neutral-500 text-xs max-w-[200px] truncate">{e.description ?? '—'}</td>
+                          <td className="px-5 py-4 text-xs tabular-nums font-medium">
                             <span className={e.type === 'income' ? 'text-emerald-400' : 'text-rose-400'}>
                               {e.type === 'expense' ? '−' : '+'}{fmtExact(e.amount)}
                             </span>
                           </td>
-                          <td className="px-5 py-3">
+                          <td className="px-5 py-4">
                             <button
                               onClick={() => deleteEntry(e.id)}
                               disabled={deletingId === e.id}
