@@ -28,9 +28,10 @@ export async function POST(request, { params }) {
       lastName  = (body.lastName  ?? '').trim() || ''
     }
 
-    const phone          = body.phone      ?? null
-    const customerId     = body.customerId ?? null
-    const subId          = body.subId      ?? null
+    const phone          = body.phone       ?? null
+    const customerId     = body.customerId  ?? null
+    const subId          = body.subId       ?? null
+    const accessCode     = body.accessCode  ? String(body.accessCode).trim() : null
 
     const MEMBERSHIP_TYPE_MAP = { founding: 'FOUNDING', general: 'GENERAL', student: 'STUDENT' }
     const rawType        = (body.membershipType ?? '').toLowerCase().trim()
@@ -48,15 +49,17 @@ export async function POST(request, { params }) {
         phone, membershipType,
         stripeCustomerId:     customerId,
         stripeSubscriptionId: subId,
+        ...(accessCode ? { accessCode } : {}),
       },
       update: {
         firstName,
         lastName,
         membershipType,
         status: 'ACTIVE',
-        ...(phone      ? { phone }                                  : {}),
-        ...(customerId ? { stripeCustomerId:     customerId }       : {}),
-        ...(subId      ? { stripeSubscriptionId: subId }            : {}),
+        ...(phone       ? { phone }                                  : {}),
+        ...(customerId  ? { stripeCustomerId:     customerId }       : {}),
+        ...(subId       ? { stripeSubscriptionId: subId }            : {}),
+        ...(accessCode  ? { accessCode }                             : {}),
       },
     })
 

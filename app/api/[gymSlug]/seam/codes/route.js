@@ -210,6 +210,29 @@ export async function GET(request, { params }) {
     const memberCodeCount = codes.filter(c => c.type === 'member').length
     const guestCodeCount  = codes.filter(c => c.type === 'guest').length
     console.log(`[seam/codes GET] ${devices.length} device(s), ${codes.length} total code(s) — ${memberCodeCount} member, ${guestCodeCount} guest (${members.length} members with codes in DB)`)
+
+    // ── Background sync: write Seam codes back to Member.accessCode ───────────
+    // Collect updates for member codes whose DB accessCode is missing or stale.
+    // Fire-and-forget so the response is never delayed.
+    const syncUpdates = codes
+      .filter(c => c.memberId && c.code)
+      .map(c => {
+        const m = members.find(m => m.id === c.memberId)
+        if (!m || m.accessCode === String(c.code)) return null
+        return { id: c.memberId, code: String(c.code), name: c.name }
+      })
+      .filter(Boolean)
+
+    if (syncUpdates.length) {
+      Promise.all(
+        syncUpdates.map(u =>
+          prisma.member.update({ where: { id: u.id }, data: { accessCode: u.code } })
+            .then(() => console.log(`[seam/codes sync] wrote ${u.code} → "${u.name}"`))
+            .catch(e  => console.error(`[seam/codes sync] failed for "${u.name}":`, e.message))
+        )
+      )
+    }
+
     return NextResponse.json({ codes })
   } catch (error) {
     console.error('[seam/codes GET]', error)
