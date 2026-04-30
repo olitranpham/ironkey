@@ -62,17 +62,16 @@ export async function POST(request, { params }) {
     }
     const email    = (body.email ?? '').trim().toLowerCase() || null
 
-    //  Upsert guest profile 
+    //  Upsert guest profile (global — keyed by email only)
     let profile = null
     if (email) {
-      profile = await prisma.guestProfile.upsert({
-        where:  { gymId_email: { gymId: gym.id, email } },
+      profile = await prisma.guest.upsert({
+        where:  { email },
         update: {
           name:  guestName,
           phone: body.phone ?? undefined,
         },
         create: {
-          gymId: gym.id,
           name:  guestName,
           email,
           phone: body.phone ?? null,
@@ -85,7 +84,7 @@ export async function POST(request, { params }) {
         // New guest -- save incoming code to profile
         const incomingCode = body.accessCode ? String(body.accessCode).trim() : null
         if (incomingCode) {
-          profile = await prisma.guestProfile.update({
+          profile = await prisma.guest.update({
             where: { id: profile.id },
             data:  { accessCode: incomingCode },
           })
@@ -94,7 +93,7 @@ export async function POST(request, { params }) {
     }
 
     //  Create the pass 
-    const pass = await prisma.guestPass.create({
+    const pass = await prisma.guestVisit.create({
       data: {
         gymId:          gym.id,
         guestProfileId: profile?.id ?? null,
@@ -137,9 +136,16 @@ export async function GET(request, { params }) {
     }
     const gymId = gym.id
 
-    // Profiles with all passes
-    const profiles = await prisma.guestProfile.findMany({
-      where:   { gymId },
+    // Find profile IDs that have passes at this gym (GuestProfile is now global)
+    const gymPassLinks = await prisma.guestVisit.findMany({
+      where:    { gymId, guestProfileId: { not: null } },
+      select:   { guestProfileId: true },
+      distinct: ['guestProfileId'],
+    })
+    const profileIds = gymPassLinks.map(p => p.guestProfileId)
+
+    const profiles = await prisma.guest.findMany({
+      where:   { id: { in: profileIds } },
       orderBy: { updatedAt: 'desc' },
       select: {
         id:         true,
@@ -148,6 +154,7 @@ export async function GET(request, { params }) {
         phone:      true,
         accessCode: true,
         passes: {
+          where:   { gymId },   // only this gym's passes
           orderBy: { usedAt: { sort: 'desc', nulls: 'last' } },
           select: {
             id:         true,
@@ -162,7 +169,7 @@ export async function GET(request, { params }) {
     })
 
     // Also fetch unlinked passes (no profile / no email)
-    const unlinked = await prisma.guestPass.findMany({
+    const unlinked = await prisma.guestVisit.findMany({
       where: {
         gymId,
         guestProfileId: null,

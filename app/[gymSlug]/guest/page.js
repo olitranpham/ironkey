@@ -165,9 +165,9 @@ export default function GuestPage() {
   const [plans,      setPlans]      = useState([])
   const [pageLoading, setPageLoading] = useState(true)
 
-  // step: intent | new-or-returning | new-form | email-input | returning-confirm | checkin-confirm | checkin-done
+  // step: intent | email-input | new-form | returning-confirm | checkin-confirm | checkin-done
   const [step,       setStep]       = useState('intent')
-  const [mode,       setMode]       = useState(null)   // 'purchase-new' | 'purchase-returning' | 'checkin'
+  const [mode,       setMode]       = useState(null)   // 'purchase' | 'checkin'
   const [submitting, setSubmitting] = useState(false)
   const [error,      setError]      = useState(null)
   const [waiverOpen, setWaiverOpen] = useState(false)
@@ -182,7 +182,8 @@ export default function GuestPage() {
   // Shared
   const [selectedPriceId, setSelectedPriceId] = useState('')
   const [lookupEmail,     setLookupEmail]      = useState('')
-  const [lookupResult,    setLookupResult]     = useState(null)   // { profile, passesLeft }
+  const [lookupResult,    setLookupResult]     = useState(null)   // { profile, hasSignedWaiver, passesLeft, packs }
+  const [returningName,   setReturningName]    = useState('')
   const [checkinResult,   setCheckinResult]    = useState(null)
 
   useEffect(() => {
@@ -203,9 +204,8 @@ export default function GuestPage() {
 
   function goBack() {
     clearError()
-    if (step === 'new-or-returning')   { setStep('intent'); setMode(null) }
-    else if (step === 'new-form')      { setStep('new-or-returning') }
-    else if (step === 'email-input')   { setStep(mode === 'checkin' ? 'intent' : 'new-or-returning') }
+    if (step === 'email-input')        { setStep('intent'); setMode(null) }
+    else if (step === 'new-form')      { setStep('email-input') }
     else if (step === 'returning-confirm') { setStep('email-input') }
     else if (step === 'checkin-confirm')   { setStep('email-input') }
     else { setStep('intent'); setMode(null) }
@@ -235,9 +235,16 @@ export default function GuestPage() {
         setLookupResult(json)
         setStep('checkin-confirm')
       } else {
-        // purchase-returning
+        // purchase — hasSignedWaiver determines which form to show
         setLookupResult(json)
-        setStep('returning-confirm')
+        if (json.hasSignedWaiver) {
+          setReturningName(json.profile?.name ?? '')
+          setStep('returning-confirm')
+        } else {
+          // First time at this gym — pre-fill email and show full form
+          setField('email', lookupEmail.trim())
+          setStep('new-form')
+        }
       }
     } catch (e) {
       setError(e.message)
@@ -296,7 +303,8 @@ export default function GuestPage() {
   // ── Submit returning guest checkout ───────────────────────────────────────
   async function handleReturningCheckout() {
     clearError()
-    if (!selectedPriceId) { setError('please select a pass type.'); return }
+    if (!returningName.trim()) { setError('please enter your name.'); return }
+    if (!selectedPriceId)      { setError('please select a pass type.'); return }
     const plan = plans.find(p => p.priceId === selectedPriceId)
     setSubmitting(true)
     try {
@@ -307,6 +315,7 @@ export default function GuestPage() {
           priceId:    selectedPriceId,
           passType:   plan?.passType   ?? 'SINGLE',
           passesLeft: plan?.passesLeft ?? 1,
+          name:       returningName.trim(),
           email:      lookupEmail.trim(),
           isNewGuest: false,
         }),
@@ -377,7 +386,7 @@ export default function GuestPage() {
         {step === 'intent' && (
           <div className="flex flex-col gap-3">
             <button
-              onClick={() => { clearError(); setStep('new-or-returning'); setMode('purchase') }}
+              onClick={() => { clearError(); setStep('email-input'); setMode('purchase') }}
               className="w-full bg-[#1c1c1c] border border-neutral-800 rounded-2xl p-6 flex items-center gap-4 text-left hover:border-neutral-600 transition-colors group"
             >
               <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center shrink-0 group-hover:bg-white/15 transition-colors">
@@ -397,31 +406,10 @@ export default function GuestPage() {
                 <LogIn size={18} className="text-white" />
               </div>
               <div>
-                <p className="text-sm font-semibold text-white">check in with existing pass</p>
-                <p className="text-xs text-neutral-500 mt-0.5">use a pass you've already purchased</p>
+                <p className="text-sm font-semibold text-white">check in with existing pack</p>
+                <p className="text-xs text-neutral-500 mt-0.5">use a pack you've already purchased</p>
               </div>
             </button>
-          </div>
-        )}
-
-        {/* ── Step: new-or-returning (purchase path) ─────────────────────── */}
-        {step === 'new-or-returning' && (
-          <div className="bg-[#1c1c1c] border border-neutral-800 rounded-2xl p-6 flex flex-col gap-4 shadow-2xl">
-            <p className="text-sm font-semibold text-white">is this your first visit?</p>
-            <div className="flex flex-col gap-2.5">
-              <button
-                onClick={() => { clearError(); setStep('new-form'); setMode('purchase-new') }}
-                className="w-full py-3 rounded-xl text-sm font-semibold bg-white text-[#1c1c1c] hover:bg-neutral-200 transition-colors"
-              >
-                yes, first visit
-              </button>
-              <button
-                onClick={() => { clearError(); setStep('email-input'); setMode('purchase-returning') }}
-                className="w-full py-3 rounded-xl text-sm font-medium bg-neutral-800 text-neutral-200 hover:bg-neutral-700 transition-colors border border-neutral-700"
-              >
-                no, i've been before
-              </button>
-            </div>
           </div>
         )}
 
@@ -586,12 +574,12 @@ export default function GuestPage() {
           >
             <div>
               <p className="text-sm font-semibold text-white">
-                {mode === 'checkin' ? 'check in' : 'welcome back'}
+                {mode === 'checkin' ? 'check in' : 'enter your email'}
               </p>
               <p className="text-xs text-neutral-500 mt-1">
                 {mode === 'checkin'
                   ? 'enter the email you used when you purchased your pass.'
-                  : "enter your email and we'll look up your profile."}
+                  : "we'll check if you've visited before."}
               </p>
             </div>
 
@@ -626,21 +614,26 @@ export default function GuestPage() {
         )}
 
         {/* ── Step: returning-confirm ─────────────────────────────────────── */}
-        {step === 'returning-confirm' && lookupResult && (
+        {step === 'returning-confirm' && (
           <div className="bg-[#1c1c1c] border border-neutral-800 rounded-2xl p-6 flex flex-col gap-5 shadow-2xl">
-            {/* Profile card */}
-            <div className="bg-neutral-900 rounded-xl p-4 flex flex-col gap-1">
-              <p className="text-sm font-semibold text-white">
-                {lookupResult.profile ? lookupResult.profile.name : lookupEmail}
-              </p>
-              <p className="text-xs text-neutral-500">{lookupEmail}</p>
-              {lookupResult.passesLeft > 0 && (
-                <p className="text-xs text-emerald-400 mt-1">{lookupResult.passesLeft} pass{lookupResult.passesLeft !== 1 ? 'es' : ''} remaining</p>
-              )}
+            <div>
+              <p className="text-sm font-semibold text-white">welcome back</p>
+              <p className="text-xs text-neutral-500 mt-1">{lookupEmail}</p>
             </div>
 
+            {/* Name */}
+            <Field label="full name" required>
+              <input
+                type="text"
+                placeholder="Jane Smith"
+                value={returningName}
+                onChange={e => setReturningName(e.target.value)}
+                className={INPUT}
+              />
+            </Field>
+
             {/* Plan selector */}
-            <Field label="add a pass" required>
+            <Field label="pass type" required>
               <PlanSelector
                 plans={plans}
                 value={selectedPriceId}
@@ -726,7 +719,7 @@ export default function GuestPage() {
                   <p className="text-xs text-neutral-600 mt-1">purchase a new pass to continue.</p>
                 </div>
                 <button
-                  onClick={() => { setStep('returning-confirm'); setMode('purchase-returning') }}
+                  onClick={() => { clearError(); setStep('email-input'); setMode('purchase') }}
                   className="w-full py-3 rounded-xl text-sm font-semibold bg-white text-[#1c1c1c] hover:bg-neutral-200 transition-colors"
                 >
                   purchase a pass

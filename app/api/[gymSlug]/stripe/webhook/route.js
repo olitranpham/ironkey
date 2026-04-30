@@ -70,117 +70,66 @@ export async function POST(request, { params }) {
       const passType   = meta.passType ?? 'SINGLE'
       const passesLeft = parseInt(meta.passesLeft, 10) || 1
 
-      // Upsert GuestProfile
+      // Upsert GuestProfile (global — keyed by email only)
       let guestProfile = null
       if (email) {
-        guestProfile = await prisma.guestProfile.upsert({
-          where:  { gymId_email: { gymId: gym.id, email } },
+        guestProfile = await prisma.guest.upsert({
+          where:  { email },
           update: { name: guestName || undefined, phone: phone || undefined },
-          create: { gymId: gym.id, name: guestName || email, email, phone },
+          create: { name: guestName || email, email, phone },
         })
       }
 
-      // Create GuestPass
-      await prisma.guestPass.create({
-        data: {
-          gymId:          gym.id,
-          guestProfileId: guestProfile?.id ?? null,
-          guestName:      guestName || email,
-          guestEmail:     email || null,
-          guestPhone:     phone,
-          passType,
-          passesLeft,
-          expiresAt:      new Date(Date.now() + 24 * 60 * 60 * 1000),
-        },
-      })
-      console.log('[webhook] created guest pass:', passType, 'passesLeft:', passesLeft, 'for', email)
+      // Create GuestWaiver for this gym if not already recorded
+      if (guestProfile) {
+        await prisma.guestWaiver.upsert({
+          where:  { guestProfileId_gymId: { guestProfileId: guestProfile.id, gymId: gym.id } },
+          update: {},
+          create: { guestProfileId: guestProfile.id, gymId: gym.id },
+        })
+      }
 
-      // ── Seam: time-bound 24hr access code for guest ────────────────────────
-      if (gym.seamApiKey && guestProfile) {
-        const newCode     = String(Math.floor(1000 + Math.random() * 9000))
-        const accessCode  = guestProfile.accessCode ?? newCode
-        const deviceId    = gym.seamDeviceId ?? process.env.SEAM_DEVICE_ID
-        const seamHeaders = {
-          Authorization:  `Bearer ${gym.seamApiKey}`,
-          'Content-Type': 'application/json',
-        }
-        const startsAt = new Date().toISOString()
-        const endsAt   = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
-
-        try {
-          let devices = deviceId ? [{ device_id: deviceId }] : []
-          if (!deviceId) {
-            const devRes = await fetch(`${SEAM_API}/devices/list`, {
-              method: 'POST', headers: seamHeaders, body: JSON.stringify({}),
-            })
-            if (devRes.ok) {
-              const { devices: devList = [] } = await devRes.json()
-              devices = devList
-            }
-          }
-
-          if (guestProfile.accessCode) {
-            // Returning guest — find and update expiry on each device
-            for (const dev of devices) {
-              const listRes = await fetch(`${SEAM_API}/access_codes/list`, {
-                method: 'POST', headers: seamHeaders,
-                body:   JSON.stringify({ device_id: dev.device_id }),
-              })
-              if (!listRes.ok) continue
-              const { access_codes = [] } = await listRes.json()
-              const match = access_codes.find(
-                c => String(c.code).trim() === String(accessCode).trim()
-              )
-              if (match) {
-                await fetch(`${SEAM_API}/access_codes/update`, {
-                  method: 'POST', headers: seamHeaders,
-                  body:   JSON.stringify({
-                    access_code_id: match.access_code_id,
-                    type:           'time_bound',
-                    starts_at:      startsAt,
-                    ends_at:        endsAt,
-                  }),
-                }).catch(e => console.error('[webhook] Seam update error:', e.message))
-              } else {
-                // Code not on device — create it
-                await fetch(`${SEAM_API}/access_codes/create`, {
-                  method: 'POST', headers: seamHeaders,
-                  body:   JSON.stringify({
-                    device_id:  dev.device_id,
-                    name:       guestName,
-                    code:       accessCode,
-                    type:       'time_bound',
-                    starts_at:  startsAt,
-                    ends_at:    endsAt,
-                  }),
-                }).catch(e => console.error('[webhook] Seam create error:', e.message))
-              }
-            }
-          } else {
-            // New guest — create code on all devices
-            await Promise.all(devices.map(dev =>
-              fetch(`${SEAM_API}/access_codes/create`, {
-                method: 'POST', headers: seamHeaders,
-                body:   JSON.stringify({
-                  device_id:  dev.device_id,
-                  name:       guestName,
-                  code:       accessCode,
-                  type:       'time_bound',
-                  starts_at:  startsAt,
-                  ends_at:    endsAt,
-                }),
-              }).catch(e => console.error('[webhook] Seam create error:', e.message))
-            ))
-          }
-
-          await prisma.guestProfile.update({
+      // New guests get a fresh 4-digit accessCode; returning guests reuse theirs
+      let accessCode = guestProfile?.accessCode ?? null
+      if (!accessCode) {
+        accessCode = String(Math.floor(1000 + Math.random() * 9000))
+        if (guestProfile) {
+          await prisma.guest.update({
             where: { id: guestProfile.id },
             data:  { accessCode },
           })
-          console.log('[webhook] Seam guest code set:', accessCode, '| expires:', endsAt)
-        } catch (seamErr) {
-          console.error('[webhook] Seam guest error:', seamErr.message)
         }
+        console.log('[webhook] generated new accessCode', accessCode, 'for new guest', email)
+      } else {
+        console.log('[webhook] reusing existing accessCode', accessCode, 'for returning guest', email)
+      }
+
+      // Trigger Zapier via the guest-passes endpoint — this creates the GuestPass
+      // record and hands off Seam code programming to Zapier automation.
+      const host    = request.headers.get('host') ?? ''
+      const scheme  = host.startsWith('localhost') ? 'http' : 'https'
+      const baseUrl = `${scheme}://${host}`
+      try {
+        const zapRes = await fetch(`${baseUrl}/api/${gymSlug}/guest-passes`, {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify({
+            name:       guestName,
+            email,
+            phone,
+            passType:   passType.toLowerCase(),  // 'THREE_PACK' → 'three_pack' matches PASS_TYPE_MAP
+            passesLeft: passType === 'SINGLE' ? null : passesLeft,
+            accessCode,
+          }),
+        })
+        if (!zapRes.ok) {
+          const txt = await zapRes.text()
+          console.error('[webhook] guest-passes notify failed:', zapRes.status, txt)
+        } else {
+          console.log('[webhook] guest-passes notified for', email, '| passType:', passType, '| accessCode:', accessCode)
+        }
+      } catch (e) {
+        console.error('[webhook] guest-passes notify error:', e.message)
       }
 
       return NextResponse.json({ received: true })
@@ -230,53 +179,68 @@ export async function POST(request, { params }) {
       console.log('[webhook] updated existing member from checkout:', member.id, email)
     }
 
-    // ── Generate and program a Seam access code ──────────────────────────────
+    // ── Always generate and save a 4-digit access code ───────────────────────
+    const accessCode  = String(Math.floor(1000 + Math.random() * 9000))
+    member = await prisma.member.update({
+      where: { id: member.id },
+      data:  { accessCode },
+    })
+    console.log('[webhook] access code generated for member:', member.id, '| code:', accessCode)
+
+    // ── Program Seam lock if configured ──────────────────────────────────────
     if (gym.seamApiKey) {
-      const accessCode   = String(Math.floor(1000 + Math.random() * 9000))
-      const deviceId     = gym.seamDeviceId ?? process.env.SEAM_DEVICE_ID
-      const seamHeaders  = {
+      const deviceId    = gym.seamDeviceId ?? process.env.SEAM_DEVICE_ID
+      const seamHeaders = {
         Authorization:  `Bearer ${gym.seamApiKey}`,
         'Content-Type': 'application/json',
       }
-
       try {
         let devices = deviceId ? [{ device_id: deviceId }] : []
-
         if (!deviceId) {
           const devRes = await fetch(`${SEAM_API}/devices/list`, {
-            method:  'POST',
-            headers: seamHeaders,
-            body:    JSON.stringify({}),
+            method: 'POST', headers: seamHeaders, body: JSON.stringify({}),
           })
           if (devRes.ok) {
             const { devices: devList = [] } = await devRes.json()
             devices = devList
           }
         }
-
         await Promise.all(
           devices.map(dev =>
             fetch(`${SEAM_API}/access_codes/create`, {
               method:  'POST',
               headers: seamHeaders,
-              body:    JSON.stringify({
-                device_id: dev.device_id,
-                name:      `${firstName} ${lastName}`,
-                code:      accessCode,
-              }),
+              body:    JSON.stringify({ device_id: dev.device_id, name: `${firstName} ${lastName}`, code: accessCode }),
             }).catch(e => console.error('[webhook] Seam create error:', e.message))
           )
         )
-
-        await prisma.member.update({
-          where: { id: member.id },
-          data:  { accessCode },
-        })
-        console.log('[webhook] Seam access code created for member:', member.id, '| code:', accessCode)
+        console.log('[webhook] Seam code programmed for member:', member.id)
       } catch (seamErr) {
         console.error('[webhook] Seam error:', seamErr.message)
       }
     }
+
+    // ── Notify Zapier via members endpoint (fire-and-forget) ─────────────────
+    const memberHost   = request.headers.get('host') ?? ''
+    const memberScheme = memberHost.startsWith('localhost') ? 'http' : 'https'
+    fetch(`${memberScheme}://${memberHost}/api/${gymSlug}/members`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({
+        firstName,
+        lastName,
+        email,
+        phone:                 phone || null,
+        dob:                   meta.dob                   || null,
+        address:               meta.address               || null,
+        emergencyName:         meta.emergencyName         || null,
+        emergencyPhone:        meta.emergencyPhone        || null,
+        emergencyRelationship: meta.emergencyRelationship || null,
+        membershipType:        membershipType.toLowerCase(),
+        subId,
+        accessCode,
+      }),
+    }).catch(e => console.error('[webhook] members notify error:', e.message))
   }
 
   if (event.type === 'customer.subscription.deleted') {

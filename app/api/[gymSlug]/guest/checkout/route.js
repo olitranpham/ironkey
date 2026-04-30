@@ -38,7 +38,8 @@ export async function POST(request, { params }) {
 
     const stripe    = new Stripe(gym.stripeSecretKey, { apiVersion: '2024-06-20' })
     const origin    = request.headers.get('origin') ?? `https://${request.headers.get('host')}`
-    const guestName = [firstName, lastName].filter(Boolean).join(' ').trim() || email.trim()
+    // Accept pre-built name (returning guest) or construct from first/last
+    const guestName = body.name?.trim() || [firstName, lastName].filter(Boolean).join(' ').trim() || email.trim()
 
     const session = await stripe.checkout.sessions.create({
       mode:           'payment',

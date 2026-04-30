@@ -86,8 +86,8 @@ export async function GET(request, { params }) {
         where: { gymId },
         select: { id: true, firstName: true, lastName: true, accessCode: true, status: true },
       }),
-      prisma.guestProfile.findMany({
-        where: { gymId, accessCode: { not: null } },
+      prisma.guest.findMany({
+        where: { accessCode: { not: null }, waivers: { some: { gymId } } },
         select: { id: true, accessCode: true },
       }),
     ])

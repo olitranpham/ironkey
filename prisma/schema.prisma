@@ -30,8 +30,8 @@ model Gym {
   updatedAt DateTime @updatedAt
 
   members          Member[]
-  guestPasses      GuestPass[]
-  guestProfiles    GuestProfile[]
+  guestVisits      GuestVisit[]
+  guestWaivers     GuestWaiver[]
   users            GymUser[]
   financialEntries FinancialEntry[]
   inventoryItems   InventoryItem[]
@@ -74,7 +74,7 @@ model Member {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  guestPasses GuestPass[]
+  guestVisits GuestVisit[]
 
   @@unique([gymId, email])
 }
@@ -94,29 +94,30 @@ enum MembershipType {
   FLEX
 }
 
-// ─── GuestProfile ─────────────────────────────────────────────────────────────
+// ─── Guest ────────────────────────────────────────────────────────────────────
+// Global — shared across gyms by email. Per-gym waiver records live in GuestWaiver.
 
-model GuestProfile {
+model Guest {
   id         String   @id @default(cuid())
-  gymId      String
-  gym        Gym      @relation(fields: [gymId], references: [id], onDelete: Cascade)
 
   name       String
-  email      String?
+  email      String?  @unique
   phone      String?
   accessCode String?
 
-  passes    GuestPass[]
+  passes   GuestVisit[]
+  waivers  GuestWaiver[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@unique([gymId, email])
+  @@map("GuestProfile")
 }
 
-// ─── GuestPass ────────────────────────────────────────────────────────────────
+// ─── GuestVisit ───────────────────────────────────────────────────────────────
+// Each individual pass purchase or check-in record.
 
-model GuestPass {
+model GuestVisit {
   id        String  @id @default(cuid())
   gymId     String
   gym       Gym     @relation(fields: [gymId], references: [id], onDelete: Cascade)
@@ -125,7 +126,7 @@ model GuestPass {
   member    Member? @relation(fields: [memberId], references: [id], onDelete: SetNull)
 
   guestProfileId String?
-  guestProfile   GuestProfile? @relation(fields: [guestProfileId], references: [id], onDelete: SetNull)
+  guestProfile   Guest?  @relation(fields: [guestProfileId], references: [id], onDelete: SetNull)
 
   guestName  String
   guestEmail String?
@@ -138,6 +139,8 @@ model GuestPass {
   expiresAt DateTime
 
   createdAt DateTime @default(now())
+
+  @@map("GuestPass")
 }
 
 enum PassType {
@@ -147,6 +150,21 @@ enum PassType {
   TEN_PACK
   VALUE
   DELUXE
+}
+
+// ─── GuestWaiver ──────────────────────────────────────────────────────────────
+// Records that a guest has signed the waiver at a specific gym.
+
+model GuestWaiver {
+  id             String   @id @default(cuid())
+  guestProfileId String
+  gymId          String
+  signedAt       DateTime @default(now())
+
+  guestProfile   Guest @relation(fields: [guestProfileId], references: [id])
+  gym            Gym   @relation(fields: [gymId], references: [id])
+
+  @@unique([guestProfileId, gymId])
 }
 
 // ─── GymUser (staff / admin accounts) ────────────────────────────────────────

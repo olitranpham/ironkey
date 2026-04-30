@@ -144,7 +144,7 @@ async function main() {
     // Upsert GuestProfile if email exists
     let guestProfileId = null
     if (email) {
-      const profile = await prisma.guestProfile.upsert({
+      const profile = await prisma.guest.upsert({
         where:  { gymId_email: { gymId: gym.id, email } },
         create: { gymId: gym.id, name, email, phone, accessCode },
         update: { name, ...(phone ? { phone } : {}), ...(accessCode ? { accessCode } : {}) },
@@ -159,7 +159,7 @@ async function main() {
       : new Date(new Date().setFullYear(new Date().getFullYear() + 1))
 
     try {
-      await prisma.guestPass.create({
+      await prisma.guestVisit.create({
         data: {
           gymId: gym.id,
           guestProfileId,

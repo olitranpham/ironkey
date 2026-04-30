@@ -25,8 +25,8 @@ export async function POST(request, { params }) {
     if (!(body instanceof Object) || body === null) fields = {}
 
     const {
-      firstName, lastName, email, phone, dob,
-      emergencyName, emergencyPhone,
+      firstName, lastName, email, phone, dob, address,
+      emergencyName, emergencyPhone, emergencyRelationship,
       priceId, membershipType,
     } = fields
 
@@ -54,15 +54,17 @@ export async function POST(request, { params }) {
       cancel_url:  `${origin}/${gymSlug}/join`,
       metadata: {
         gymSlug,
-        gymId:              gym.id,
-        firstName:          firstName.trim(),
-        lastName:           lastName.trim(),
-        phone:              phone          ?? '',
-        dob:                dob            ?? '',
-        emergencyName:      emergencyName  ?? '',
-        emergencyPhone:     emergencyPhone ?? '',
-        membershipType:     membershipType ?? 'GENERAL',
-        studentIdUploaded:  body.studentId ? 'yes' : '',
+        gymId:                 gym.id,
+        firstName:             firstName.trim(),
+        lastName:              lastName.trim(),
+        phone:                 phone                 ?? '',
+        dob:                   dob                   ?? '',
+        address:               address               ?? '',
+        emergencyName:         emergencyName         ?? '',
+        emergencyPhone:        emergencyPhone        ?? '',
+        emergencyRelationship: emergencyRelationship ?? '',
+        membershipType:        membershipType        ?? 'GENERAL',
+        studentIdUploaded:     body.studentId ? 'yes' : '',
       },
     })
 

@@ -145,16 +145,18 @@ export default function JoinPage() {
   const [waiverOpen, setWaiverOpen] = useState(false)
 
   const [form, setForm] = useState({
-    firstName:      '',
-    lastName:       '',
-    email:          '',
-    phone:          '',
-    dob:            '',
-    emergencyName:  '',
-    emergencyPhone: '',
-    priceId:        '',
-    membershipType: '',
-    waiver:         false,
+    firstName:             '',
+    lastName:              '',
+    email:                 '',
+    phone:                 '',
+    dob:                   '',
+    address:               '',
+    emergencyName:         '',
+    emergencyPhone:        '',
+    emergencyRelationship: '',
+    priceId:               '',
+    membershipType:        '',
+    waiver:                false,
   })
   const [studentId, setStudentId] = useState(null)
 
@@ -188,8 +190,9 @@ export default function JoinPage() {
     if (!form.firstName.trim() || !form.lastName.trim()) { setError('First and last name are required.'); return }
     if (!form.email.trim())    { setError('Email is required.'); return }
     if (!form.phone.trim())    { setError('Phone number is required.'); return }
-    if (!form.priceId)         { setError('Please select a membership type.'); return }
     if (!form.dob)             { setError('Date of birth is required.'); return }
+    if (!form.address.trim())  { setError('Address is required.'); return }
+    if (!form.priceId)         { setError('Please select a membership type.'); return }
     const dobAge = (Date.now() - new Date(form.dob).getTime()) / (365.25 * 24 * 60 * 60 * 1000)
     if (dobAge < 18) { setError('Members under 18 must have a parent or guardian complete this form on their behalf (see Section 14 of the terms).'); return }
     if (form.membershipType === 'STUDENT' && !studentId) { setError('Please upload your student ID to qualify for the student membership.'); return }
@@ -202,31 +205,35 @@ export default function JoinPage() {
       let res
       if (form.membershipType === 'STUDENT' && studentId) {
         const fd = new FormData()
-        fd.append('firstName',      form.firstName.trim())
-        fd.append('lastName',       form.lastName.trim())
-        fd.append('email',          form.email.trim())
-        fd.append('phone',          form.phone.trim())
-        fd.append('dob',            form.dob)
-        fd.append('emergencyName',  form.emergencyName.trim())
-        fd.append('emergencyPhone', form.emergencyPhone.trim())
-        fd.append('priceId',        form.priceId)
-        fd.append('membershipType', form.membershipType)
-        fd.append('studentId',      studentId)
+        fd.append('firstName',             form.firstName.trim())
+        fd.append('lastName',              form.lastName.trim())
+        fd.append('email',                 form.email.trim())
+        fd.append('phone',                 form.phone.trim())
+        fd.append('dob',                   form.dob)
+        fd.append('address',               form.address.trim())
+        fd.append('emergencyName',         form.emergencyName.trim())
+        fd.append('emergencyPhone',        form.emergencyPhone.trim())
+        fd.append('emergencyRelationship', form.emergencyRelationship.trim())
+        fd.append('priceId',               form.priceId)
+        fd.append('membershipType',        form.membershipType)
+        fd.append('studentId',             studentId)
         res = await fetch(`/api/${gymSlug}/join/checkout`, { method: 'POST', body: fd })
       } else {
         res = await fetch(`/api/${gymSlug}/join/checkout`, {
           method:  'POST',
           headers: { 'Content-Type': 'application/json' },
           body:    JSON.stringify({
-            firstName:      form.firstName.trim(),
-            lastName:       form.lastName.trim(),
-            email:          form.email.trim(),
-            phone:          form.phone.trim(),
-            dob:            form.dob,
-            emergencyName:  form.emergencyName.trim(),
-            emergencyPhone: form.emergencyPhone.trim(),
-            priceId:        form.priceId,
-            membershipType: form.membershipType,
+            firstName:             form.firstName.trim(),
+            lastName:              form.lastName.trim(),
+            email:                 form.email.trim(),
+            phone:                 form.phone.trim(),
+            dob:                   form.dob,
+            address:               form.address.trim(),
+            emergencyName:         form.emergencyName.trim(),
+            emergencyPhone:        form.emergencyPhone.trim(),
+            emergencyRelationship: form.emergencyRelationship.trim(),
+            priceId:               form.priceId,
+            membershipType:        form.membershipType,
           }),
         })
       }
@@ -321,6 +328,18 @@ export default function JoinPage() {
           />
         </Field>
 
+        {/* Address */}
+        <Field label="address" required>
+          <input
+            type="text"
+            placeholder="123 Main St, Boston, MA 02101"
+            value={form.address}
+            onChange={e => set('address', e.target.value)}
+            className={INPUT}
+            required
+          />
+        </Field>
+
         {/* Membership type */}
         <Field label="membership type" required>
           {plans.length === 0 ? (
@@ -404,6 +423,15 @@ export default function JoinPage() {
             />
           </Field>
         </div>
+        <Field label="relationship">
+          <input
+            type="text"
+            placeholder="Spouse, parent, friend…"
+            value={form.emergencyRelationship}
+            onChange={e => set('emergencyRelationship', e.target.value)}
+            className={INPUT}
+          />
+        </Field>
 
         <div className="border-t border-neutral-800 pt-1" />
 

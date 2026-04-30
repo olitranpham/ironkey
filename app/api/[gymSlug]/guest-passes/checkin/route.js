@@ -41,6 +41,23 @@ async function deactivateSeamCode(accessCode, seamApiKey, seamDeviceId) {
   }
 }
 
+function notifyZapier(request, gymSlug, { name, email, phone, accessCode }) {
+  const host   = request.headers.get('host') ?? ''
+  const scheme = host.startsWith('localhost') ? 'http' : 'https'
+  fetch(`${scheme}://${host}/api/${gymSlug}/guest-passes`, {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body:    JSON.stringify({
+      name,
+      email,
+      phone:      phone ?? null,
+      passType:   'single',
+      passesLeft: null,
+      accessCode,
+    }),
+  }).catch(e => console.error('[checkin] Zapier notify error:', e.message))
+}
+
 export async function POST(request, { params }) {
   try {
     const { gymSlug } = await params
@@ -61,19 +78,19 @@ export async function POST(request, { params }) {
       return NextResponse.json({ error: 'Gym not found' }, { status: 404 })
     }
 
-    // ── Upsert guest profile ─────────────────────────────────────────────────
+    // ── Upsert guest profile (global — keyed by email) ──────────────────────
     let profile = null
     if (email) {
-      profile = await prisma.guestProfile.upsert({
-        where:  { gymId_email: { gymId: gym.id, email } },
+      profile = await prisma.guest.upsert({
+        where:  { email },
         update: { name: name || undefined },
-        create: { gymId: gym.id, name: name || email, email },
+        create: { name: name || email, email },
       })
     }
 
     // ── Look up most recent pack with passes remaining ────────────────────────
     const existing = email
-      ? await prisma.guestPass.findFirst({
+      ? await prisma.guestVisit.findFirst({
           where: {
             gymId:      gym.id,
             guestEmail: { equals: email, mode: 'insensitive' },
@@ -85,7 +102,7 @@ export async function POST(request, { params }) {
 
     if (existing) {
       const newCount = existing.passesLeft - 1
-      const updated  = await prisma.guestPass.update({
+      const updated  = await prisma.guestVisit.update({
         where: { id: existing.id },
         data:  {
           passesLeft:     newCount,
@@ -99,11 +116,16 @@ export async function POST(request, { params }) {
         await deactivateSeamCode(profile.accessCode, gym.seamApiKey, gym.seamDeviceId)
       }
 
+      // ── Notify Zapier (fire-and-forget) ─────────────────────────────────
+      if (profile?.accessCode) {
+        notifyZapier(request, gymSlug, { name: profile.name, email, phone: body.phone, accessCode: profile.accessCode })
+      }
+
       return NextResponse.json({ ok: true, passesLeft: updated.passesLeft, passType: updated.passType, passTypeLabel: PASS_TYPE_LABEL[updated.passType] ?? updated.passType, accessCode: profile?.accessCode ?? null })
     }
 
     // ── No pack found — create a single-use record and deactivate immediately
-    await prisma.guestPass.create({
+    await prisma.guestVisit.create({
       data: {
         gymId:          gym.id,
         guestProfileId: profile?.id ?? null,
@@ -119,6 +141,11 @@ export async function POST(request, { params }) {
     // Single pass — deactivate immediately after use
     if (profile?.accessCode && gym.seamApiKey && gym.seamDeviceId) {
       await deactivateSeamCode(profile.accessCode, gym.seamApiKey, gym.seamDeviceId)
+    }
+
+    // ── Notify Zapier (fire-and-forget) ─────────────────────────────────
+    if (profile?.accessCode) {
+      notifyZapier(request, gymSlug, { name: profile.name, email, phone: body.phone, accessCode: profile.accessCode })
     }
 
     return NextResponse.json({ ok: true, passesLeft: null, passType: 'SINGLE', passTypeLabel: 'Day Pass', accessCode: profile?.accessCode ?? null })

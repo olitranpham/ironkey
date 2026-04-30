@@ -14,8 +14,15 @@ export async function PATCH(request, { params }) {
     const gym = await prisma.gym.findUnique({ where: { slug: gymSlug }, select: { id: true } })
     if (!gym) return NextResponse.json({ error: 'Gym not found' }, { status: 404 })
 
-    const profile = await prisma.guestProfile.findFirst({
-      where: { id: profileId, gymId: gym.id },
+    // Verify the profile has passes or a waiver for this gym (auth boundary)
+    const profile = await prisma.guest.findFirst({
+      where: {
+        id: profileId,
+        OR: [
+          { passes:  { some: { gymId: gym.id } } },
+          { waivers: { some: { gymId: gym.id } } },
+        ],
+      },
     })
     if (!profile) return NextResponse.json({ error: 'Profile not found' }, { status: 404 })
 
@@ -26,7 +33,7 @@ export async function PATCH(request, { params }) {
       ? String(body.accessCode).trim()
       : null
 
-    const updated = await prisma.guestProfile.update({
+    const updated = await prisma.guest.update({
       where: { id: profileId },
       data,
     })
