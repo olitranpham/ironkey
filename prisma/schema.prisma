@@ -26,6 +26,10 @@ model Gym {
   seamApiKey             String?
   seamDeviceId           String?
 
+  // Zapier webhook URLs for outbound notifications
+  zapierGuestWebhookUrl  String?
+  zapierMemberWebhookUrl String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
