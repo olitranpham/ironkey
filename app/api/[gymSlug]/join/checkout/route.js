@@ -27,7 +27,7 @@ export async function POST(request, { params }) {
     const {
       firstName, lastName, email, phone, dob, address,
       emergencyName, emergencyPhone, emergencyRelationship,
-      priceId, membershipType,
+      priceId, membershipType, addonPriceId,
     } = fields
 
     if (!firstName || !lastName || !email || !priceId) {
@@ -46,10 +46,13 @@ export async function POST(request, { params }) {
     // Build base URL from request origin for redirect URLs
     const origin = request.headers.get('origin') ?? `https://${request.headers.get('host')}`
 
+    const lineItems = [{ price: priceId, quantity: 1 }]
+    if (addonPriceId) lineItems.push({ price: addonPriceId, quantity: 1 })
+
     const session = await stripe.checkout.sessions.create({
       mode:           'subscription',
       customer_email: email,
-      line_items: [{ price: priceId, quantity: 1 }],
+      line_items:     lineItems,
       success_url: `${origin}/${gymSlug}/join/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url:  `${origin}/${gymSlug}/join`,
       metadata: {
@@ -64,6 +67,7 @@ export async function POST(request, { params }) {
         emergencyPhone:        emergencyPhone        ?? '',
         emergencyRelationship: emergencyRelationship ?? '',
         membershipType:        membershipType        ?? 'GENERAL',
+        addonPriceId:          addonPriceId          ?? '',
         studentIdUploaded:     body.studentId ? 'yes' : '',
       },
     })

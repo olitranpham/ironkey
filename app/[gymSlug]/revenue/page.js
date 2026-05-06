@@ -5,7 +5,7 @@ import { useParams } from 'next/navigation'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine,
 } from 'recharts'
-import { RefreshCw, TrendingUp, DollarSign, Calendar, BarChart2, Plus, Trash2, TrendingDown } from 'lucide-react'
+import { Plus, Trash2 } from 'lucide-react'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -56,25 +56,6 @@ function ChartTooltip({ active, payload, label }) {
           <span className="font-semibold text-white">{fmtExact(Math.abs(p.value))}</span>
         </p>
       ))}
-    </div>
-  )
-}
-
-// ── Summary card ──────────────────────────────────────────────────────────────
-
-function SummaryCard({ icon: Icon, label, value, loading, iconCls = 'text-neutral-400' }) {
-  return (
-    <div className="bg-[#1c1c1c] border border-neutral-800 rounded-xl p-5 flex flex-col gap-3">
-      <div className="flex items-center gap-2">
-        <div className="w-7 h-7 rounded-lg bg-neutral-800 flex items-center justify-center shrink-0">
-          <Icon size={14} className={iconCls} />
-        </div>
-        <span className="text-xs text-neutral-500 font-medium">{label}</span>
-      </div>
-      {loading
-        ? <Bone className="h-8 w-28" />
-        : <p className="text-2xl font-bold text-white tabular-nums">{value}</p>
-      }
     </div>
   )
 }
@@ -253,12 +234,6 @@ export default function RevenuePage() {
 
   useEffect(() => { load() }, [load])
 
-  // ── Derived: entry totals ─────────────────────────────────────────────────
-  const thisYear = new Date().getFullYear()
-  const ytdManualIncome   = entries.filter(e => e.type === 'income'  && new Date(e.date).getFullYear() === thisYear).reduce((s, e) => s + e.amount, 0)
-  const ytdManualExpenses = entries.filter(e => e.type === 'expense' && new Date(e.date).getFullYear() === thisYear).reduce((s, e) => s + e.amount, 0)
-  const netRevenue = (data?.ytd ?? 0) + ytdManualIncome - ytdManualExpenses
-
   // ── Chart data: merge Stripe monthly + manual entries ─────────────────────
   const chartData = (() => {
     const entryMap = {}
@@ -303,16 +278,8 @@ export default function RevenuePage() {
     <div className="flex-1 overflow-y-auto">
 
       {/* Top bar */}
-      <header className="sticky top-0 z-20 h-14 bg-[#1c1c1c] border-b border-neutral-800 flex items-center justify-between px-6">
+      <header className="sticky top-0 z-20 h-14 bg-[#1c1c1c] border-b border-neutral-800 flex items-center px-6">
         <h1 className="text-sm font-semibold text-white">revenue</h1>
-        <button
-          onClick={load}
-          disabled={loading}
-          className="flex items-center gap-1.5 rounded-lg border border-neutral-700 px-3 py-1.5 text-xs text-neutral-400 hover:text-white hover:border-neutral-600 disabled:opacity-40 transition-colors"
-        >
-          <RefreshCw size={11} className={loading ? 'animate-spin' : ''} />
-          refresh
-        </button>
       </header>
 
       <main className="p-5 flex flex-col gap-5">
@@ -323,21 +290,6 @@ export default function RevenuePage() {
           </div>
         ) : (
           <>
-            {/* ── Summary cards ─────────────────────────────────────────────── */}
-            <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-              <SummaryCard icon={TrendingUp}   label="MRR"        value={fmt(data?.mrr)}       loading={loading} />
-              <SummaryCard icon={DollarSign}   label="this month" value={fmt(data?.thisMonth)} loading={loading} />
-              <SummaryCard icon={Calendar}     label="last month" value={fmt(data?.lastMonth)} loading={loading} />
-              <SummaryCard icon={BarChart2}    label="YTD"        value={fmt(data?.ytd)}       loading={loading} />
-              <SummaryCard
-                icon={netRevenue >= 0 ? TrendingUp : TrendingDown}
-                label="net YTD"
-                value={fmt(netRevenue)}
-                loading={loading}
-                iconCls={netRevenue >= 0 ? 'text-emerald-400' : 'text-rose-400'}
-              />
-            </div>
-
             {/* ── Monthly chart ──────────────────────────────────────────────── */}
             <div className="bg-[#1c1c1c] border border-neutral-800 rounded-xl p-5">
               <div className="flex items-center justify-between mb-5">
@@ -382,36 +334,34 @@ export default function RevenuePage() {
                 <table className="w-full">
                   <thead>
                     <tr className="border-b border-neutral-800 text-left">
-                      <th className="px-5 py-3 text-[11px] font-semibold text-neutral-500 tracking-wider">date</th>
-                      <th className="px-5 py-3 text-[11px] font-semibold text-neutral-500 tracking-wider">member</th>
-                      <th className="px-5 py-3 text-[11px] font-semibold text-neutral-500 tracking-wider">amount</th>
-                      <th className="px-5 py-3 text-[11px] font-semibold text-neutral-500 tracking-wider">status</th>
+                      <th className="px-5 py-3 text-[11px] font-medium text-neutral-500">date</th>
+                      <th className="px-5 py-3 text-[11px] font-medium text-neutral-500">member</th>
+                      <th className="px-5 py-3 text-[11px] font-medium text-neutral-500">amount</th>
+                      <th className="px-5 py-3 text-[11px] font-medium text-neutral-500">status</th>
                     </tr>
                   </thead>
                   <tbody>
                     {loading ? (
                       Array.from({ length: 8 }).map((_, i) => (
-                        <tr key={i} className="border-b border-neutral-800/40">
-                          <td className="px-5 py-4"><Bone className="h-3 w-24" /></td>
-                          <td className="px-5 py-4"><Bone className="h-3 w-32" /></td>
-                          <td className="px-5 py-4"><Bone className="h-3 w-14" /></td>
-                          <td className="px-5 py-4"><Bone className="h-5 w-16 rounded-full" /></td>
+                        <tr key={i} className="border-b border-white/5">
+                          <td className="px-5 py-3"><Bone className="h-3 w-24" /></td>
+                          <td className="px-5 py-3"><Bone className="h-3 w-32" /></td>
+                          <td className="px-5 py-3"><Bone className="h-3 w-14" /></td>
+                          <td className="px-5 py-3"><Bone className="h-3 w-16" /></td>
                         </tr>
                       ))
                     ) : (data?.transactions ?? []).length === 0 ? (
                       <tr><td colSpan={4} className="px-5 py-16 text-center text-sm text-neutral-600">no transactions found</td></tr>
                     ) : (
                       data.transactions.slice(0, 10).map(tx => (
-                        <tr key={tx.id} className="border-b border-neutral-800/40 hover:bg-white/[0.025] transition-colors">
-                          <td className="px-5 py-4 text-neutral-400 text-xs tabular-nums whitespace-nowrap">{fmtDate(tx.date * 1000)}</td>
-                          <td className="px-5 py-4">
+                        <tr key={tx.id} className="border-b border-white/5 hover:bg-white/[0.025] transition-colors">
+                          <td className="px-5 py-3 text-neutral-400 text-xs tabular-nums whitespace-nowrap">{fmtDate(tx.date * 1000)}</td>
+                          <td className="px-5 py-3">
                             <p className="text-white text-xs font-medium">{tx.name ?? '—'}</p>
                             {tx.email && <p className="text-neutral-500 text-[11px] mt-0.5">{tx.email}</p>}
                           </td>
-                          <td className="px-5 py-4 text-white text-xs tabular-nums font-medium">{fmtExact(tx.amount)}</td>
-                          <td className="px-5 py-4">
-                            <span className="inline-block text-[11px] font-medium px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400">{tx.status}</span>
-                          </td>
+                          <td className="px-5 py-3 text-white text-xs tabular-nums font-medium">{fmtExact(tx.amount)}</td>
+                          <td className="px-5 py-3 text-xs text-emerald-600">{tx.status}</td>
                         </tr>
                       ))
                     )}
@@ -441,11 +391,11 @@ export default function RevenuePage() {
                 <table className="w-full">
                   <thead>
                     <tr className="border-b border-neutral-800 text-left">
-                      <th className="px-5 py-3 text-[11px] font-semibold text-neutral-500 tracking-wider">date</th>
-                      <th className="px-5 py-3 text-[11px] font-semibold text-neutral-500 tracking-wider">type</th>
-                      <th className="px-5 py-3 text-[11px] font-semibold text-neutral-500 tracking-wider">category</th>
-                      <th className="px-5 py-3 text-[11px] font-semibold text-neutral-500 tracking-wider">description</th>
-                      <th className="px-5 py-3 text-[11px] font-semibold text-neutral-500 tracking-wider">amount</th>
+                      <th className="px-5 py-3 text-[11px] font-medium text-neutral-500">date</th>
+                      <th className="px-5 py-3 text-[11px] font-medium text-neutral-500">type</th>
+                      <th className="px-5 py-3 text-[11px] font-medium text-neutral-500">category</th>
+                      <th className="px-5 py-3 text-[11px] font-medium text-neutral-500">description</th>
+                      <th className="px-5 py-3 text-[11px] font-medium text-neutral-500">amount</th>
                       <th className="px-5 py-3" />
                     </tr>
                   </thead>
@@ -454,23 +404,21 @@ export default function RevenuePage() {
                       <tr><td colSpan={6} className="px-5 py-16 text-center text-sm text-neutral-600">no entries yet — click "add entry" to get started</td></tr>
                     ) : (
                       entries.map(e => (
-                        <tr key={e.id} className="border-b border-neutral-800/40 hover:bg-white/[0.025] transition-colors">
-                          <td className="px-5 py-4 text-neutral-400 text-xs tabular-nums whitespace-nowrap">{fmtDate(e.date)}</td>
-                          <td className="px-5 py-4">
-                            <span className={`inline-block text-[11px] font-medium px-2 py-0.5 rounded-full ${
-                              e.type === 'income' ? 'bg-emerald-500/15 text-emerald-400' : 'bg-rose-500/15 text-rose-400'
-                            }`}>
+                        <tr key={e.id} className="border-b border-white/5 hover:bg-white/[0.025] transition-colors">
+                          <td className="px-5 py-3 text-neutral-400 text-xs tabular-nums whitespace-nowrap">{fmtDate(e.date)}</td>
+                          <td className="px-5 py-3 text-[11px]">
+                            <span className={e.type === 'income' ? 'text-emerald-600' : 'text-rose-400/70'}>
                               {e.type}
                             </span>
                           </td>
-                          <td className="px-5 py-4 text-neutral-300 text-xs">{e.category}</td>
-                          <td className="px-5 py-4 text-neutral-500 text-xs max-w-[200px] truncate">{e.description ?? '—'}</td>
-                          <td className="px-5 py-4 text-xs tabular-nums font-medium">
-                            <span className={e.type === 'income' ? 'text-emerald-400' : 'text-rose-400'}>
+                          <td className="px-5 py-3 text-neutral-400 text-xs">{e.category}</td>
+                          <td className="px-5 py-3 text-neutral-500 text-xs max-w-[200px] truncate">{e.description ?? '—'}</td>
+                          <td className="px-5 py-3 text-xs tabular-nums font-medium">
+                            <span className={e.type === 'income' ? 'text-emerald-600' : 'text-rose-400/70'}>
                               {e.type === 'expense' ? '−' : '+'}{fmtExact(e.amount)}
                             </span>
                           </td>
-                          <td className="px-5 py-4">
+                          <td className="px-5 py-3">
                             <button
                               onClick={() => deleteEntry(e.id)}
                               disabled={deletingId === e.id}

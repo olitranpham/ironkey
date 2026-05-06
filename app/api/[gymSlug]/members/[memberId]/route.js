@@ -3,6 +3,38 @@ import prisma from '@/lib/prisma'
 
 const VALID_STATUSES = ['ACTIVE', 'FROZEN', 'CANCELLED']
 
+const MEMBER_SELECT = {
+  id: true, firstName: true, lastName: true, email: true, phone: true,
+  status: true, membershipType: true, accessCode: true,
+  dateFrozen: true, dateCanceled: true, createdAt: true,
+  stripeCustomerId: true, stripeSubscriptionId: true,
+}
+
+/**
+ * GET /api/[gymSlug]/members/[memberId]
+ * Returns a single member record.
+ */
+export async function GET(request, { params }) {
+  try {
+    const gymId        = request.headers.get('x-gym-id')
+    const { memberId } = params
+
+    const member = await prisma.member.findFirst({
+      where:  { id: memberId, gymId },
+      select: MEMBER_SELECT,
+    })
+
+    if (!member) {
+      return NextResponse.json({ error: 'Member not found' }, { status: 404 })
+    }
+
+    return NextResponse.json({ member })
+  } catch (error) {
+    console.error('[members/get]', error)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  }
+}
+
 /**
  * PATCH /api/[gymSlug]/members/[memberId]
  * Updates a member's status and/or accessCode.
@@ -40,12 +72,9 @@ export async function PATCH(request, { params }) {
     }
 
     const member = await prisma.member.update({
-      where: { id: memberId },
+      where:  { id: memberId },
       data,
-      select: {
-        id: true, status: true, accessCode: true,
-        dateFrozen: true, dateCanceled: true, updatedAt: true,
-      },
+      select: MEMBER_SELECT,
     })
 
     return NextResponse.json({ member })

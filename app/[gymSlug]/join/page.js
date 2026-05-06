@@ -137,12 +137,13 @@ const SELECT = "w-full bg-[#1c1c1c] border border-neutral-700 rounded-lg px-3 py
 export default function JoinPage() {
   const { gymSlug } = useParams()
 
-  const [gymName, setGymName]   = useState('')
-  const [plans,   setPlans]     = useState([])
-  const [loading, setLoading]   = useState(true)
-  const [submitting, setSubmitting] = useState(false)
-  const [error,   setError]     = useState(null)
-  const [waiverOpen, setWaiverOpen] = useState(false)
+  const [gymName,          setGymName]          = useState('')
+  const [membershipPlans,  setMembershipPlans]  = useState([])
+  const [addonPlans,       setAddonPlans]       = useState([])
+  const [loading,          setLoading]          = useState(true)
+  const [submitting,       setSubmitting]       = useState(false)
+  const [error,            setError]            = useState(null)
+  const [waiverOpen,       setWaiverOpen]       = useState(false)
 
   const [form, setForm] = useState({
     firstName:             '',
@@ -156,6 +157,7 @@ export default function JoinPage() {
     emergencyRelationship: '',
     priceId:               '',
     membershipType:        '',
+    addonPriceId:          '',
     waiver:                false,
   })
   const [studentId, setStudentId] = useState(null)
@@ -163,11 +165,12 @@ export default function JoinPage() {
   useEffect(() => {
     fetch(`/api/${gymSlug}/join`)
       .then(r => r.json())
-      .then(({ gym, plans }) => {
+      .then(({ gym, membershipPlans = [], addonPlans = [] }) => {
         setGymName(gym?.name ?? gymSlug)
-        setPlans(plans ?? [])
-        if (plans?.length) {
-          setForm(f => ({ ...f, priceId: plans[0].priceId, membershipType: plans[0].membershipType }))
+        setMembershipPlans(membershipPlans)
+        setAddonPlans(addonPlans)
+        if (membershipPlans.length) {
+          setForm(f => ({ ...f, priceId: membershipPlans[0].priceId, membershipType: membershipPlans[0].membershipType }))
         }
       })
       .catch(() => setError('Could not load membership options.'))
@@ -179,7 +182,7 @@ export default function JoinPage() {
   }
 
   function selectPlan(priceId) {
-    const plan = plans.find(p => p.priceId === priceId)
+    const plan = membershipPlans.find(p => p.priceId === priceId)
     setForm(f => ({ ...f, priceId, membershipType: plan?.membershipType ?? 'GENERAL' }))
   }
 
@@ -196,6 +199,7 @@ export default function JoinPage() {
     const dobAge = (Date.now() - new Date(form.dob).getTime()) / (365.25 * 24 * 60 * 60 * 1000)
     if (dobAge < 18) { setError('Members under 18 must have a parent or guardian complete this form on their behalf (see Section 14 of the terms).'); return }
     if (form.membershipType === 'STUDENT' && !studentId) { setError('Please upload your student ID to qualify for the student membership.'); return }
+
     if (!form.emergencyName.trim() || !form.emergencyPhone.trim()) { setError('Emergency contact name and phone are required.'); return }
     if (!form.waiver)          { setError('You must agree to the membership terms.'); return }
 
@@ -216,6 +220,7 @@ export default function JoinPage() {
         fd.append('emergencyRelationship', form.emergencyRelationship.trim())
         fd.append('priceId',               form.priceId)
         fd.append('membershipType',        form.membershipType)
+        fd.append('addonPriceId',          form.addonPriceId)
         fd.append('studentId',             studentId)
         res = await fetch(`/api/${gymSlug}/join/checkout`, { method: 'POST', body: fd })
       } else {
@@ -234,6 +239,7 @@ export default function JoinPage() {
             emergencyRelationship: form.emergencyRelationship.trim(),
             priceId:               form.priceId,
             membershipType:        form.membershipType,
+            addonPriceId:          form.addonPriceId,
           }),
         })
       }
@@ -274,7 +280,7 @@ export default function JoinPage() {
           <Field label="first name" required>
             <input
               type="text"
-              placeholder="Jane"
+              placeholder="jane"
               value={form.firstName}
               onChange={e => set('firstName', e.target.value)}
               className={INPUT}
@@ -284,7 +290,7 @@ export default function JoinPage() {
           <Field label="last name" required>
             <input
               type="text"
-              placeholder="Smith"
+              placeholder="smith"
               value={form.lastName}
               onChange={e => set('lastName', e.target.value)}
               className={INPUT}
@@ -342,7 +348,7 @@ export default function JoinPage() {
 
         {/* Membership type */}
         <Field label="membership type" required>
-          {plans.length === 0 ? (
+          {membershipPlans.length === 0 ? (
             <p className="text-xs text-neutral-600 px-1">No plans available — contact the gym directly.</p>
           ) : (
             <div className="relative">
@@ -351,7 +357,7 @@ export default function JoinPage() {
                 onChange={e => selectPlan(e.target.value)}
                 className={SELECT}
               >
-                {plans.map(p => (
+                {membershipPlans.map(p => (
                   <option key={p.priceId} value={p.priceId}>
                     {p.name} — {fmt(p.amount, p.interval)}
                   </option>
@@ -365,6 +371,31 @@ export default function JoinPage() {
             </div>
           )}
         </Field>
+
+        {/* Coaching / Programming Add-on */}
+        {addonPlans.length > 0 && (
+          <Field label="coaching / programming add-on">
+            <div className="relative">
+              <select
+                value={form.addonPriceId}
+                onChange={e => set('addonPriceId', e.target.value)}
+                className={SELECT}
+              >
+                <option value="">None</option>
+                {addonPlans.map(p => (
+                  <option key={p.priceId} value={p.priceId}>
+                    {p.name} — {fmt(p.amount, p.interval)}
+                  </option>
+                ))}
+              </select>
+              <div className="pointer-events-none absolute inset-y-0 right-3 flex items-center">
+                <svg className="w-4 h-4 text-neutral-500" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.17l3.71-3.94a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
+                </svg>
+              </div>
+            </div>
+          </Field>
+        )}
 
         {/* Student ID upload — shown only for student plans */}
         {form.membershipType === 'STUDENT' && (
@@ -405,7 +436,7 @@ export default function JoinPage() {
           <Field label="name" required>
             <input
               type="text"
-              placeholder="John Smith"
+              placeholder="john smith"
               value={form.emergencyName}
               onChange={e => set('emergencyName', e.target.value)}
               className={INPUT}
@@ -426,7 +457,7 @@ export default function JoinPage() {
         <Field label="relationship">
           <input
             type="text"
-            placeholder="Spouse, parent, friend…"
+            placeholder="spouse, parent, friend…"
             value={form.emergencyRelationship}
             onChange={e => set('emergencyRelationship', e.target.value)}
             className={INPUT}
@@ -472,7 +503,7 @@ export default function JoinPage() {
 
         <button
           type="submit"
-          disabled={submitting || plans.length === 0}
+          disabled={submitting || membershipPlans.length === 0}
           className="w-full py-3 rounded-xl text-sm font-semibold bg-white text-[#1c1c1c] hover:bg-neutral-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
         >
           {submitting ? (

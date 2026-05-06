@@ -2,27 +2,10 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams } from 'next/navigation'
-import { Search, RefreshCw, AlertTriangle } from 'lucide-react'
+import { Search, RefreshCw, AlertTriangle, X, CreditCard } from 'lucide-react'
+import { getGymTheme } from '@/lib/gymThemes'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
-
-const PLAN_BADGE = {
-  FOUNDING: 'bg-blue-500/15 text-blue-400',
-  GENERAL:  'bg-neutral-500/15 text-neutral-400',
-  STUDENT:  'bg-amber-500/15 text-amber-400',
-}
-
-const STATUS_PILL = {
-  ACTIVE:    'bg-emerald-500/15 text-emerald-400',
-  FROZEN:    'bg-sky-500/15 text-sky-400',
-  CANCELLED: 'bg-neutral-500/15 text-neutral-400',
-  OVERDUE:   'bg-red-500/15 text-red-400',
-}
-
-const AVATAR_COLORS = [
-  'bg-violet-500', 'bg-blue-500', 'bg-emerald-500', 'bg-amber-500',
-  'bg-rose-500',   'bg-cyan-500', 'bg-orange-500',  'bg-indigo-500',
-]
 
 const TYPE_FILTERS = ['all', 'founding', 'general', 'student']
 
@@ -53,17 +36,11 @@ const CONFIRM_COPY = {
   },
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-function avatarBg(id = '') {
-  const n = [...id].reduce((s, c) => s + c.charCodeAt(0), 0)
-  return AVATAR_COLORS[n % AVATAR_COLORS.length]
-}
-
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function PaymentsPage() {
   const { gymSlug } = useParams()
+  const { membershipBorder } = getGymTheme(gymSlug)
 
   const [members,    setMembers]    = useState([])
   const [priceMap,   setPriceMap]   = useState({})
@@ -73,6 +50,10 @@ export default function PaymentsPage() {
   const [search,     setSearch]     = useState('')
   const [typeFilter, setTypeFilter] = useState('all')
   const [activeTab,  setActiveTab]  = useState('all')
+
+  const [selectedMember, setSelectedMember] = useState(null)
+  const [panelOpen,      setPanelOpen]      = useState(false)
+  const closeTimer = useRef(null)
 
   const [confirmModal,  setConfirmModal]  = useState(null)
   const [actionLoading, setActionLoading] = useState(false)
@@ -106,12 +87,15 @@ export default function PaymentsPage() {
 
   useEffect(() => { fetchMembers() }, [fetchMembers])
 
-  // ── Counts for tabs ───────────────────────────────────────────────────────
-  const tabCounts = {
-    all:       members.length,
-    active:    members.filter(m => ['ACTIVE', 'OVERDUE'].includes(m.status)).length,
-    paused:    members.filter(m => m.status === 'FROZEN').length,
-    canceled: members.filter(m => m.status === 'CANCELLED').length,
+  // ── Panel helpers ─────────────────────────────────────────────────────────
+  function openPanel(member) {
+    setSelectedMember(member)
+    setPanelOpen(true)
+  }
+  function closePanel() {
+    setPanelOpen(false)
+    clearTimeout(closeTimer.current)
+    closeTimer.current = setTimeout(() => setSelectedMember(null), 220)
   }
 
   // ── Filtered list ─────────────────────────────────────────────────────────
@@ -144,6 +128,7 @@ export default function PaymentsPage() {
       if (!res.ok) throw new Error('Request failed')
       const { member: updated } = await res.json()
       setMembers(prev => prev.map(m => m.id === updated.id ? { ...m, ...updated } : m))
+      setSelectedMember(prev => prev?.id === updated.id ? { ...prev, ...updated } : prev)
       setConfirmModal(null)
     } catch {
       setActionError('something went wrong — please try again')
@@ -156,16 +141,8 @@ export default function PaymentsPage() {
     <div className="flex-1 flex flex-col overflow-hidden">
 
       {/* Top bar */}
-      <header className="h-14 shrink-0 bg-[#1c1c1c] border-b border-neutral-800 flex items-center justify-between px-6">
+      <header className="h-14 shrink-0 bg-[#1c1c1c] border-b border-neutral-800 flex items-center px-6">
         <h1 className="text-sm font-semibold text-white">payments</h1>
-        <button
-          onClick={fetchMembers}
-          disabled={loading}
-          className="flex items-center gap-1.5 rounded-lg border border-neutral-700 px-3 py-1.5 text-xs text-neutral-400 hover:text-white hover:border-neutral-600 disabled:opacity-40 transition-colors"
-        >
-          <RefreshCw size={11} className={loading ? 'animate-spin' : ''} />
-          refresh
-        </button>
       </header>
 
       <main className="flex-1 flex flex-col p-5 gap-4 overflow-hidden min-h-0">
@@ -216,9 +193,6 @@ export default function PaymentsPage() {
                 }`}
               >
                 {tab}
-                <span className={`ml-1.5 text-[10px] tabular-nums ${activeTab === tab ? 'text-neutral-400' : 'text-neutral-700'}`}>
-                  {tabCounts[tab] ?? 0}
-                </span>
               </button>
             ))}
           </div>
@@ -243,22 +217,23 @@ export default function PaymentsPage() {
               <table className="w-full text-sm">
                 <thead className="sticky top-0 bg-[#1c1c1c] z-10">
                   <tr className="border-b border-neutral-800 text-left">
-                    <th className="px-5 py-3 text-[11px] font-semibold text-neutral-500 tracking-wider">member</th>
-                    <th className="px-5 py-3 text-[11px] font-semibold text-neutral-500 tracking-wider">plan</th>
-                    <th className="px-5 py-3 text-[11px] font-semibold text-neutral-500 tracking-wider">amount</th>
-                    <th className="px-5 py-3 text-[11px] font-semibold text-neutral-500 tracking-wider">status</th>
-                    <th className="px-5 py-3 text-[11px] font-semibold text-neutral-500 tracking-wider">actions</th>
+                    <th className="px-5 py-3 text-[11px] font-medium text-neutral-500">member</th>
+                    <th className="px-5 py-3 text-[11px] font-medium text-neutral-500">plan</th>
+                    <th className="px-5 py-3 text-[11px] font-medium text-neutral-500">amount</th>
                   </tr>
                 </thead>
                 <tbody>
                   {visible.map(m => (
-                    <tr key={m.id} className="border-b border-neutral-800/40 hover:bg-white/[0.025] transition-colors">
-
+                    <tr
+                      key={m.id}
+                      onClick={() => openPanel(m)}
+                      className="border-b border-white/5 hover:bg-white/[0.025] transition-colors cursor-pointer"
+                    >
                       {/* Member */}
-                      <td className="px-5 py-3">
+                      <td className="px-5 py-2">
                         <div className="flex items-center gap-3">
-                          <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 ${avatarBg(m.id)}`}>
-                            <span className="text-white font-semibold text-[10px] select-none">
+                          <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 bg-white">
+                            <span className="text-black font-medium text-[10px] select-none">
                               {(m.firstName?.[0] ?? '') + (m.lastName?.[0] ?? '')}
                             </span>
                           </div>
@@ -270,60 +245,20 @@ export default function PaymentsPage() {
                       </td>
 
                       {/* Plan */}
-                      <td className="px-5 py-3">
-                        <span className={`inline-block text-[11px] font-medium px-2 py-0.5 rounded-full ${PLAN_BADGE[m.membershipType] ?? PLAN_BADGE.GENERAL}`}>
+                      <td className="px-5 py-2">
+                        <span className={`inline-block text-[11px] font-medium border-l-2 pl-2 ${membershipBorder[m.membershipType] ?? membershipBorder.GENERAL}`}>
                           {(m.membershipType ?? 'GENERAL').toLowerCase()}
                         </span>
                       </td>
 
-                      {/* Amount — sub map first, then priceId fallback */}
-                      <td className="px-5 py-3 text-white text-xs tabular-nums">
+                      {/* Amount */}
+                      <td className="px-5 py-2 text-white text-xs tabular-nums">
                         {(() => {
                           const entry = priceMap[m.stripeSubscriptionId] ?? priceIdMap[m.priceId]
                           return entry
                             ? <>${entry.amount}<span className="text-neutral-600">/{entry.interval}</span></>
                             : <span className="text-neutral-600">—</span>
                         })()}
-                      </td>
-
-                      {/* Status */}
-                      <td className="px-5 py-3">
-                        <span className={`inline-block text-[11px] font-medium px-2 py-0.5 rounded-full ${STATUS_PILL[m.status]}`}>
-                          {m.status === 'CANCELLED' ? 'canceled' : m.status.toLowerCase()}
-                        </span>
-                      </td>
-
-                      {/* Actions */}
-                      <td className="px-5 py-3">
-                        <div className="flex items-center gap-2">
-                          {(m.status === 'ACTIVE' || m.status === 'OVERDUE') && (
-                            <>
-                              <button
-                                onClick={() => { setActionError(null); setConfirmModal({ action: 'freeze', member: m }) }}
-                                className="text-[11px] font-medium px-2.5 py-1 rounded-md bg-sky-500/10 text-sky-400 hover:bg-sky-500/20 transition-colors"
-                              >
-                                freeze
-                              </button>
-                              <button
-                                onClick={() => { setActionError(null); setConfirmModal({ action: 'cancel', member: m }) }}
-                                className="text-[11px] font-medium px-2.5 py-1 rounded-md bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors"
-                              >
-                                cancel
-                              </button>
-                            </>
-                          )}
-                          {m.status === 'FROZEN' && (
-                            <button
-                              onClick={() => { setActionError(null); setConfirmModal({ action: 'resume', member: m }) }}
-                              className="text-[11px] font-medium px-2.5 py-1 rounded-md bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition-colors"
-                            >
-                              resume
-                            </button>
-                          )}
-                          {m.status === 'CANCELLED' && (
-                            <span className="text-[11px] text-neutral-700">—</span>
-                          )}
-                        </div>
                       </td>
                     </tr>
                   ))}
@@ -334,11 +269,31 @@ export default function PaymentsPage() {
         </div>
       </main>
 
+      {/* ── Overlay ───────────────────────────────────────────────────────── */}
+      <div
+        className={`fixed inset-0 bg-black/60 z-40 transition-opacity duration-200 ${panelOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+        onClick={closePanel}
+      />
+
+      {/* ── Payment detail panel ──────────────────────────────────────────── */}
+      <div className={`fixed inset-y-0 right-0 w-full sm:w-[360px] bg-[#171717] border-l border-neutral-800 z-50 flex flex-col shadow-2xl transition-transform duration-200 ${panelOpen ? 'translate-x-0' : 'translate-x-full'}`}>
+        {selectedMember && (
+          <PaymentPanel
+            member={selectedMember}
+            priceMap={priceMap}
+            priceIdMap={priceIdMap}
+            onClose={closePanel}
+            onAction={(action, member) => { setActionError(null); setConfirmModal({ action, member }) }}
+            actionLoading={actionLoading}
+          />
+        )}
+      </div>
+
       {/* ── Confirm modal ──────────────────────────────────────────────────── */}
       {confirmModal && (() => {
         const copy = CONFIRM_COPY[confirmModal.action]
         return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 z-60 flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-black/70" onClick={!actionLoading ? () => setConfirmModal(null) : undefined} />
             <div className="relative bg-[#1c1c1c] border border-neutral-800 rounded-xl w-full max-w-sm p-6 shadow-2xl">
               <div className="flex items-center gap-3 mb-4">
@@ -380,6 +335,99 @@ export default function PaymentsPage() {
         )
       })()}
 
+    </div>
+  )
+}
+
+// ── Payment detail panel ──────────────────────────────────────────────────────
+
+function PaymentPanel({ member, priceMap, priceIdMap, onClose, onAction, actionLoading }) {
+  const initials = (member.firstName?.[0] ?? '') + (member.lastName?.[0] ?? '')
+  const entry    = priceMap[member.stripeSubscriptionId] ?? priceIdMap[member.priceId]
+
+  const STATUS_TEXT = {
+    ACTIVE:    'text-emerald-600',
+    FROZEN:    'text-blue-400/70',
+    CANCELLED: 'text-zinc-500',
+    OVERDUE:   'text-red-400/70',
+  }
+
+  return (
+    <div className="flex flex-col h-full">
+      <div className="flex items-center justify-between px-5 h-14 shrink-0 border-b border-neutral-800">
+        <p className="text-sm font-semibold text-white">payment details</p>
+        <button onClick={onClose} className="p-1.5 rounded-lg text-neutral-500 hover:text-white hover:bg-white/5 transition-colors">
+          <X size={15} />
+        </button>
+      </div>
+
+      <div className="flex-1 overflow-y-auto p-5 space-y-5">
+        {/* Avatar + name */}
+        <div className="flex flex-col items-center text-center gap-3 pt-1 pb-2">
+          <div className="w-[60px] h-[60px] rounded-full flex items-center justify-center shrink-0 bg-white">
+            <span className="text-black font-bold text-lg tracking-tight select-none">{initials || '?'}</span>
+          </div>
+          <div>
+            <p className="text-white font-semibold text-base leading-tight">{member.firstName} {member.lastName}</p>
+            <p className="text-neutral-500 text-xs mt-0.5">{member.email}</p>
+          </div>
+          <span className={`text-xs font-medium ${STATUS_TEXT[member.status] ?? 'text-neutral-500'}`}>
+            {member.status === 'CANCELLED' ? 'canceled' : member.status.toLowerCase()}
+          </span>
+        </div>
+
+        {/* Billing info */}
+        <div>
+          <div className="flex items-center gap-1.5 mb-2">
+            <CreditCard size={11} className="text-neutral-600" />
+            <p className="text-[11px] font-semibold tracking-widest text-neutral-600">BILLING</p>
+          </div>
+          <div className="rounded-lg border border-neutral-800 divide-y divide-neutral-800 overflow-hidden">
+            {[
+              { label: 'plan',   value: (member.membershipType ?? 'GENERAL').toLowerCase() },
+              { label: 'amount', value: entry ? `$${entry.amount}/${entry.interval}` : '—' },
+            ].map(({ label, value }) => (
+              <div key={label} className="flex items-center justify-between px-3 py-2.5 bg-[#1c1c1c]">
+                <span className="text-xs text-neutral-500 shrink-0">{label}</span>
+                <span className="text-xs text-white text-right ml-4">{value}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Action buttons */}
+      {member.status !== 'CANCELLED' && (
+        <div className="shrink-0 px-5 py-4 border-t border-neutral-800 space-y-2">
+          {(member.status === 'ACTIVE' || member.status === 'OVERDUE') && (
+            <>
+              <button
+                onClick={() => onAction('freeze', member)}
+                disabled={actionLoading}
+                className="w-full py-2 rounded-lg text-sm font-medium bg-sky-500/10 text-sky-400 hover:bg-sky-500/20 disabled:opacity-40 transition-colors"
+              >
+                freeze membership
+              </button>
+              <button
+                onClick={() => onAction('cancel', member)}
+                disabled={actionLoading}
+                className="w-full py-2 rounded-lg text-sm font-medium bg-red-500/10 text-red-400 hover:bg-red-500/20 disabled:opacity-40 transition-colors"
+              >
+                cancel membership
+              </button>
+            </>
+          )}
+          {member.status === 'FROZEN' && (
+            <button
+              onClick={() => onAction('resume', member)}
+              disabled={actionLoading}
+              className="w-full py-2 rounded-lg text-sm font-medium bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 disabled:opacity-40 transition-colors"
+            >
+              resume membership
+            </button>
+          )}
+        </div>
+      )}
     </div>
   )
 }

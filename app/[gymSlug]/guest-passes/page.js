@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams } from 'next/navigation'
 import { Search, RefreshCw, X, KeyRound, Phone } from 'lucide-react'
 import { getAllowedPassTypes } from '@/lib/gymPassTypes'
+import { getGymTheme } from '@/lib/gymThemes'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -14,15 +15,6 @@ const PASS_TYPE_LABEL = {
   TEN_PACK:   '10-pack',
   VALUE:      'value',
   DELUXE:     'deluxe',
-}
-
-const PASS_TYPE_BADGE = {
-  SINGLE:     'bg-neutral-500/15 text-neutral-400',
-  THREE_PACK: 'bg-violet-500/15 text-violet-400',
-  FIVE_PACK:  'bg-blue-500/15 text-blue-400',
-  TEN_PACK:   'bg-emerald-500/15 text-emerald-400',
-  VALUE:      'bg-amber-500/15 text-amber-400',
-  DELUXE:     'bg-rose-500/15 text-rose-400',
 }
 
 const PASS_TABS     = ['all', 'single', '3-pack', '5-pack', '10-pack', 'value', 'deluxe']
@@ -46,15 +38,6 @@ function fmtDate(iso) {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
-const AVATAR_COLORS = [
-  'bg-violet-500', 'bg-blue-500', 'bg-emerald-500', 'bg-amber-500',
-  'bg-rose-500',   'bg-cyan-500', 'bg-orange-500',  'bg-indigo-500',
-]
-
-function avatarBg(id = '') {
-  const n = [...(id ?? '')].reduce((s, c) => s + c.charCodeAt(0), 0)
-  return AVATAR_COLORS[n % AVATAR_COLORS.length]
-}
 
 function normName(s) {
   return (s ?? '').trim().toLowerCase().replace(/\s+/g, ' ')
@@ -176,6 +159,7 @@ function buildUnifiedGuests(profiles, unlinked) {
 
 export default function GuestPassesPage() {
   const { gymSlug } = useParams()
+  const { passTypeBorder } = getGymTheme(gymSlug)
 
   const [profiles,  setProfiles]  = useState([])
   const [unlinked,  setUnlinked]  = useState([])
@@ -252,28 +236,6 @@ export default function GuestPassesPage() {
   const allowedTypes = getAllowedPassTypes(gymSlug)
   const visibleTabs  = ['all', ...allowedTypes.map(t => TYPE_TO_TAB[t]).filter(Boolean)]
 
-  // Metric card counts — all pass record totals
-  const passCounts = {
-    total:     allPasses.length,
-    single:    allPasses.filter(p => p.passType === 'SINGLE').length,
-    '3-pack':  allPasses.filter(p => p.passType === 'THREE_PACK').length,
-    '5-pack':  allPasses.filter(p => p.passType === 'FIVE_PACK').length,
-    '10-pack': allPasses.filter(p => p.passType === 'TEN_PACK').length,
-    value:     allPasses.filter(p => p.passType === 'VALUE').length,
-    deluxe:    allPasses.filter(p => p.passType === 'DELUXE').length,
-  }
-
-  // Tab pill counts — unique guests per type
-  const counts = {
-    all:       unified.length,
-    single:    unified.filter(g => g.passes.some(p => p.passType === 'SINGLE')).length,
-    '3-pack':  unified.filter(g => g.passes.some(p => p.passType === 'THREE_PACK')).length,
-    '5-pack':  unified.filter(g => g.passes.some(p => p.passType === 'FIVE_PACK')).length,
-    '10-pack': unified.filter(g => g.passes.some(p => p.passType === 'TEN_PACK')).length,
-    value:     unified.filter(g => g.passes.some(p => p.passType === 'VALUE')).length,
-    deluxe:    unified.filter(g => g.passes.some(p => p.passType === 'DELUXE')).length,
-  }
-
   const visible = unified
     .filter(g => {
       const q           = search.trim().toLowerCase()
@@ -294,42 +256,11 @@ export default function GuestPassesPage() {
     <div className="flex-1 flex flex-col overflow-hidden" style={{ fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif" }}>
 
       {/* Top bar */}
-      <header className="h-14 shrink-0 bg-[#1c1c1c] border-b border-neutral-800 flex items-center justify-between px-6">
+      <header className="h-14 shrink-0 bg-[#1c1c1c] border-b border-neutral-800 flex items-center px-6">
         <h1 className="text-sm font-semibold text-white">guest passes</h1>
-        <button
-          onClick={fetchPasses}
-          disabled={loading}
-          className="flex items-center gap-1.5 rounded-lg border border-neutral-700 px-3 py-1.5 text-xs text-neutral-400 hover:text-white hover:border-neutral-600 disabled:opacity-40 transition-colors"
-        >
-          <RefreshCw size={11} className={loading ? 'animate-spin' : ''} />
-          refresh
-        </button>
       </header>
 
       <main className="flex-1 flex flex-col p-5 gap-4 overflow-hidden min-h-0">
-
-        {/* Metric cards */}
-        <div className="shrink-0 grid gap-3" style={{ gridTemplateColumns: `repeat(${visibleTabs.length}, minmax(0, 1fr))` }}>
-          {[
-            { label: 'total passes', key: 'all' },
-            { label: 'single',       key: 'single' },
-            { label: '3-pack',       key: '3-pack' },
-            { label: '5-pack',       key: '5-pack' },
-            { label: '10-pack',      key: '10-pack' },
-            { label: 'value',        key: 'value' },
-            { label: 'deluxe',       key: 'deluxe' },
-          ].filter(c => c.key === 'all' || visibleTabs.includes(c.key))
-           .map(({ label, key }) => {
-            const value = key === 'all' ? passCounts.total : passCounts[key]
-            return (
-            <div key={label} className="bg-[#1c1c1c] rounded-xl border border-neutral-800 px-4 py-3">
-              <p className="text-[11px] text-neutral-500 mb-1">{label}</p>
-              <p className="text-xl font-semibold text-white tabular-nums">
-                {loading ? '—' : value}
-              </p>
-            </div>
-          )})}
-        </div>
 
         {/* Search */}
         <div className="shrink-0 relative w-80">
@@ -359,9 +290,6 @@ export default function GuestPassesPage() {
                 }`}
               >
                 {tab}
-                <span className={`ml-1.5 text-[10px] tabular-nums ${activeTab === tab ? 'text-neutral-400' : 'text-neutral-700'}`}>
-                  {counts[tab] ?? 0}
-                </span>
               </button>
             ))}
           </div>
@@ -388,13 +316,13 @@ export default function GuestPassesPage() {
               <table className="w-full text-sm">
                 <thead className="sticky top-0 bg-[#1c1c1c] z-10">
                   <tr className="border-b border-neutral-800 text-left">
-                    <th className="px-5 py-3 text-[11px] font-semibold text-neutral-500 tracking-wider">name</th>
-                    <th className="px-5 py-3 text-[11px] font-semibold text-neutral-500 tracking-wider">email</th>
-                    <th className="px-5 py-3 text-[11px] font-semibold text-neutral-500 tracking-wider">last pass type</th>
-                    <th className="px-5 py-3 text-[11px] font-semibold text-neutral-500 tracking-wider">passes left</th>
-                    <th className="px-5 py-3 text-[11px] font-semibold text-neutral-500 tracking-wider">visits</th>
-                    <th className="px-5 py-3 text-[11px] font-semibold text-neutral-500 tracking-wider">access code</th>
-                    <th className="px-5 py-3 text-[11px] font-semibold text-neutral-500 tracking-wider">last seen</th>
+                    <th className="px-5 py-3 text-[11px] font-medium text-neutral-500">name</th>
+                    <th className="px-5 py-3 text-[11px] font-medium text-neutral-500">email</th>
+                    <th className="px-5 py-3 text-[11px] font-medium text-neutral-500">last pass type</th>
+                    <th className="px-5 py-3 text-[11px] font-medium text-neutral-500">passes left</th>
+                    <th className="px-5 py-3 text-[11px] font-medium text-neutral-500">visits</th>
+                    <th className="px-5 py-3 text-[11px] font-medium text-neutral-500">access code</th>
+                    <th className="px-5 py-3 text-[11px] font-medium text-neutral-500">last seen</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -405,18 +333,18 @@ export default function GuestPassesPage() {
                       <tr
                         key={g.id}
                         onClick={() => openPanel(g)}
-                        className="border-b border-neutral-800/40 hover:bg-white/[0.025] transition-colors cursor-pointer"
+                        className="border-b border-white/5 hover:bg-white/[0.025] transition-colors cursor-pointer"
                       >
-                        <td className="px-5 py-3 text-white text-sm font-medium">{g.name}</td>
-                        <td className="px-5 py-3 text-neutral-500 text-xs">{g.email || '—'}</td>
-                        <td className="px-5 py-3">
+                        <td className="px-5 py-2 text-white text-sm font-medium">{g.name}</td>
+                        <td className="px-5 py-2 text-neutral-500 text-xs">{g.email || '—'}</td>
+                        <td className="px-5 py-2">
                           {lastType ? (
-                            <span className={`inline-block text-[11px] font-medium px-2 py-0.5 rounded-full ${PASS_TYPE_BADGE[lastType]}`}>
+                            <span className={`inline-block text-[11px] font-medium border-l-2 pl-2 ${passTypeBorder[lastType] ?? passTypeBorder.SINGLE}`}>
                               {PASS_TYPE_LABEL[lastType]}
                             </span>
                           ) : <span className="text-neutral-600 text-xs">—</span>}
                         </td>
-                        <td className="px-5 py-3">
+                        <td className="px-5 py-2">
                           {left === null ? (
                             <span className="text-neutral-600 text-xs">—</span>
                           ) : left === 0 ? (
@@ -425,9 +353,9 @@ export default function GuestPassesPage() {
                             <span className="text-white text-xs">{left} left</span>
                           )}
                         </td>
-                        <td className="px-5 py-3 text-neutral-400 text-xs tabular-nums">{totalVisits(g)}</td>
-                        <td className="px-5 py-3 text-xs text-neutral-400">{g.accessCode || '—'}</td>
-                        <td className="px-5 py-3 text-neutral-600 text-xs whitespace-nowrap">
+                        <td className="px-5 py-2 text-neutral-400 text-xs tabular-nums">{totalVisits(g)}</td>
+                        <td className="px-5 py-2 text-xs text-neutral-400">{g.accessCode || '—'}</td>
+                        <td className="px-5 py-2 text-neutral-600 text-xs whitespace-nowrap">
                           {fmtDate(lastSeenDate(g))}
                         </td>
                       </tr>
@@ -452,6 +380,7 @@ export default function GuestPassesPage() {
         {selectedProfile && (
           <GuestProfilePanel
             profile={selectedProfile}
+            passTypeBorder={passTypeBorder}
             onClose={closePanel}
             onSaveCode={saveAccessCode}
             saving={savingCode}
@@ -465,13 +394,12 @@ export default function GuestPassesPage() {
 
 // ── Guest Profile Panel ───────────────────────────────────────────────────────
 
-function GuestProfilePanel({ profile, onClose, onSaveCode, saving }) {
+function GuestProfilePanel({ profile, passTypeBorder, onClose, onSaveCode, saving }) {
   const [codeInput, setCodeInput] = useState(profile.accessCode ?? '')
   const visits     = totalVisits(profile)
   const isUnlinked = profile._unlinked === true
   const nameParts  = profile.name.trim().split(/\s+/)
   const initials   = (nameParts[0]?.[0] ?? '') + (nameParts[1]?.[0] ?? '')
-  const color      = avatarBg(profile.id)
 
   function handleSave() {
     onSaveCode(profile.id, codeInput.trim())
@@ -495,8 +423,8 @@ function GuestProfilePanel({ profile, onClose, onSaveCode, saving }) {
 
         {/* Identity */}
         <div className="flex flex-col items-center text-center gap-3 pt-1 pb-2">
-          <div className={`w-[60px] h-[60px] rounded-full flex items-center justify-center shrink-0 ${color}`}>
-            <span className="text-white font-bold text-lg tracking-tight select-none">
+          <div className="w-[60px] h-[60px] rounded-full flex items-center justify-center shrink-0 bg-white">
+            <span className="text-black font-bold text-lg tracking-tight select-none">
               {initials.toUpperCase() || '?'}
             </span>
           </div>
@@ -569,7 +497,7 @@ function GuestProfilePanel({ profile, onClose, onSaveCode, saving }) {
                   {profile.passes.map(p => (
                     <tr key={p.id} className="bg-[#1c1c1c]">
                       <td className="px-3 py-2.5">
-                        <span className={`inline-block text-[10px] font-medium px-1.5 py-0.5 rounded-full ${PASS_TYPE_BADGE[p.passType]}`}>
+                        <span className={`inline-block text-[10px] font-medium border-l-2 pl-1.5 ${passTypeBorder[p.passType] ?? passTypeBorder.SINGLE}`}>
                           {PASS_TYPE_LABEL[p.passType]}
                         </span>
                       </td>

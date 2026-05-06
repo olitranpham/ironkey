@@ -1,20 +1,22 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams } from 'next/navigation'
 import { RefreshCw, KeyRound, AlertTriangle, X, Search } from 'lucide-react'
+import { getGymTheme } from '@/lib/gymThemes'
+import MemberProfileDrawer from '@/components/MemberProfileDrawer'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const CODE_STATUS_BADGE = {
-  set:     'bg-emerald-500/15 text-emerald-400',
-  unset:   'bg-neutral-500/15 text-neutral-400',
-  unknown: 'bg-amber-500/15 text-amber-400',
+const CODE_STATUS_TEXT = {
+  set:     'text-emerald-600',
+  unset:   'text-zinc-500',
+  unknown: 'text-amber-600/70',
 }
 
-const CODE_TYPE_BADGE = {
-  member: 'bg-blue-500/15 text-blue-400',
-  guest:  'bg-amber-500/15 text-amber-400',
+const CODE_TYPE_BORDER = {
+  member: 'border-blue-400/50 text-neutral-400',
+  guest:  'border-amber-600/50 text-neutral-400',
 }
 
 const TABS = ['all', 'active', 'timed']
@@ -38,6 +40,7 @@ function timeLeft(endsAt) {
 
 export default function DoorAccessPage() {
   const { gymSlug } = useParams()
+  const { membershipBorder } = getGymTheme(gymSlug)
 
   const [codes,         setCodes]         = useState([])
   const [loading,       setLoading]       = useState(true)
@@ -49,6 +52,70 @@ export default function DoorAccessPage() {
   const [actionLoading, setActionLoading] = useState(false)
   const [actionError,   setActionError]   = useState(null)
   const [newCode,       setNewCode]       = useState('')
+
+  // ── Member profile drawer ─────────────────────────────────────────────────
+  const [selectedMember, setSelectedMember] = useState(null)
+  const [panelOpen,      setPanelOpen]      = useState(false)
+  const [updatingMember, setUpdatingMember] = useState(false)
+  const closeTimer = useRef(null)
+
+  function closePanel() {
+    setPanelOpen(false)
+    clearTimeout(closeTimer.current)
+    closeTimer.current = setTimeout(() => setSelectedMember(null), 220)
+  }
+
+  async function openMemberPanel(code) {
+    if (code.type !== 'member' || !code.memberId) return
+    setPanelOpen(true)
+    try {
+      const token = localStorage.getItem('ik_token')
+      const res   = await fetch(`/api/${gymSlug}/members/${code.memberId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!res.ok) throw new Error(`${res.status}`)
+      const { member } = await res.json()
+      setSelectedMember(member)
+    } catch {
+      closePanel()
+    }
+  }
+
+  async function handleStatusChange(memberId, newStatus) {
+    setUpdatingMember(true)
+    try {
+      const token = localStorage.getItem('ik_token')
+      const res   = await fetch(`/api/${gymSlug}/members/${memberId}`, {
+        method:  'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body:    JSON.stringify({ status: newStatus }),
+      })
+      if (!res.ok) throw new Error('Failed')
+      const { member: updated } = await res.json()
+      setSelectedMember(prev => prev?.id === memberId ? { ...prev, ...updated } : prev)
+    } catch {
+      // non-fatal
+    } finally {
+      setUpdatingMember(false)
+    }
+  }
+
+  async function handleSaveAccessCode(memberId, code) {
+    try {
+      const token = localStorage.getItem('ik_token')
+      const res   = await fetch(`/api/${gymSlug}/members/${memberId}`, {
+        method:  'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body:    JSON.stringify({ accessCode: code }),
+      })
+      if (!res.ok) throw new Error('Failed')
+      const { member: updated } = await res.json()
+      setSelectedMember(prev => prev?.id === memberId ? { ...prev, ...updated } : prev)
+      fetchCodes() // refresh codes table to reflect updated code
+    } catch {
+      // non-fatal
+    }
+  }
 
   const fetchCodes = useCallback(async () => {
     setLoading(true)
@@ -70,11 +137,6 @@ export default function DoorAccessPage() {
 
   useEffect(() => { fetchCodes() }, [fetchCodes])
 
-  // Metrics
-  const activeCodes   = codes.filter(c => c.status === 'set').length
-  const memberCodes   = codes.filter(c => c.type === 'member').length
-  const guestCodes    = codes.filter(c => c.type === 'guest').length
-
   // Tab + search filter
   const visible = codes.filter(c => {
     if (activeTab === 'active' && (c.status !== 'set' || c.codeType === 'time_bound')) return false
@@ -87,12 +149,6 @@ export default function DoorAccessPage() {
     if (a.type !== b.type) return a.type === 'guest' ? -1 : 1
     return a.name.localeCompare(b.name)
   })
-
-  const counts = {
-    all:    codes.length,
-    active: activeCodes,
-    timed:  codes.filter(c => c.codeType === 'time_bound').length,
-  }
 
   async function handleChangeCode() {
     if (!changeModal?.memberId) return
@@ -141,35 +197,11 @@ export default function DoorAccessPage() {
     <div className="flex-1 flex flex-col overflow-hidden">
 
       {/* Top bar */}
-      <header className="h-14 shrink-0 bg-[#1c1c1c] border-b border-neutral-800 flex items-center justify-between px-6">
+      <header className="h-14 shrink-0 bg-[#1c1c1c] border-b border-neutral-800 flex items-center px-6">
         <h1 className="text-sm font-semibold text-white">door access</h1>
-        <button
-          onClick={fetchCodes}
-          disabled={loading}
-          className="flex items-center gap-1.5 rounded-lg border border-neutral-700 px-3 py-1.5 text-xs text-neutral-400 hover:text-white hover:border-neutral-600 disabled:opacity-40 transition-colors"
-        >
-          <RefreshCw size={11} className={loading ? 'animate-spin' : ''} />
-          refresh
-        </button>
       </header>
 
       <main className="flex-1 flex flex-col p-5 gap-4 overflow-hidden min-h-0">
-
-        {/* Metric cards */}
-        <div className="shrink-0 grid grid-cols-1 sm:grid-cols-3 gap-3">
-          {[
-            { label: 'total codes',  value: activeCodes },
-            { label: 'member codes', value: memberCodes },
-            { label: 'guest codes',  value: guestCodes  },
-          ].map(({ label, value }) => (
-            <div key={label} className="bg-[#1c1c1c] rounded-xl border border-neutral-800 px-4 py-3">
-              <p className="text-[11px] text-neutral-500 mb-1">{label}</p>
-              <p className="text-xl font-semibold text-white tabular-nums">
-                {loading ? '—' : value}
-              </p>
-            </div>
-          ))}
-        </div>
 
         {/* Search bar */}
         <div className="shrink-0 relative w-full sm:w-80">
@@ -199,9 +231,6 @@ export default function DoorAccessPage() {
                 }`}
               >
                 {tab}
-                <span className={`ml-1.5 text-[10px] tabular-nums ${activeTab === tab ? 'text-neutral-400' : 'text-neutral-700'}`}>
-                  {counts[tab] ?? 0}
-                </span>
               </button>
             ))}
           </div>
@@ -228,32 +257,36 @@ export default function DoorAccessPage() {
               <table className="w-full text-sm">
                 <thead className="sticky top-0 bg-[#1c1c1c] z-10">
                   <tr className="border-b border-neutral-800 text-left">
-                    <th className="px-5 py-3 text-[11px] font-semibold text-neutral-500 tracking-wider">name</th>
-                    <th className="px-5 py-3 text-[11px] font-semibold text-neutral-500 tracking-wider">code</th>
-                    <th className="px-5 py-3 text-[11px] font-semibold text-neutral-500 tracking-wider">status</th>
-                    <th className="px-5 py-3 text-[11px] font-semibold text-neutral-500 tracking-wider">type</th>
-                    <th className="px-5 py-3 text-[11px] font-semibold text-neutral-500 tracking-wider">time left</th>
-                    <th className="px-5 py-3 text-[11px] font-semibold text-neutral-500 tracking-wider">actions</th>
+                    <th className="px-5 py-3 text-[11px] font-medium text-neutral-500">name</th>
+                    <th className="px-5 py-3 text-[11px] font-medium text-neutral-500">code</th>
+                    <th className="px-5 py-3 text-[11px] font-medium text-neutral-500"></th>
+                    <th className="px-5 py-3 text-[11px] font-medium text-neutral-500">type</th>
+                    <th className="px-5 py-3 text-[11px] font-medium text-neutral-500">time left</th>
+                    <th className="px-5 py-3 text-[11px] font-medium text-neutral-500">actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {visible.map(c => {
                     const tl = c.codeType === 'time_bound' ? timeLeft(c.endsAt) : null
                     return (
-                      <tr key={c.id} className="border-b border-neutral-800/40 hover:bg-white/[0.025] transition-colors">
-                        <td className="px-5 py-3 text-white text-sm">{c.name}</td>
-                        <td className="px-5 py-3 font-mono text-xs text-neutral-400 tabular-nums">{c.code}</td>
-                        <td className="px-5 py-3">
-                          <span className={`inline-block text-[11px] font-medium px-2 py-0.5 rounded-full ${CODE_STATUS_BADGE[c.status] ?? CODE_STATUS_BADGE.unknown}`}>
+                      <tr
+                        key={c.id}
+                        onClick={() => openMemberPanel(c)}
+                        className={`border-b border-white/5 hover:bg-white/[0.025] transition-colors ${c.type === 'member' && c.memberId ? 'cursor-pointer' : ''}`}
+                      >
+                        <td className="px-5 py-2 text-white text-sm">{c.name}</td>
+                        <td className="px-5 py-2 font-mono text-xs text-neutral-400 tabular-nums">{c.code}</td>
+                        <td className="px-5 py-2">
+                          <span className={`text-[11px] font-medium ${CODE_STATUS_TEXT[c.status] ?? CODE_STATUS_TEXT.unknown}`}>
                             {c.status}
                           </span>
                         </td>
-                        <td className="px-5 py-3">
-                          <span className={`inline-block text-[11px] font-medium px-2 py-0.5 rounded-full ${CODE_TYPE_BADGE[c.type]}`}>
+                        <td className="px-5 py-2">
+                          <span className={`inline-block text-[11px] font-medium border-l-2 pl-2 ${CODE_TYPE_BORDER[c.type] ?? 'border-zinc-400 text-neutral-400'}`}>
                             {c.type}
                           </span>
                         </td>
-                        <td className="px-5 py-3">
+                        <td className="px-5 py-2">
                           {tl ? (
                             <span className={`text-xs ${tl === 'expired' ? 'text-red-400' : 'text-neutral-400'}`}>
                               {tl}
@@ -262,7 +295,7 @@ export default function DoorAccessPage() {
                             <span className="text-neutral-700 text-xs">—</span>
                           )}
                         </td>
-                        <td className="px-5 py-3">
+                        <td className="px-5 py-2">
                           <div className="flex items-center gap-2">
                             {c.type === 'member' && (
                               <button
@@ -393,6 +426,16 @@ export default function DoorAccessPage() {
           </div>
         </div>
       )}
+
+      <MemberProfileDrawer
+        member={selectedMember}
+        open={panelOpen}
+        membershipBorder={membershipBorder}
+        onClose={closePanel}
+        onStatusChange={handleStatusChange}
+        onSaveAccessCode={handleSaveAccessCode}
+        updating={updatingMember}
+      />
 
     </div>
   )

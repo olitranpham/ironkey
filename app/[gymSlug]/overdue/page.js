@@ -1,23 +1,13 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams } from 'next/navigation'
-import { RefreshCw, AlertTriangle } from 'lucide-react'
+import { AlertTriangle, X } from 'lucide-react'
+import { getGymTheme } from '@/lib/gymThemes'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const PLAN_AMOUNT = { FOUNDING: 50, GENERAL: 65, STUDENT: 55 }
-
-const PLAN_BADGE = {
-  FOUNDING: 'bg-blue-500/15 text-blue-400',
-  GENERAL:  'bg-neutral-500/15 text-neutral-400',
-  STUDENT:  'bg-amber-500/15 text-amber-400',
-}
-
-const AVATAR_COLORS = [
-  'bg-violet-500', 'bg-blue-500', 'bg-emerald-500', 'bg-amber-500',
-  'bg-rose-500',   'bg-cyan-500', 'bg-orange-500',  'bg-indigo-500',
-]
 
 const CONFIRM_COPY = {
   retry: {
@@ -39,11 +29,6 @@ const CONFIRM_COPY = {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function avatarBg(id) {
-  const n = [...(id ?? '')].reduce((s, c) => s + c.charCodeAt(0), 0)
-  return AVATAR_COLORS[n % AVATAR_COLORS.length]
-}
-
 function fmtAmount(cents, membershipType) {
   if (cents != null) return `$${(cents / 100).toFixed(2)}`
   const flat = PLAN_AMOUNT[membershipType]
@@ -55,18 +40,37 @@ function fmtDate(unix) {
   return new Date(unix * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
+function invoiceLabel(r) {
+  return r.invoiceStatus === 'unpaid' ? 'unpaid' : r.invoiceStatus === 'open' ? 'open invoice' : 'past due'
+}
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function OverduePage() {
   const { gymSlug } = useParams()
+  const { membershipBorder } = getGymTheme(gymSlug)
 
-  const [rows,         setRows]         = useState([])
-  const [loading,      setLoading]      = useState(true)
-  const [fetchErr,     setFetchErr]     = useState(null)
-  const [stripeErr,    setStripeErr]    = useState(null)
-  const [confirmModal, setConfirmModal] = useState(null) // { action, row }
-  const [actionLoading,setActionLoading]= useState(false)
-  const [actionError,  setActionError]  = useState(null)
+  const [rows,          setRows]          = useState([])
+  const [loading,       setLoading]       = useState(true)
+  const [fetchErr,      setFetchErr]      = useState(null)
+  const [stripeErr,     setStripeErr]     = useState(null)
+  const [confirmModal,  setConfirmModal]  = useState(null) // { action, row }
+  const [actionLoading, setActionLoading] = useState(false)
+  const [actionError,   setActionError]   = useState(null)
+
+  const [selectedRow, setSelectedRow] = useState(null)
+  const [panelOpen,   setPanelOpen]   = useState(false)
+  const closeTimer = useRef(null)
+
+  function openPanel(row) {
+    setSelectedRow(row)
+    setPanelOpen(true)
+  }
+  function closePanel() {
+    setPanelOpen(false)
+    clearTimeout(closeTimer.current)
+    closeTimer.current = setTimeout(() => setSelectedRow(null), 220)
+  }
 
   const fetchOverdue = useCallback(async () => {
     setLoading(true)
@@ -89,13 +93,6 @@ export default function OverduePage() {
 
   useEffect(() => { fetchOverdue() }, [fetchOverdue])
 
-  // Metrics
-  const pastDue   = rows.filter(r => r.invoiceStatus === 'past_due' || r.invoiceStatus === 'open').length
-  const unpaid    = rows.filter(r => r.invoiceStatus === 'unpaid').length
-  const totalOwed = rows.reduce((s, r) => {
-    return s + (r.amountDue != null ? r.amountDue / 100 : PLAN_AMOUNT[r.membershipType] ?? 0)
-  }, 0)
-
   // ── Actions ───────────────────────────────────────────────────────────────
   async function confirmAction() {
     const { action, row } = confirmModal
@@ -115,8 +112,8 @@ export default function OverduePage() {
           const body = await res.json().catch(() => ({}))
           throw new Error(body.error ?? 'Retry failed')
         }
-        // Remove from list on success
         setRows(prev => prev.filter(r => r.id !== row.id))
+        closePanel()
       } else if (action === 'resolve') {
         const res = await fetch(`/api/${gymSlug}/stripe/resolve`, {
           method:  'POST',
@@ -125,6 +122,7 @@ export default function OverduePage() {
         })
         if (!res.ok) throw new Error('Failed to resolve')
         setRows(prev => prev.filter(r => r.id !== row.id))
+        closePanel()
       } else if (action === 'cancel') {
         const res = await fetch(`/api/${gymSlug}/cancel`, {
           method:  'POST',
@@ -133,6 +131,7 @@ export default function OverduePage() {
         })
         if (!res.ok) throw new Error('Cancel failed')
         setRows(prev => prev.filter(r => r.id !== row.id))
+        closePanel()
       }
 
       setConfirmModal(null)
@@ -147,34 +146,11 @@ export default function OverduePage() {
     <div className="flex-1 flex flex-col overflow-hidden">
 
       {/* Top bar */}
-      <header className="h-14 shrink-0 bg-[#1c1c1c] border-b border-neutral-800 flex items-center justify-between px-6">
+      <header className="h-14 shrink-0 bg-[#1c1c1c] border-b border-neutral-800 flex items-center px-6">
         <h1 className="text-sm font-semibold text-white">overdue</h1>
-        <button
-          onClick={fetchOverdue}
-          disabled={loading}
-          className="flex items-center gap-1.5 rounded-lg border border-neutral-700 px-3 py-1.5 text-xs text-neutral-400 hover:text-white hover:border-neutral-600 disabled:opacity-40 transition-colors"
-        >
-          <RefreshCw size={11} className={loading ? 'animate-spin' : ''} />
-          refresh
-        </button>
       </header>
 
       <main className="flex-1 flex flex-col p-5 gap-4 overflow-hidden min-h-0">
-
-        {/* Metric cards */}
-        <div className="shrink-0 grid grid-cols-1 sm:grid-cols-3 gap-3">
-          {[
-            { label: 'past due',   value: loading ? '—' : pastDue,  sub: 'stripe is still retrying' },
-            { label: 'unpaid',     value: loading ? '—' : unpaid,   sub: 'retries exhausted — needs outreach' },
-            { label: 'total owed', value: loading ? '—' : `$${totalOwed.toFixed(2)}`, sub: null },
-          ].map(({ label, value, sub }) => (
-            <div key={label} className="bg-[#1c1c1c] rounded-xl border border-red-900/30 px-4 py-3">
-              <p className="text-[11px] text-neutral-500 mb-1">{label}</p>
-              <p className="text-xl font-semibold text-red-400 tabular-nums">{value}</p>
-              {sub && <p className="text-[10px] text-neutral-600 mt-1">{sub}</p>}
-            </div>
-          ))}
-        </div>
 
         {/* Stripe error banner */}
         {stripeErr && (
@@ -185,12 +161,10 @@ export default function OverduePage() {
 
         {/* Table card */}
         <div className="flex-1 flex flex-col bg-[#1c1c1c] rounded-xl border border-neutral-800 overflow-hidden min-h-0">
-
-          {/* Body */}
           <div className="flex-1 overflow-y-auto">
             {loading ? (
               <div className="flex items-center justify-center h-48 gap-2">
-                <RefreshCw size={16} className="text-neutral-600 animate-spin" />
+                <div className="w-4 h-4 border-2 border-neutral-600 border-t-neutral-400 rounded-full animate-spin" />
                 <span className="text-sm text-neutral-600">loading…</span>
               </div>
             ) : fetchErr ? (
@@ -207,88 +181,59 @@ export default function OverduePage() {
               <table className="w-full text-sm">
                 <thead className="sticky top-0 bg-[#1c1c1c] z-10">
                   <tr className="border-b border-neutral-800 text-left">
-                    <th className="px-5 py-3 text-[11px] font-semibold text-neutral-500 tracking-wider">member</th>
-                    <th className="px-5 py-3 text-[11px] font-semibold text-neutral-500 tracking-wider">plan</th>
-                    <th className="px-5 py-3 text-[11px] font-semibold text-neutral-500 tracking-wider">amount</th>
-                    <th className="px-5 py-3 text-[11px] font-semibold text-neutral-500 tracking-wider">status</th>
-                    <th className="px-5 py-3 text-[11px] font-semibold text-neutral-500 tracking-wider">decline reason</th>
-                    <th className="px-5 py-3 text-[11px] font-semibold text-neutral-500 tracking-wider">actions</th>
+                    <th className="px-5 py-3 text-[11px] font-medium text-neutral-500">member</th>
+                    <th className="px-5 py-3 text-[11px] font-medium text-neutral-500">plan</th>
+                    <th className="px-5 py-3 text-[11px] font-medium text-neutral-500">amount</th>
+                    <th className="px-5 py-3 text-[11px] font-medium text-neutral-500">failed</th>
+                    <th className="px-5 py-3 text-[11px] font-medium text-neutral-500">decline reason</th>
                   </tr>
                 </thead>
                 <tbody>
                   {rows.map(r => (
-                    <tr key={r.id} className="border-b border-neutral-800/40 bg-red-950/20 hover:bg-red-950/30 transition-colors">
-
+                    <tr
+                      key={r.id}
+                      onClick={() => openPanel(r)}
+                      className="border-b border-white/5 hover:bg-white/[0.025] transition-colors cursor-pointer"
+                    >
                       {/* Member */}
-                      <td className="px-5 py-3">
-                        <div className="flex items-center gap-3">
-                          <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 ${avatarBg(r.id)}`}>
-                            <span className="text-white font-semibold text-[10px] select-none">
+                      <td className="px-5 py-2">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center shrink-0">
+                            <span className="text-black text-xs font-medium select-none">
                               {(r.firstName?.[0] ?? '') + (r.lastName?.[0] ?? '')}
                             </span>
                           </div>
                           <div className="min-w-0">
-                            <p className="text-white font-medium text-sm truncate">{r.firstName} {r.lastName}</p>
+                            <p className="text-white text-sm">{r.firstName} {r.lastName}</p>
                             <p className="text-neutral-500 text-[11px] truncate">{r.email}</p>
                           </div>
                         </div>
                       </td>
 
                       {/* Plan */}
-                      <td className="px-5 py-3">
-                        <span className={`inline-block text-[11px] font-medium px-2 py-0.5 rounded-full ${PLAN_BADGE[r.membershipType] ?? PLAN_BADGE.GENERAL}`}>
+                      <td className="px-5 py-2">
+                        <span className={`inline-block text-[11px] font-medium border-l-2 pl-2 ${membershipBorder[r.membershipType] ?? membershipBorder.GENERAL}`}>
                           {(r.membershipType ?? 'GENERAL').toLowerCase()}
                         </span>
                       </td>
 
                       {/* Amount */}
-                      <td className="px-5 py-3 text-red-400 text-xs font-medium tabular-nums">
+                      <td className="px-5 py-2 text-red-400/80 text-xs tabular-nums">
                         {fmtAmount(r.amountDue, r.membershipType)}
                       </td>
 
-                      {/* Status */}
-                      <td className="px-5 py-3">
-                        <div className="flex flex-col gap-0.5">
-                          <span className="inline-block text-[11px] font-medium px-2 py-0.5 rounded-full bg-red-500/15 text-red-400 w-fit">
-                            {r.invoiceStatus === 'unpaid' ? 'unpaid' : r.invoiceStatus === 'open' ? 'open invoice' : 'past due'}
-                          </span>
-                          {r.failedAt && (
-                            <span className="text-[10px] text-neutral-600 pl-1">{fmtDate(r.failedAt)}</span>
-                          )}
-                        </div>
+                      {/* Failed date */}
+                      <td className="px-5 py-2 text-neutral-600 text-xs whitespace-nowrap">
+                        {r.failedAt ? fmtDate(r.failedAt) : '—'}
                       </td>
 
                       {/* Decline reason */}
-                      <td className="px-5 py-3 max-w-[200px]">
+                      <td className="px-5 py-2 max-w-[200px]">
                         {r.declineReason ? (
-                          <span className="text-xs text-amber-400/80">{r.declineReason}</span>
+                          <span className="text-xs text-amber-400/70">{r.declineReason}</span>
                         ) : (
                           <span className="text-xs text-neutral-700">—</span>
                         )}
-                      </td>
-
-                      {/* Actions */}
-                      <td className="px-5 py-3">
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => { setActionError(null); setConfirmModal({ action: 'retry', row: r }) }}
-                            className="text-[11px] font-medium px-2.5 py-1 rounded-md bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition-colors"
-                          >
-                            retry charge
-                          </button>
-                          <button
-                            onClick={() => { setActionError(null); setConfirmModal({ action: 'resolve', row: r }) }}
-                            className="text-[11px] font-medium px-2.5 py-1 rounded-md bg-sky-500/10 text-sky-400 hover:bg-sky-500/20 transition-colors"
-                          >
-                            mark resolved
-                          </button>
-                          <button
-                            onClick={() => { setActionError(null); setConfirmModal({ action: 'cancel', row: r }) }}
-                            className="text-[11px] font-medium px-2.5 py-1 rounded-md bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors"
-                          >
-                            cancel
-                          </button>
-                        </div>
                       </td>
                     </tr>
                   ))}
@@ -299,12 +244,30 @@ export default function OverduePage() {
         </div>
       </main>
 
-      {/* ── Confirm modal ──────────────────────────────────────────────────── */}
+      {/* ── Overlay ───────────────────────────────────────────────────────────── */}
+      <div
+        className={`fixed inset-0 bg-black/60 z-40 transition-opacity duration-200 ${panelOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+        onClick={closePanel}
+      />
+
+      {/* ── Overdue panel ─────────────────────────────────────────────────────── */}
+      <div className={`fixed inset-y-0 right-0 w-full sm:w-[360px] bg-[#171717] border-l border-neutral-800 z-50 flex flex-col shadow-2xl transition-transform duration-200 ${panelOpen ? 'translate-x-0' : 'translate-x-full'}`}>
+        {selectedRow && (
+          <OverduePanel
+            row={selectedRow}
+            membershipBorder={membershipBorder}
+            onClose={closePanel}
+            onAction={(action) => { setActionError(null); setConfirmModal({ action, row: selectedRow }) }}
+          />
+        )}
+      </div>
+
+      {/* ── Confirm modal ─────────────────────────────────────────────────────── */}
       {confirmModal && (() => {
         const copy = CONFIRM_COPY[confirmModal.action]
         const name = `${confirmModal.row.firstName} ${confirmModal.row.lastName}`
         return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 z-60 flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-black/70" onClick={!actionLoading ? () => setConfirmModal(null) : undefined} />
             <div className="relative bg-[#1c1c1c] border border-neutral-800 rounded-xl w-full max-w-sm p-6 shadow-2xl">
               <div className="flex items-center gap-3 mb-4">
@@ -345,6 +308,95 @@ export default function OverduePage() {
           </div>
         )
       })()}
+
+    </div>
+  )
+}
+
+// ── Overdue panel ─────────────────────────────────────────────────────────────
+
+function OverduePanel({ row, membershipBorder, onClose, onAction }) {
+  const initials = (row.firstName?.[0] ?? '') + (row.lastName?.[0] ?? '')
+
+  return (
+    <div className="flex flex-col h-full">
+
+      {/* Header */}
+      <div className="flex items-center justify-between px-5 h-14 shrink-0 border-b border-neutral-800">
+        <p className="text-sm font-semibold text-white">overdue member</p>
+        <button
+          onClick={onClose}
+          className="p-1.5 rounded-lg text-neutral-500 hover:text-white hover:bg-white/5 transition-colors"
+        >
+          <X size={15} />
+        </button>
+      </div>
+
+      {/* Body */}
+      <div className="flex-1 overflow-y-auto p-5 space-y-5">
+
+        {/* Avatar + name */}
+        <div className="flex flex-col items-center text-center gap-3 pt-1 pb-2">
+          <div className="w-[60px] h-[60px] rounded-full bg-white flex items-center justify-center shrink-0">
+            <span className="text-black font-bold text-lg tracking-tight select-none">{initials || '?'}</span>
+          </div>
+          <div>
+            <p className="text-white font-semibold text-base leading-tight">{row.firstName} {row.lastName}</p>
+            <p className="text-neutral-500 text-xs mt-0.5">{row.email}</p>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="text-[11px] text-red-400/70">{row.invoiceStatus === 'unpaid' ? 'unpaid' : row.invoiceStatus === 'open' ? 'open invoice' : 'past due'}</span>
+            <span className={`text-[11px] font-medium border-l-2 pl-2 ${membershipBorder[row.membershipType] ?? membershipBorder.GENERAL}`}>
+              {(row.membershipType ?? 'GENERAL').toLowerCase()}
+            </span>
+          </div>
+        </div>
+
+        {/* Details */}
+        <div className="rounded-lg border border-neutral-800 divide-y divide-neutral-800 overflow-hidden">
+          <div className="flex items-center justify-between px-3 py-2.5 bg-[#1c1c1c]">
+            <span className="text-xs text-neutral-500">amount due</span>
+            <span className="text-xs text-red-400/80 tabular-nums font-medium">
+              {row.amountDue != null ? `$${(row.amountDue / 100).toFixed(2)}` : PLAN_AMOUNT[row.membershipType] ? `$${PLAN_AMOUNT[row.membershipType]}.00` : '—'}
+            </span>
+          </div>
+          {row.failedAt && (
+            <div className="flex items-center justify-between px-3 py-2.5 bg-[#1c1c1c]">
+              <span className="text-xs text-neutral-500">failed</span>
+              <span className="text-xs text-white">{fmtDate(row.failedAt)}</span>
+            </div>
+          )}
+          {row.declineReason && (
+            <div className="flex items-start justify-between px-3 py-2.5 bg-[#1c1c1c] gap-4">
+              <span className="text-xs text-neutral-500 shrink-0">decline reason</span>
+              <span className="text-xs text-amber-400/70 text-right">{row.declineReason}</span>
+            </div>
+          )}
+        </div>
+
+      </div>
+
+      {/* Actions */}
+      <div className="shrink-0 px-5 py-4 border-t border-neutral-800 space-y-2">
+        <button
+          onClick={() => onAction('retry')}
+          className="w-full py-2 rounded-lg text-xs font-medium bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition-colors"
+        >
+          retry charge
+        </button>
+        <button
+          onClick={() => onAction('resolve')}
+          className="w-full py-2 rounded-lg text-xs font-medium bg-sky-500/10 text-sky-400 hover:bg-sky-500/20 transition-colors"
+        >
+          mark resolved
+        </button>
+        <button
+          onClick={() => onAction('cancel')}
+          className="w-full py-2 rounded-lg text-xs font-medium bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors"
+        >
+          cancel membership
+        </button>
+      </div>
 
     </div>
   )

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useParams } from 'next/navigation'
-import { Plus, Search, Minus, RotateCcw, Pencil, Trash2, Package, AlertTriangle, XCircle } from 'lucide-react'
+import { Plus, Search, Minus, RotateCcw, Pencil, Trash2 } from 'lucide-react'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -16,40 +16,15 @@ function fmt(n) {
 }
 
 function statusColor(status) {
-  if (status === 'out') return 'text-rose-400'
-  if (status === 'low') return 'text-amber-400'
+  if (status === 'out') return 'text-red-400/70'
+  if (status === 'low') return 'text-amber-400/70'
   return 'text-white'
-}
-
-function rowHighlight(status) {
-  if (status === 'out') return 'bg-rose-500/5'
-  if (status === 'low') return 'bg-amber-500/5'
-  return ''
 }
 
 // ── Skeleton ──────────────────────────────────────────────────────────────────
 
 function Bone({ className = '' }) {
   return <div className={`bg-neutral-800 animate-pulse rounded ${className}`} />
-}
-
-// ── Metric card ───────────────────────────────────────────────────────────────
-
-function MetricCard({ icon: Icon, label, value, iconCls = 'text-neutral-400', loading }) {
-  return (
-    <div className="bg-[#1c1c1c] border border-neutral-800 rounded-xl p-5 flex flex-col gap-3">
-      <div className="flex items-center gap-2">
-        <div className="w-7 h-7 rounded-lg bg-neutral-800 flex items-center justify-center shrink-0">
-          <Icon size={14} className={iconCls} />
-        </div>
-        <span className="text-xs text-neutral-500 font-medium">{label}</span>
-      </div>
-      {loading
-        ? <Bone className="h-8 w-16" />
-        : <p className="text-2xl font-bold text-white tabular-nums">{value}</p>
-      }
-    </div>
-  )
 }
 
 // ── Item Modal (Add / Edit) ───────────────────────────────────────────────────
@@ -466,10 +441,6 @@ export default function InventoryPage() {
   useEffect(() => { load() }, [load])
 
   // ── Derived ──────────────────────────────────────────────────────────────
-  const totalItems   = items.length
-  const lowCount     = items.filter(i => i.status === 'low').length
-  const outCount     = items.filter(i => i.status === 'out').length
-
   const filtered = items.filter(item => {
     const matchCat    = activeTab === 'all' || item.category === activeTab
     const matchSearch = !search || item.name.toLowerCase().includes(search.toLowerCase())
@@ -533,13 +504,6 @@ export default function InventoryPage() {
           </div>
         ) : (
           <>
-            {/* ── Metric cards ──────────────────────────────────────────────── */}
-            <div className="grid grid-cols-3 gap-4">
-              <MetricCard icon={Package}       label="total items"  value={totalItems} loading={loading} />
-              <MetricCard icon={AlertTriangle} label="low stock"    value={lowCount}   loading={loading} iconCls={lowCount  > 0 ? 'text-amber-400' : 'text-neutral-400'} />
-              <MetricCard icon={XCircle}       label="out of stock" value={outCount}   loading={loading} iconCls={outCount  > 0 ? 'text-rose-400'  : 'text-neutral-400'} />
-            </div>
-
             {/* ── Search + category tabs ─────────────────────────────────────── */}
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               {/* Search */}
@@ -577,24 +541,24 @@ export default function InventoryPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-neutral-800 text-left">
-                    <th className="px-5 py-3 text-[11px] font-semibold text-neutral-500 tracking-wider">item</th>
-                    <th className="px-5 py-3 text-[11px] font-semibold text-neutral-500 tracking-wider">category</th>
-                    <th className="px-5 py-3 text-[11px] font-semibold text-neutral-500 tracking-wider">qty</th>
-                    <th className="px-5 py-3 text-[11px] font-semibold text-neutral-500 tracking-wider">unit cost</th>
-                    <th className="px-5 py-3 text-[11px] font-semibold text-neutral-500 tracking-wider">total value</th>
+                    <th className="px-5 py-3 text-[11px] font-medium text-neutral-500">item</th>
+                    <th className="px-5 py-3 text-[11px] font-medium text-neutral-500">category</th>
+                    <th className="px-5 py-3 text-[11px] font-medium text-neutral-500">qty</th>
+                    <th className="px-5 py-3 text-[11px] font-medium text-neutral-500">unit cost</th>
+                    <th className="px-5 py-3 text-[11px] font-medium text-neutral-500">total value</th>
                     <th className="px-5 py-3" />
                   </tr>
                 </thead>
                 <tbody>
                   {loading ? (
                     Array.from({ length: 6 }).map((_, i) => (
-                      <tr key={i} className="border-b border-neutral-800/40">
-                        <td className="px-5 py-3.5"><Bone className="h-3 w-36" /></td>
-                        <td className="px-5 py-3.5"><Bone className="h-3 w-20" /></td>
-                        <td className="px-5 py-3.5"><Bone className="h-3 w-10" /></td>
-                        <td className="px-5 py-3.5"><Bone className="h-3 w-16" /></td>
-                        <td className="px-5 py-3.5"><Bone className="h-3 w-16" /></td>
-                        <td className="px-5 py-3.5"><Bone className="h-5 w-24 rounded-full" /></td>
+                      <tr key={i} className="border-b border-white/5">
+                        <td className="px-5 py-3"><Bone className="h-3 w-36" /></td>
+                        <td className="px-5 py-3"><Bone className="h-3 w-20" /></td>
+                        <td className="px-5 py-3"><Bone className="h-3 w-10" /></td>
+                        <td className="px-5 py-3"><Bone className="h-3 w-16" /></td>
+                        <td className="px-5 py-3"><Bone className="h-3 w-16" /></td>
+                        <td className="px-5 py-3"><Bone className="h-3 w-16" /></td>
                       </tr>
                     ))
                   ) : filtered.length === 0 ? (
@@ -607,31 +571,31 @@ export default function InventoryPage() {
                     filtered.map(item => (
                       <tr
                         key={item.id}
-                        className={`border-b border-neutral-800/40 transition-colors hover:bg-white/[0.025] ${rowHighlight(item.status)}`}
+                        className="border-b border-white/5 transition-colors hover:bg-white/[0.025]"
                       >
-                        <td className="px-5 py-3">
+                        <td className="px-5 py-2">
                           <p className="text-white text-xs font-medium">{item.name}</p>
                           {item.notes && <p className="text-neutral-600 text-[11px] mt-0.5">{item.notes}</p>}
                         </td>
-                        <td className="px-5 py-3 text-neutral-400 text-xs">{item.category}</td>
-                        <td className="px-5 py-3">
-                          <span className={`text-xs font-semibold tabular-nums ${statusColor(item.status)}`}>
+                        <td className="px-5 py-2 text-neutral-400 text-xs">{item.category}</td>
+                        <td className="px-5 py-2">
+                          <span className={`text-xs tabular-nums ${statusColor(item.status)}`}>
                             {item.quantity}
                           </span>
                           {item.status === 'low' && (
-                            <span className="ml-1.5 text-[10px] text-amber-500/70">low</span>
+                            <span className="ml-1.5 text-[10px] text-amber-400/50">low</span>
                           )}
                           {item.status === 'out' && (
-                            <span className="ml-1.5 text-[10px] text-rose-500/70">out</span>
+                            <span className="ml-1.5 text-[10px] text-red-400/50">out</span>
                           )}
                         </td>
-                        <td className="px-5 py-3 text-neutral-400 text-xs tabular-nums">
+                        <td className="px-5 py-2 text-neutral-400 text-xs tabular-nums">
                           {item.unitCost != null ? fmt(item.unitCost) : '—'}
                         </td>
-                        <td className="px-5 py-3 text-neutral-300 text-xs tabular-nums font-medium">
+                        <td className="px-5 py-2 text-neutral-300 text-xs tabular-nums font-medium">
                           {item.unitCost != null ? fmt(item.unitCost * item.quantity) : '—'}
                         </td>
-                        <td className="px-5 py-3">
+                        <td className="px-5 py-2">
                           <div className="flex items-center justify-end gap-1">
                             {/* Sell */}
                             <button

@@ -12,6 +12,12 @@ function inferMembershipType(name = '') {
   return 'GENERAL'
 }
 
+// Identify coaching/programming add-on plans by name
+function isAddon(name = '') {
+  const n = name.toLowerCase()
+  return n.includes('programming') || n.includes('coaching') || n.includes('communication') || n.includes('add-on') || n.includes('addon')
+}
+
 // Membership types excluded from the public join form per gym
 const EXCLUDED_TYPES = {
   'triumph-barbell': ['FOUNDING'],
@@ -31,7 +37,8 @@ export async function GET(request, { params }) {
     })
     if (!gym) return NextResponse.json({ error: 'Gym not found' }, { status: 404 })
 
-    let plans = []
+    let membershipPlans = []
+    let addonPlans      = []
 
     if (gym.stripeSecretKey) {
       const stripe = new Stripe(gym.stripeSecretKey, { apiVersion: '2024-06-20' })
@@ -43,7 +50,7 @@ export async function GET(request, { params }) {
 
       const excluded = EXCLUDED_TYPES[gymSlug] ?? []
 
-      plans = prices.data
+      const allPlans = prices.data
         .filter(p => p.recurring && p.unit_amount != null)
         .map(p => ({
           priceId:        p.id,
@@ -52,11 +59,16 @@ export async function GET(request, { params }) {
           interval:       p.recurring.interval,
           membershipType: inferMembershipType(p.nickname ?? p.product?.name ?? ''),
         }))
-        .filter(p => !excluded.includes(p.membershipType))
         .sort((a, b) => a.amount - b.amount)
+
+      const MEMBERSHIP_ORDER = { GENERAL: 0, STUDENT: 1, WEEKEND: 2, FLEX: 3, FOUNDING: 4 }
+      membershipPlans = allPlans
+        .filter(p => !isAddon(p.name) && !excluded.includes(p.membershipType))
+        .sort((a, b) => (MEMBERSHIP_ORDER[a.membershipType] ?? 99) - (MEMBERSHIP_ORDER[b.membershipType] ?? 99))
+      addonPlans      = allPlans.filter(p => isAddon(p.name))
     }
 
-    return NextResponse.json({ gym: { name: gym.name, slug: gymSlug }, plans })
+    return NextResponse.json({ gym: { name: gym.name, slug: gymSlug }, membershipPlans, addonPlans })
   } catch (error) {
     console.error('[join GET]', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

@@ -2,18 +2,9 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams } from 'next/navigation'
-import {
-  RefreshCw,
-  Activity,
-  Search,
-  TrendingUp,
-  ArrowUpRight,
-  X,
-  Mail,
-  Phone,
-  KeyRound,
-  CreditCard,
-} from 'lucide-react'
+import { RefreshCw, Activity, Search, TrendingUp, Lock, Unlock } from 'lucide-react'
+import { getGymTheme } from '@/lib/gymThemes'
+import MemberProfileDrawer from '@/components/MemberProfileDrawer'
 import {
   AreaChart,
   Area,
@@ -28,42 +19,21 @@ import {
 
 const TABS = ['all', 'active', 'frozen', 'canceled', 'overdue']
 
-const STATUS_PILL = {
-  ACTIVE:    'bg-emerald-500/15 text-emerald-400',
-  FROZEN:    'bg-sky-500/15 text-sky-400',
-  CANCELLED: 'bg-neutral-500/15 text-neutral-400',
-  OVERDUE:   'bg-red-500/15 text-red-400',
+const STATUS_TEXT = {
+  ACTIVE:    'text-emerald-600',
+  FROZEN:    'text-blue-400/70',
+  CANCELLED: 'text-zinc-500',
+  OVERDUE:   'text-red-400/70',
 }
 
-const TYPE_BADGE = {
-  FOUNDING: 'bg-blue-500/15 text-blue-400',
-  GENERAL:  'bg-neutral-500/15 text-neutral-400',
-  STUDENT:  'bg-amber-500/15 text-amber-400',
-}
-
-const AVATAR_COLORS = [
-  'bg-violet-500', 'bg-blue-500', 'bg-emerald-500', 'bg-amber-500',
-  'bg-rose-500',   'bg-cyan-500', 'bg-orange-500',  'bg-indigo-500',
-]
+const AVATAR_COLOR = 'bg-white'
 
 function fmtStatus(status) {
   return status === 'CANCELLED' ? 'canceled' : status.toLowerCase()
 }
 
-function avatarBg(id = '') {
-  const n = [...(id ?? '')].reduce((s, c) => s + c.charCodeAt(0), 0)
-  return AVATAR_COLORS[n % AVATAR_COLORS.length]
-}
-
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function sinceLabel(date) {
-  if (!date) return '—'
-  const s = Math.floor((Date.now() - date) / 1000)
-  if (s < 10) return 'just now'
-  if (s < 60) return `${s}s ago`
-  return `${Math.floor(s / 60)}m ago`
-}
 
 function sinceISO(iso) {
   if (!iso) return '—'
@@ -121,11 +91,10 @@ function buildChartData(members) {
 
 export default function DashboardPage() {
   const { gymSlug } = useParams()
+  const { membershipBorder } = getGymTheme(gymSlug)
 
   const [members,  setMembers]  = useState([])
   const [loading,  setLoading]  = useState(true)
-  const [syncing,  setSyncing]  = useState(false)
-  const [lastSync, setLastSync] = useState(null)
   const [fetchErr, setFetchErr] = useState(null)
 
   const [search,    setSearch]    = useState('')
@@ -193,8 +162,7 @@ export default function DashboardPage() {
 
   // ── Fetch ───────────────────────────────────────────────────────────────
 
-  const load = useCallback(async ({ manual = false } = {}) => {
-    if (manual) setSyncing(true)
+  const load = useCallback(async () => {
     try {
       const token = localStorage.getItem('ik_token')
       const res = await fetch(`/api/${gymSlug}/all`, {
@@ -203,13 +171,11 @@ export default function DashboardPage() {
       if (!res.ok) throw new Error(`${res.status}`)
       const { members } = await res.json()
       setMembers(members)
-      setLastSync(Date.now())
       setFetchErr(null)
     } catch {
       setFetchErr('Could not load members — retrying in 30s')
     } finally {
       setLoading(false)
-      setSyncing(false)
     }
   }, [gymSlug])
 
@@ -244,14 +210,6 @@ export default function DashboardPage() {
 
   // ── Derived ─────────────────────────────────────────────────────────────
 
-  const counts = {
-    all:      members.length,
-    active:   members.filter(m => m.status === 'ACTIVE').length,
-    frozen:   members.filter(m => m.status === 'FROZEN').length,
-    canceled: members.filter(m => m.status === 'CANCELLED').length,
-    overdue:  members.filter(m => m.status === 'OVERDUE').length,
-  }
-
   const STATUS_ORDER = { ACTIVE: 0, OVERDUE: 1, FROZEN: 2, CANCELLED: 3 }
 
   const visible = members
@@ -279,29 +237,6 @@ export default function DashboardPage() {
       <header className="h-14 shrink-0 bg-[#1c1c1c] border-b border-neutral-800 flex items-center justify-between px-6">
         <h1 className="text-sm font-semibold text-white">dashboard</h1>
 
-        <div className="flex items-center gap-4">
-          {/* Sync indicator */}
-          <div className="flex items-center gap-2">
-            <span
-              className={`w-2 h-2 rounded-full ${
-                syncing ? 'bg-amber-400 animate-pulse' : 'bg-emerald-500'
-              }`}
-            />
-            <span className="text-xs text-neutral-500">
-              {syncing ? 'syncing…' : `synced ${sinceLabel(lastSync)}`}
-            </span>
-          </div>
-
-          {/* Sync button */}
-          <button
-            onClick={() => load({ manual: true })}
-            disabled={syncing || loading}
-            className="flex items-center gap-1.5 rounded-lg border border-neutral-700 px-3 py-1.5 text-xs text-neutral-400 hover:text-white hover:border-neutral-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-          >
-            <RefreshCw size={11} className={syncing ? 'animate-spin' : ''} />
-            sync
-          </button>
-        </div>
       </header>
 
       {/* ── Body ─────────────────────────────────────────────────────────── */}
@@ -313,19 +248,11 @@ export default function DashboardPage() {
           <ErrorState message={fetchErr} onRetry={() => load({ manual: true })} />
         ) : (
           <>
-            {/* Metric cards — always 4 across, shrink proportionally */}
-            <div className="grid grid-cols-4 gap-4 shrink-0">
-              <MetricCard label="active members" value={counts.active}   color="text-emerald-400" border="border-emerald-900/30" />
-              <MetricCard label="frozen"         value={counts.frozen}   color="text-sky-400"     border="border-sky-900/30" />
-              <MetricCard label="canceled"       value={counts.canceled} color="text-neutral-400" border="border-neutral-700/50" />
-              <MetricCard label="overdue"        value={counts.overdue}  color="text-red-400"     border="border-red-900/30" />
-            </div>
-
             {/* Mid row — stacks vertically on mobile, side by side on lg+ */}
             <div className="flex flex-col lg:flex-row gap-4 shrink-0 lg:h-[340px]">
               <MemberDirectory
                 members={visible}
-                counts={counts}
+                membershipBorder={membershipBorder}
                 search={search}
                 setSearch={setSearch}
                 activeTab={activeTab}
@@ -337,7 +264,7 @@ export default function DashboardPage() {
                 events={doorEvents}
                 loading={doorEventsLoading}
                 error={doorEventsError}
-                className="lg:w-72 h-[340px] lg:h-full"
+                className="lg:w-80 h-[340px] lg:h-full"
               />
             </div>
 
@@ -348,24 +275,15 @@ export default function DashboardPage() {
 
       </main>
 
-      {/* ── Slide-out overlay ────────────────────────────────────────────── */}
-      <div
-        className={`fixed inset-0 bg-black/60 z-40 transition-opacity duration-200 ${panelOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
-        onClick={closePanel}
+      <MemberProfileDrawer
+        member={selectedMember}
+        open={panelOpen}
+        membershipBorder={membershipBorder}
+        onClose={closePanel}
+        onStatusChange={handleStatusChange}
+        onSaveAccessCode={handleAccessCodeSave}
+        updating={updatingStatus}
       />
-
-      {/* ── Member profile panel ─────────────────────────────────────────── */}
-      <div className={`fixed inset-y-0 right-0 w-full sm:w-[380px] bg-[#171717] border-l border-neutral-800 z-50 flex flex-col shadow-2xl transition-transform duration-200 ${panelOpen ? 'translate-x-0' : 'translate-x-full'}`}>
-        {selectedMember && (
-          <MemberPanel
-            member={selectedMember}
-            onClose={closePanel}
-            onStatusChange={handleStatusChange}
-            updating={updatingStatus}
-            onAccessCodeSave={handleAccessCodeSave}
-          />
-        )}
-      </div>
 
     </div>
   )
@@ -396,35 +314,20 @@ function ErrorState({ message, onRetry }) {
   )
 }
 
-// ── Metric card ───────────────────────────────────────────────────────────────
-
-function MetricCard({ label, value, color, delta, border = 'border-neutral-800' }) {
-  return (
-    <div className={`w-full min-w-0 overflow-hidden bg-[#1c1c1c] rounded-xl border ${border} px-3 py-3`}>
-      <p className="text-[9px] sm:text-[11px] font-semibold tracking-widest text-neutral-500 mb-1 sm:mb-2 truncate">{label}</p>
-      <div className="flex items-end justify-between">
-        <p className={`text-xl sm:text-3xl font-bold tracking-tight ${color}`}>{value}</p>
-        {delta && (
-          <span className="hidden sm:flex items-center gap-0.5 text-[11px] text-emerald-500 mb-1">
-            <ArrowUpRight size={12} />
-            {delta}
-          </span>
-        )}
-      </div>
-    </div>
-  )
-}
-
 // ── Member directory ──────────────────────────────────────────────────────────
 
-function MemberDirectory({ members, counts, search, setSearch, activeTab, setActiveTab, onRowClick, className = '' }) {
+function MemberDirectory({ members, membershipBorder, search, setSearch, activeTab, setActiveTab, onRowClick, className = '' }) {
   return (
     <div className={`bg-[#1c1c1c] rounded-xl border border-neutral-800 overflow-hidden flex flex-col ${className}`}>
 
-      {/* Header row */}
-      <div className="flex items-center justify-between gap-4 px-5 py-3.5 border-b border-neutral-800">
-        <h2 className="text-sm font-semibold text-white shrink-0">member directory</h2>
-        <div className="relative w-56">
+      {/* Header */}
+      <div className="px-5 py-3.5 border-b border-neutral-800">
+        <h2 className="text-sm font-semibold text-white">member directory</h2>
+      </div>
+
+      {/* Search */}
+      <div className="px-5 py-3 border-b border-neutral-800 shrink-0">
+        <div className="relative">
           <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500 pointer-events-none" />
           <input
             type="text"
@@ -437,23 +340,18 @@ function MemberDirectory({ members, counts, search, setSearch, activeTab, setAct
       </div>
 
       {/* Tabs */}
-      <div className="flex border-b border-neutral-800 px-4">
+      <div className="flex border-b border-neutral-800 px-4 shrink-0">
         {TABS.map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
-            className={`
-              py-2.5 px-2.5 mr-1 text-xs font-medium border-b-2 transition-colors
-              ${activeTab === tab
+            className={`py-2.5 px-2.5 mr-1 text-xs font-medium border-b-2 transition-colors ${
+              activeTab === tab
                 ? 'border-white text-white'
                 : 'border-transparent text-neutral-500 hover:text-neutral-300'
-              }
-            `}
+            }`}
           >
             {tab}
-            <span className={`ml-1.5 text-[10px] tabular-nums ${activeTab === tab ? 'text-neutral-400' : 'text-neutral-700'}`}>
-              {counts[tab]}
-            </span>
           </button>
         ))}
       </div>
@@ -468,37 +366,42 @@ function MemberDirectory({ members, counts, search, setSearch, activeTab, setAct
           <table className="w-full text-sm">
             <thead className="sticky top-0 bg-[#1c1c1c] z-10">
               <tr className="text-left border-b border-neutral-800">
-                <th className="px-5 py-2.5 text-[11px] font-semibold text-neutral-500 tracking-wider">name</th>
-                <th className="px-5 py-2.5 text-[11px] font-semibold text-neutral-500 tracking-wider">type</th>
-                <th className="px-5 py-2.5 text-[11px] font-semibold text-neutral-500 tracking-wider">status</th>
-                <th className="px-5 py-2.5 text-[11px] font-semibold text-neutral-500 tracking-wider">{dateLabelFor(activeTab)}</th>
+                <th className="px-5 py-2.5 text-[11px] font-medium text-neutral-500">name</th>
+                <th className="px-5 py-2.5 text-[11px] font-medium text-neutral-500">type</th>
+                <th className="px-5 py-2.5 text-[11px] font-medium text-neutral-500">{dateLabelFor(activeTab)}</th>
               </tr>
             </thead>
             <tbody>
-              {members.map((m) => (
-                <tr
-                  key={m.id}
-                  onClick={() => onRowClick(m)}
-                  className="border-b border-neutral-800/40 hover:bg-white/[0.025] transition-colors cursor-pointer"
-                >
-                  <td className="px-5 py-3 text-white font-medium whitespace-nowrap">
-                    {m.firstName} {m.lastName}
-                  </td>
-                  <td className="px-5 py-3">
-                    <span className={`inline-block text-[11px] font-medium px-2 py-0.5 rounded-full ${TYPE_BADGE[m.membershipType] ?? TYPE_BADGE.GENERAL}`}>
-                      {(m.membershipType ?? 'GENERAL').toLowerCase()}
-                    </span>
-                  </td>
-                  <td className="px-5 py-3">
-                    <span className={`inline-block text-[11px] font-medium px-2 py-0.5 rounded-full ${STATUS_PILL[m.status]}`}>
-                      {fmtStatus(m.status)}
-                    </span>
-                  </td>
-                  <td className="px-5 py-3 text-neutral-600 text-xs whitespace-nowrap">
-                    {fmtDate(statusDate(m))}
-                  </td>
-                </tr>
-              ))}
+              {members.map((m) => {
+                const initials = (m.firstName?.[0] ?? '') + (m.lastName?.[0] ?? '')
+                return (
+                  <tr
+                    key={m.id}
+                    onClick={() => onRowClick(m)}
+                    className="border-b border-white/5 hover:bg-white/[0.025] transition-colors cursor-pointer"
+                  >
+                    <td className="px-5 py-2 whitespace-nowrap">
+                      <div className="flex items-center gap-2.5">
+                        <div className={`w-8 h-8 rounded-full ${AVATAR_COLOR} flex items-center justify-center shrink-0`}>
+                          <span className="text-black text-xs font-medium select-none">{initials || '?'}</span>
+                        </div>
+                        <div>
+                          <p className="text-white text-sm">{m.firstName} {m.lastName}</p>
+                          <p className={`text-[11px] ${STATUS_TEXT[m.status] ?? 'text-zinc-500'}`}>{fmtStatus(m.status)}</p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-5 py-2">
+                      <span className={`inline-block text-[11px] font-medium border-l-2 pl-2 ${membershipBorder[m.membershipType] ?? membershipBorder.GENERAL}`}>
+                        {(m.membershipType ?? 'GENERAL').toLowerCase()}
+                      </span>
+                    </td>
+                    <td className="px-5 py-2 text-neutral-600 text-xs whitespace-nowrap">
+                      {fmtDate(statusDate(m))}
+                    </td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         )}
@@ -537,18 +440,20 @@ function DoorActivity({ events, loading, error, className = '' }) {
             <p className="text-[11px] text-neutral-600">no events in the last 24h</p>
           </div>
         ) : (
-          events.map((ev) => (
-            <div key={ev.id} className="flex items-center gap-3 px-4 py-2.5">
-              <span
-                className={`w-1.5 h-1.5 rounded-full shrink-0 ${ev.ok ? 'bg-emerald-500' : 'bg-red-500'}`}
-              />
-              <div className="min-w-0 flex-1">
-                <p className="text-xs text-white font-medium truncate">{ev.name}</p>
-                <p className="text-[11px] text-neutral-500">{ev.event}</p>
+          events.map((ev) => {
+            const isUnlock = ev.event?.toLowerCase().includes('unlock')
+            const EventIcon = isUnlock ? Unlock : Lock
+            return (
+              <div key={ev.id} className="flex items-center gap-3 px-4 py-2.5">
+                <EventIcon size={13} className={`shrink-0 ${ev.ok ? 'text-emerald-500' : 'text-red-400'}`} />
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs text-white font-medium truncate">{ev.name || 'unknown'}</p>
+                  <p className="text-[11px] text-neutral-500">{ev.event}</p>
+                </div>
+                <span className="text-[11px] text-neutral-600 shrink-0">{sinceISO(ev.createdAt)}</span>
               </div>
-              <span className="text-[11px] text-neutral-600 shrink-0">{sinceISO(ev.createdAt)}</span>
-            </div>
-          ))
+            )
+          })
         )}
       </div>
     </div>
@@ -573,7 +478,7 @@ const CUSTOM_TOOLTIP = ({ active, payload, label }) => {
 
 function RetentionChart({ data }) {
   return (
-    <div className="min-w-0 overflow-hidden bg-[#1c1c1c] rounded-xl border border-neutral-800 px-5 pt-4 pb-4 flex flex-col">
+    <div className="min-w-0 overflow-hidden bg-[#1c1c1c] rounded-xl px-5 pt-4 pb-4 flex flex-col">
       <div className="flex items-center justify-between mb-3 shrink-0">
         <div className="flex items-center gap-2">
           <TrendingUp size={13} className="text-neutral-400" />
@@ -592,7 +497,7 @@ function RetentionChart({ data }) {
           <AreaChart data={data} margin={{ top: 4, right: 4, left: -24, bottom: 0 }}>
             <defs>
               <linearGradient id="gActive" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%"  stopColor="#10b981" stopOpacity={0.25} />
+                <stop offset="5%"  stopColor="#10b981" stopOpacity={0.10} />
                 <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
               </linearGradient>
               <linearGradient id="gFrozen" x1="0" y1="0" x2="0" y2="1">
@@ -631,167 +536,3 @@ function RetentionChart({ data }) {
 
 // ── Member profile panel ──────────────────────────────────────────────────────
 
-function PanelSection({ icon: Icon, title, children }) {
-  return (
-    <div>
-      <div className="flex items-center gap-1.5 mb-2">
-        <Icon size={11} className="text-neutral-600" />
-        <p className="text-[11px] font-semibold tracking-widest text-neutral-600">{title}</p>
-      </div>
-      <div className="rounded-lg border border-neutral-800 divide-y divide-neutral-800 overflow-hidden">
-        {children}
-      </div>
-    </div>
-  )
-}
-
-function PanelField({ label, value, mono = false }) {
-  return (
-    <div className="flex items-center justify-between px-3 py-2.5 bg-[#1c1c1c]">
-      <span className="text-xs text-neutral-500 shrink-0">{label}</span>
-      <span className={`text-xs text-white text-right ml-4 truncate max-w-[200px] ${mono ? 'font-mono text-[11px]' : ''}`}>
-        {value || '—'}
-      </span>
-    </div>
-  )
-}
-
-function MemberPanel({ member, onClose, onStatusChange, updating, onAccessCodeSave }) {
-  const initials      = (member.firstName?.[0] ?? '') + (member.lastName?.[0] ?? '')
-  const color         = avatarBg(member.id)
-  const [codeInput,   setCodeInput]   = useState(member.accessCode ?? '')
-  const [savingCode,  setSavingCode]  = useState(false)
-
-  async function handleCodeSave() {
-    setSavingCode(true)
-    await onAccessCodeSave(member.id, codeInput.trim())
-    setSavingCode(false)
-  }
-
-  return (
-    <div className="flex flex-col h-full">
-
-      {/* Header */}
-      <div className="flex items-center justify-between px-5 h-14 shrink-0 border-b border-neutral-800">
-        <p className="text-sm font-semibold text-white">member profile</p>
-        <button
-          onClick={onClose}
-          className="p-1.5 rounded-lg text-neutral-500 hover:text-white hover:bg-white/5 transition-colors"
-        >
-          <X size={15} />
-        </button>
-      </div>
-
-      {/* Scrollable body */}
-      <div className="flex-1 overflow-y-auto p-5 space-y-5">
-
-        {/* Avatar + name + badges */}
-        <div className="flex flex-col items-center text-center gap-3 pt-1 pb-2">
-          <div className={`w-[60px] h-[60px] rounded-full flex items-center justify-center shrink-0 ${color}`}>
-            <span className="text-white font-bold text-lg tracking-tight select-none">
-              {initials || '?'}
-            </span>
-          </div>
-          <div>
-            <p className="text-white font-semibold text-base leading-tight">
-              {member.firstName} {member.lastName}
-            </p>
-            <p className="text-neutral-500 text-xs mt-0.5">member</p>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className={`text-[11px] font-medium px-2.5 py-0.5 rounded-full ${STATUS_PILL[member.status]}`}>
-              {fmtStatus(member.status)}
-            </span>
-            <span className={`text-[11px] font-medium px-2.5 py-0.5 rounded-full ${TYPE_BADGE[member.membershipType] ?? TYPE_BADGE.GENERAL}`}>
-              {(member.membershipType ?? 'GENERAL').toLowerCase()}
-            </span>
-          </div>
-        </div>
-
-        {/* Contact */}
-        <PanelSection icon={Phone} title="contact">
-          <PanelField label="email" value={member.email} />
-          <PanelField label="phone" value={member.phone} />
-        </PanelSection>
-
-        {/* Membership */}
-        <PanelSection icon={KeyRound} title="membership">
-          <PanelField label="type"   value={(member.membershipType ?? 'GENERAL').toLowerCase()} />
-          <div className="flex items-center justify-between px-3 py-2.5 bg-[#1c1c1c]">
-            <span className="text-xs text-neutral-500 shrink-0">code</span>
-            <div className="flex items-center gap-2 ml-4">
-              <input
-                type="text"
-                value={codeInput}
-                onChange={e => setCodeInput(e.target.value)}
-                placeholder="——"
-                maxLength={6}
-                className="bg-[#252525] border border-neutral-700 rounded px-2 py-1 text-xs text-white text-right placeholder-neutral-600 focus:outline-none focus:border-neutral-500 w-20"
-              />
-              <button
-                onClick={() => setCodeInput(String(Math.floor(1000 + Math.random() * 9000)))}
-                title="generate random 4-digit code"
-                className="text-[10px] px-2 py-1 rounded bg-white/5 text-neutral-400 hover:text-white hover:bg-white/10 transition-colors shrink-0"
-              >
-                gen
-              </button>
-              <button
-                onClick={handleCodeSave}
-                disabled={savingCode || codeInput.trim() === (member.accessCode ?? '')}
-                className="text-[10px] px-2 py-1 rounded bg-white/10 text-white hover:bg-white/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shrink-0"
-              >
-                {savingCode ? '…' : 'save'}
-              </button>
-            </div>
-          </div>
-          <PanelField label="joined" value={fmtDate(member.createdAt)} />
-          {member.status === 'FROZEN'    && <PanelField label="frozen"   value={fmtDate(member.dateFrozen)} />}
-          {member.status === 'CANCELLED' && <PanelField label="canceled" value={fmtDate(member.dateCanceled)} />}
-        </PanelSection>
-
-        {/* Stripe */}
-        {(member.stripeCustomerId || member.stripeSubscriptionId) && (
-          <PanelSection icon={CreditCard} title="stripe">
-            <PanelField label="customer id"     value={member.stripeCustomerId}     mono />
-            <PanelField label="subscription id" value={member.stripeSubscriptionId} mono />
-          </PanelSection>
-        )}
-
-      </div>
-
-      {/* Action buttons */}
-      {member.status !== 'CANCELLED' && (
-        <div className="shrink-0 px-5 py-4 border-t border-neutral-800 space-y-2">
-          {member.status === 'ACTIVE' && (
-            <>
-              <button
-                onClick={() => onStatusChange(member.id, 'FROZEN')}
-                disabled={updating}
-                className="w-full py-2 rounded-lg text-sm font-medium bg-sky-500/10 text-sky-400 hover:bg-sky-500/20 disabled:opacity-40 transition-colors"
-              >
-                freeze membership
-              </button>
-              <button
-                onClick={() => onStatusChange(member.id, 'CANCELLED')}
-                disabled={updating}
-                className="w-full py-2 rounded-lg text-sm font-medium bg-red-500/10 text-red-400 hover:bg-red-500/20 disabled:opacity-40 transition-colors"
-              >
-                cancel membership
-              </button>
-            </>
-          )}
-          {member.status === 'FROZEN' && (
-            <button
-              onClick={() => onStatusChange(member.id, 'ACTIVE')}
-              disabled={updating}
-              className="w-full py-2 rounded-lg text-sm font-medium bg-sky-500/10 text-sky-400 hover:bg-sky-500/20 disabled:opacity-40 transition-colors"
-            >
-              resume membership
-            </button>
-          )}
-        </div>
-      )}
-
-    </div>
-  )
-}

@@ -423,14 +423,14 @@ export default function GuestPage() {
             <div className="grid grid-cols-2 gap-3">
               <Field label="first name" required>
                 <input
-                  type="text" placeholder="Jane"
+                  type="text" placeholder="jane"
                   value={form.firstName} onChange={e => setField('firstName', e.target.value)}
                   className={INPUT} required
                 />
               </Field>
               <Field label="last name" required>
                 <input
-                  type="text" placeholder="Smith"
+                  type="text" placeholder="smith"
                   value={form.lastName} onChange={e => setField('lastName', e.target.value)}
                   className={INPUT} required
                 />
@@ -480,7 +480,7 @@ export default function GuestPage() {
             <div className="grid grid-cols-2 gap-3">
               <Field label="name" required>
                 <input
-                  type="text" placeholder="John Smith"
+                  type="text" placeholder="john smith"
                   value={form.emergencyName} onChange={e => setField('emergencyName', e.target.value)}
                   className={INPUT} required
                 />
@@ -495,7 +495,7 @@ export default function GuestPage() {
             </div>
             <Field label="relationship">
               <input
-                type="text" placeholder="Spouse, parent, friend…"
+                type="text" placeholder="spouse, parent, friend…"
                 value={form.emergencyRelationship} onChange={e => setField('emergencyRelationship', e.target.value)}
                 className={INPUT}
               />
@@ -625,7 +625,7 @@ export default function GuestPage() {
             <Field label="full name" required>
               <input
                 type="text"
-                placeholder="Jane Smith"
+                placeholder="jane smith"
                 value={returningName}
                 onChange={e => setReturningName(e.target.value)}
                 className={INPUT}

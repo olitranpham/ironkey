@@ -129,8 +129,11 @@ export async function POST(request, { params }) {
 
     // ── Parse form body ───────────────────────────────────────────────────────
     const rawBody   = await request.text()
+    console.log('[jotform/guest-pass] RAW BODY:', rawBody)
     const urlParams = new URLSearchParams(rawBody)
+    console.log('[jotform/guest-pass] PARSED FIELDS:', JSON.stringify(Object.fromEntries(urlParams)))
     const fieldMap  = buildFieldMap(urlParams)
+    console.log('[jotform/guest-pass] FIELD MAP:', JSON.stringify(fieldMap))
 
     // ── Extract fields ────────────────────────────────────────────────────────
     const name                = getFullName(fieldMap)
