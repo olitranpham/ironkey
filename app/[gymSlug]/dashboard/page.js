@@ -240,7 +240,7 @@ export default function DashboardPage() {
       </header>
 
       {/* ── Body ─────────────────────────────────────────────────────────── */}
-      <main className="flex-1 flex flex-col p-4 md:p-5 pb-4 md:pb-5 gap-4 overflow-y-auto lg:overflow-hidden min-h-0">
+      <main className="flex-1 flex flex-col p-4 md:p-5 pb-4 md:pb-5 gap-4 overflow-y-auto lg:overflow-hidden lg:min-h-0">
 
         {loading ? (
           <LoadingState />
@@ -249,7 +249,7 @@ export default function DashboardPage() {
         ) : (
           <>
             {/* Mid row — stacks vertically on mobile, side by side on lg+ */}
-            <div className="flex flex-col lg:flex-row gap-4 flex-[2] min-h-0">
+            <div className="flex flex-col lg:flex-row gap-4 lg:flex-[2] lg:min-h-0">
               <MemberDirectory
                 members={visible}
                 membershipBorder={membershipBorder}
@@ -258,13 +258,13 @@ export default function DashboardPage() {
                 activeTab={activeTab}
                 setActiveTab={setActiveTab}
                 onRowClick={openPanel}
-                className="flex-1 min-h-0"
+                className="lg:flex-1 lg:min-h-0"
               />
               <DoorActivity
                 events={doorEvents}
                 loading={doorEventsLoading}
                 error={doorEventsError}
-                className="lg:w-80 min-h-[280px] lg:min-h-0"
+                className="lg:w-80 lg:min-h-0"
               />
             </div>
 
@@ -318,7 +318,7 @@ function ErrorState({ message, onRetry }) {
 
 function MemberDirectory({ members, membershipBorder, search, setSearch, activeTab, setActiveTab, onRowClick, className = '' }) {
   return (
-    <div className={`bg-white/[0.03] rounded-xl border border-white/5 overflow-hidden flex flex-col ${className}`}>
+    <div className={`bg-white/[0.03] rounded-xl border border-white/5 lg:overflow-hidden flex flex-col ${className}`}>
 
       {/* Header */}
       <div className="px-5 py-3.5 border-b border-neutral-800">
@@ -357,7 +357,7 @@ function MemberDirectory({ members, membershipBorder, search, setSearch, activeT
       </div>
 
       {/* Table */}
-      <div className="overflow-y-auto flex-1">
+      <div className="lg:overflow-y-auto lg:flex-1">
         {members.length === 0 ? (
           <div className="flex items-center justify-center h-32 text-sm text-neutral-600">
             no members match
@@ -408,7 +408,7 @@ function DoorActivity({ events, loading, error, className = '' }) {
       </div>
 
       {/* Body */}
-      <div className="flex-1 overflow-auto divide-y divide-neutral-800/50">
+      <div className="lg:flex-1 lg:overflow-auto divide-y divide-neutral-800/50">
         {loading ? (
           <div className="flex items-center justify-center h-24">
             <RefreshCw size={14} className="text-neutral-600 animate-spin" />
@@ -460,7 +460,7 @@ const CUSTOM_TOOLTIP = ({ active, payload, label }) => {
 
 function RetentionChart({ data }) {
   return (
-    <div className="flex-1 min-h-0 min-w-0 overflow-hidden bg-white/[0.03] border border-white/5 rounded-xl px-5 pt-4 pb-4 flex flex-col">
+    <div className="min-h-[300px] lg:flex-1 lg:min-h-0 min-w-0 overflow-hidden bg-white/[0.03] border border-white/5 rounded-xl px-5 pt-4 pb-4 flex flex-col">
       <div className="flex items-center justify-between mb-3 shrink-0">
         <div className="flex items-center gap-2">
           <TrendingUp size={13} className="text-neutral-400" />

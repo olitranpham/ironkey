@@ -127,7 +127,7 @@ function PortalLayout({ gymSlug, children }) {
   const isActive = (slug) => pathname === `/${gymSlug}/${slug}`
 
   return (
-    <div className="flex h-screen overflow-hidden bg-[#1c1c1c]">
+    <div className="flex h-dvh overflow-hidden bg-[#1c1c1c]">
 
       {/* ── Mobile backdrop ───────────────────────────────────────────────── */}
       {mobileOpen && (

@@ -83,7 +83,7 @@ function DrawerContent({ member, membershipBorder, onClose, onStatusChange, onSa
       </div>
 
       {/* Scrollable body */}
-      <div className="flex-1 overflow-y-auto p-5 space-y-5">
+      <div className="flex-1 overflow-y-auto p-5 space-y-5" style={{ WebkitOverflowScrolling: 'touch' }}>
 
         {/* Avatar + name + status */}
         <div className="flex flex-col items-center text-center gap-2 pt-1 pb-2">
