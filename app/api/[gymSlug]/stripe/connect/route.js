@@ -28,7 +28,7 @@ export async function GET(request, { params }) {
   url.searchParams.set('state', gymSlug)
   url.searchParams.set('redirect_uri', redirectUri)
 
-  return NextResponse.redirect(url.toString())
+  return NextResponse.json({ url: url.toString() })
 }
 
 /**
