@@ -217,12 +217,12 @@ export default function OverduePage() {
 
       {/* ── Overlay ───────────────────────────────────────────────────────────── */}
       <div
-        className={`fixed inset-0 bg-black/60 z-40 transition-opacity duration-200 ${panelOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+        className={`fixed inset-0 bg-black/60 z-30 transition-opacity duration-200 ${panelOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
         onClick={closePanel}
       />
 
       {/* ── Overdue panel ─────────────────────────────────────────────────────── */}
-      <div className={`fixed inset-y-0 right-0 w-full sm:w-[360px] bg-[#171717] border-l border-neutral-800 z-50 flex flex-col shadow-2xl transition-transform duration-200 ${panelOpen ? 'translate-x-0' : 'translate-x-full'}`}>
+      <div className={`fixed inset-y-0 right-0 w-full sm:w-[360px] bg-[#171717] border-l border-neutral-800 z-40 flex flex-col shadow-2xl transition-transform duration-200 ${panelOpen ? 'translate-x-0' : 'translate-x-full'}`}>
         {selectedRow && (
           <OverduePanel
             row={selectedRow}
@@ -238,7 +238,7 @@ export default function OverduePage() {
         const copy = CONFIRM_COPY[confirmModal.action]
         const name = `${confirmModal.row.firstName} ${confirmModal.row.lastName}`
         return (
-          <div className="fixed inset-0 z-60 flex items-center justify-center p-4">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-black/70" onClick={!actionLoading ? () => setConfirmModal(null) : undefined} />
             <div className="relative bg-[#1c1c1c] border border-neutral-800 rounded-xl w-full max-w-sm p-6 shadow-2xl">
               <div className="flex items-center gap-3 mb-4">
