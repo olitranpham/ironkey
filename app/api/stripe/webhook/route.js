@@ -212,6 +212,18 @@ export async function POST(request) {
     })
     console.log('[platform/webhook] access code generated for member:', member.id, '| code:', accessCode)
 
+    const zapierMemberUrl = process.env.ZAPIER_MEMBER_WEBHOOK_URL
+    console.log('[platform/webhook] firing Zapier member webhook:', zapierMemberUrl)
+    if (zapierMemberUrl) {
+      fetch(zapierMemberUrl, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ firstName, lastName, email, accessCode, membershipType }),
+      })
+        .then(r => console.log('[platform/webhook] Zapier member webhook status:', r.status))
+        .catch(e => console.error('[platform/webhook] Zapier member webhook error:', e.message))
+    }
+
     if (gym.seamApiKey) {
       const deviceId    = gym.seamDeviceId ?? process.env.SEAM_DEVICE_ID
       const seamHeaders = {

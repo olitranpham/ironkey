@@ -36,7 +36,10 @@
       "Bash(GYM_SLUG=triumph-barbell node import-oasis.js)",
       "Bash(mkdir -p /Users/olitranpham/ironkey/app/api/\\\\[gymSlug\\\\]/stripe/revenue)",
       "Bash(mkdir -p /Users/olitranpham/ironkey/app/\\\\[gymSlug\\\\]/revenue)",
-      "Bash(xargs sed:*)"
+      "Bash(xargs sed:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)"
     ]
   }
 }
