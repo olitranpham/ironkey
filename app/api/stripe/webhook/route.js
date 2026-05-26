@@ -46,7 +46,7 @@ export async function POST(request) {
     return NextResponse.json({ received: true })
   }
 
-  const gym = await prisma.gym.findUnique({
+  const gym = await prisma.gym.findFirst({
     where:  { stripeAccountId: connectedAccountId },
     select: {
       id:          true,
