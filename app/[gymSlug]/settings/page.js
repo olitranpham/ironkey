@@ -49,12 +49,7 @@ function SettingsPage() {
   const [disconnecting,  setDisconnecting]  = useState(false)
   const [stripeMsg,      setStripeMsg]      = useState(null) // { type: 'ok'|'err', text }
 
-  const [zapierGuestUrl,   setZapierGuestUrl]   = useState('')
-  const [zapierMemberUrl,  setZapierMemberUrl]  = useState('')
-  const [zapierSaving,     setZapierSaving]     = useState(false)
-  const [zapierMsg,        setZapierMsg]        = useState(null)
-
-  const [curPw,     setCurPw]     = useState('')
+const [curPw,     setCurPw]     = useState('')
   const [newPw,     setNewPw]     = useState('')
   const [confirmPw, setConfirmPw] = useState('')
   const [pwSaving,  setPwSaving]  = useState(false)
@@ -72,8 +67,6 @@ function SettingsPage() {
       if (!res.ok) return
       const { settings } = await res.json()
       setConnected(Boolean(settings.hasStripeConnect))
-      setZapierGuestUrl(settings.zapierGuestWebhookUrl   ?? '')
-      setZapierMemberUrl(settings.zapierMemberWebhookUrl ?? '')
     } finally {
       setSettingsLoaded(true)
     }
@@ -135,30 +128,6 @@ function SettingsPage() {
     }
   }
 
-  // ── Save Zapier URLs ───────────────────────────────────────────────────────
-  async function saveZapier(e) {
-    e.preventDefault()
-    setZapierSaving(true); setZapierMsg(null)
-    try {
-      const res = await fetch(`/api/${gymSlug}/settings`, {
-        method:  'PATCH',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` },
-        body:    JSON.stringify({
-          type:                  'zapier',
-          zapierGuestWebhookUrl:  zapierGuestUrl.trim(),
-          zapierMemberWebhookUrl: zapierMemberUrl.trim(),
-        }),
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error)
-      setZapierMsg({ type: 'ok', text: 'zapier urls saved.' })
-      setTimeout(() => setZapierMsg(null), 2500)
-    } catch (err) {
-      setZapierMsg({ type: 'err', text: err.message ?? 'save failed' })
-    } finally {
-      setZapierSaving(false)
-    }
-  }
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
@@ -205,17 +174,7 @@ function SettingsPage() {
                   </button>
                 ) : (
                   <a
-                    href={(() => {
-                      const clientId  = process.env.NEXT_PUBLIC_STRIPE_CLIENT_ID
-                      const appUrl    = process.env.NEXT_PUBLIC_APP_URL
-                      const url       = new URL('https://connect.stripe.com/oauth/authorize')
-                      url.searchParams.set('response_type', 'code')
-                      url.searchParams.set('client_id', clientId)
-                      url.searchParams.set('scope', 'read_write')
-                      url.searchParams.set('state', gymSlug)
-                      url.searchParams.set('redirect_uri', `${appUrl}/api/stripe/callback`)
-                      return url.toString()
-                    })()}
+                    href={`/api/${gymSlug}/stripe/connect`}
                     className="flex items-center justify-center w-full py-2 rounded-lg text-xs font-medium bg-[#635BFF] text-white hover:bg-[#4F46E5] transition-colors"
                   >
                     connect stripe
@@ -225,47 +184,7 @@ function SettingsPage() {
             </div>
           </Section>
 
-          {/* ── Zapier ─────────────────────────────────────────────────────── */}
-          <Section title="zapier">
-            <form onSubmit={saveZapier} className="space-y-4">
-              <div>
-                <label className="block text-xs text-neutral-500 mb-1.5">guest webhook url</label>
-                <input
-                  type="url"
-                  value={zapierGuestUrl}
-                  onChange={e => setZapierGuestUrl(e.target.value)}
-                  placeholder="https://hooks.zapier.com/hooks/catch/..."
-                  className="w-full bg-[#292929] border border-neutral-700 rounded-lg px-3 py-2 text-xs text-white placeholder-neutral-600 focus:outline-none focus:border-neutral-500 focus:ring-1 focus:ring-neutral-500 transition-colors"
-                />
-              </div>
-              <div>
-                <label className="block text-xs text-neutral-500 mb-1.5">member webhook url</label>
-                <input
-                  type="url"
-                  value={zapierMemberUrl}
-                  onChange={e => setZapierMemberUrl(e.target.value)}
-                  placeholder="https://hooks.zapier.com/hooks/catch/..."
-                  className="w-full bg-[#292929] border border-neutral-700 rounded-lg px-3 py-2 text-xs text-white placeholder-neutral-600 focus:outline-none focus:border-neutral-500 focus:ring-1 focus:ring-neutral-500 transition-colors"
-                />
-              </div>
-              {zapierMsg && (
-                <p className={`text-xs ${zapierMsg.type === 'ok' ? 'text-emerald-400' : 'text-red-400'}`}>
-                  {zapierMsg.text}
-                </p>
-              )}
-              <div className="flex justify-end">
-                <button
-                  type="submit"
-                  disabled={zapierSaving}
-                  className="px-4 py-2 rounded-lg text-xs font-medium bg-white text-[#1c1c1c] hover:bg-neutral-200 disabled:opacity-40 transition-colors"
-                >
-                  {zapierSaving ? 'saving…' : 'save'}
-                </button>
-              </div>
-            </form>
-          </Section>
-
-          {/* ── Change password ────────────────────────────────────────────── */}
+{/* ── Change password ────────────────────────────────────────────── */}
           <Section title="change password">
             <form onSubmit={savePassword} className="space-y-4">
               <MaskedInput label="current password" value={curPw}     onChange={setCurPw} />

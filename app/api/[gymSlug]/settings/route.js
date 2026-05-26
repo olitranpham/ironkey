@@ -13,12 +13,10 @@ export async function GET(request) {
     const gym = await prisma.gym.findUnique({
       where:  { id: gymId },
       select: {
-        name:                   true,
-        slug:                   true,
-        stripeAccountId:        true,
-        seamApiKey:             true,
-        zapierGuestWebhookUrl:  true,
-        zapierMemberWebhookUrl: true,
+        name:            true,
+        slug:            true,
+        stripeAccountId: true,
+        seamApiKey:      true,
       },
     })
 
@@ -28,10 +26,8 @@ export async function GET(request) {
       settings: {
         name:                  gym.name,
         slug:                  gym.slug,
-        hasStripeConnect:      Boolean(gym.stripeAccountId),
-        hasSeam:               Boolean(gym.seamApiKey),
-        zapierGuestWebhookUrl: gym.zapierGuestWebhookUrl  ?? '',
-        zapierMemberWebhookUrl: gym.zapierMemberWebhookUrl ?? '',
+        hasStripeConnect: Boolean(gym.stripeAccountId),
+        hasSeam:          Boolean(gym.seamApiKey),
       },
     })
   } catch (error) {
@@ -145,33 +141,6 @@ export async function PATCH(request) {
         settings: {
           hasSeam:      Boolean(updated.seamApiKey),
           seamDeviceId: updated.seamDeviceId ?? '',
-        },
-      })
-    }
-
-    // ── Zapier webhook URLs ──────────────────────────────────────────────────
-    if (type === 'zapier') {
-      const data = {}
-      const guestUrl  = body.zapierGuestWebhookUrl?.trim()
-      const memberUrl = body.zapierMemberWebhookUrl?.trim()
-
-      if (guestUrl  !== undefined) data.zapierGuestWebhookUrl  = guestUrl  || null
-      if (memberUrl !== undefined) data.zapierMemberWebhookUrl = memberUrl || null
-
-      if (Object.keys(data).length === 0) {
-        return NextResponse.json({ error: 'No values provided' }, { status: 400 })
-      }
-
-      await prisma.gym.update({ where: { id: gymId }, data })
-
-      const updated = await prisma.gym.findUnique({
-        where:  { id: gymId },
-        select: { zapierGuestWebhookUrl: true, zapierMemberWebhookUrl: true },
-      })
-      return NextResponse.json({
-        settings: {
-          zapierGuestWebhookUrl:  updated.zapierGuestWebhookUrl  ?? '',
-          zapierMemberWebhookUrl: updated.zapierMemberWebhookUrl ?? '',
         },
       })
     }

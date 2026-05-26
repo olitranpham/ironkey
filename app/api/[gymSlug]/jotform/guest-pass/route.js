@@ -164,10 +164,9 @@ export async function POST(request, { params }) {
     const gym = await prisma.gym.findUnique({
       where:  { slug: gymSlug },
       select: {
-        id:                    true,
-        seamApiKey:            true,
-        seamDeviceId:          true,
-        zapierGuestWebhookUrl: true,
+        id:          true,
+        seamApiKey:  true,
+        seamDeviceId: true,
       },
     })
     if (!gym) return NextResponse.json({ error: 'Gym not found' }, { status: 404 })
@@ -309,8 +308,9 @@ export async function POST(request, { params }) {
     }
 
     // ── Notify Zapier (fire-and-forget) ───────────────────────────────────────
-    if (gym.zapierGuestWebhookUrl) {
-      fetch(gym.zapierGuestWebhookUrl, {
+    const zapierGuestUrl = process.env.ZAPIER_GUEST_WEBHOOK_URL
+    if (zapierGuestUrl) {
+      fetch(zapierGuestUrl, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({ name, email, accessCode, passType }),

@@ -59,7 +59,10 @@ export async function GET(request) {
 
     await prisma.gym.update({
       where: { id: gym.id },
-      data:  { stripeAccountId },
+      data:  {
+        stripeAccountId,
+        stripeSecretKey: tokenData.access_token ?? null,
+      },
     })
 
     console.log('[stripe/callback] connected account %s saved for gym %s', stripeAccountId, gymSlug)

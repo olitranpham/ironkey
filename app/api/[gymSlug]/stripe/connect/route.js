@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import Stripe from 'stripe'
 import prisma from '@/lib/prisma'
 
 const STRIPE_OAUTH_URL = 'https://connect.stripe.com/oauth/authorize'
@@ -42,9 +43,28 @@ export async function DELETE(request) {
       return NextResponse.json({ error: 'Only the gym owner can disconnect Stripe' }, { status: 403 })
     }
 
+    const gym = await prisma.gym.findUnique({
+      where:  { id: gymId },
+      select: { stripeAccountId: true },
+    })
+
+    // Revoke the OAuth grant on Stripe's side (fire-and-forget — DB update is authoritative)
+    if (gym?.stripeAccountId && process.env.STRIPE_CLIENT_ID && process.env.STRIPE_SECRET_KEY) {
+      try {
+        const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2024-06-20' })
+        await stripe.oauth.deauthorize({
+          client_id:      process.env.STRIPE_CLIENT_ID,
+          stripe_user_id: gym.stripeAccountId,
+        })
+        console.log('[stripe/connect DELETE] deauthorized account:', gym.stripeAccountId)
+      } catch (e) {
+        console.warn('[stripe/connect DELETE] deauthorize failed (continuing):', e.message)
+      }
+    }
+
     await prisma.gym.update({
       where: { id: gymId },
-      data:  { stripeAccountId: null },
+      data:  { stripeAccountId: null, stripeSecretKey: null },
     })
 
     return NextResponse.json({ ok: true })
