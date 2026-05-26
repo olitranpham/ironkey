@@ -241,7 +241,7 @@ export default function MembersPage() {
           </div>
 
           {/* Table body */}
-          <div className="md:flex-1 md:overflow-y-auto">
+          <div className="md:flex-1 md:overflow-y-auto overflow-x-auto">
             {loading ? (
               <div className="flex items-center justify-center h-48 gap-2">
                 <RefreshCw size={16} className="text-neutral-600 animate-spin" />

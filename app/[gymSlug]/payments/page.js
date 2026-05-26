@@ -59,6 +59,11 @@ export default function PaymentsPage() {
   const [actionLoading, setActionLoading] = useState(false)
   const [actionError,   setActionError]   = useState(null)
 
+  useEffect(() => {
+    document.body.style.overflow = panelOpen ? 'hidden' : ''
+    return () => { document.body.style.overflow = '' }
+  }, [panelOpen])
+
   const fetchMembers = useCallback(async () => {
     setLoading(true)
     try {
@@ -198,7 +203,7 @@ export default function PaymentsPage() {
           </div>
 
           {/* Body */}
-          <div className="md:flex-1 md:overflow-y-auto">
+          <div className="md:flex-1 md:overflow-y-auto overflow-x-auto">
             {loading ? (
               <div className="flex items-center justify-center h-48 gap-2">
                 <RefreshCw size={16} className="text-neutral-600 animate-spin" />

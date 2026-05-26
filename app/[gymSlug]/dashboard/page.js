@@ -357,7 +357,7 @@ function MemberDirectory({ members, membershipBorder, search, setSearch, activeT
       </div>
 
       {/* Table */}
-      <div className="lg:overflow-y-auto lg:flex-1">
+      <div className="lg:overflow-y-auto lg:flex-1 overflow-x-auto">
         {members.length === 0 ? (
           <div className="flex items-center justify-center h-32 text-sm text-neutral-600">
             no members match

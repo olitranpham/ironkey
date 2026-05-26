@@ -208,7 +208,7 @@ export default function DoorAccessPage() {
         <div className="flex-1 flex flex-col bg-white/[0.03] rounded-xl border border-white/5 md:overflow-hidden md:min-h-0">
 
           {/* Body */}
-          <div className="md:flex-1 md:overflow-y-auto">
+          <div className="md:flex-1 md:overflow-y-auto overflow-x-auto">
             {loading ? (
               <div className="flex items-center justify-center h-48 gap-2">
                 <RefreshCw size={16} className="text-neutral-600 animate-spin" />

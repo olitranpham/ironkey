@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { X, Phone, KeyRound } from 'lucide-react'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -200,6 +200,11 @@ export default function MemberProfileDrawer({
   onSaveAccessCode,
   updating = false,
 }) {
+  useEffect(() => {
+    document.body.style.overflow = open ? 'hidden' : ''
+    return () => { document.body.style.overflow = '' }
+  }, [open])
+
   return (
     <>
       <div

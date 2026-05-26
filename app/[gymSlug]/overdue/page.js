@@ -72,6 +72,11 @@ export default function OverduePage() {
     closeTimer.current = setTimeout(() => setSelectedRow(null), 220)
   }
 
+  useEffect(() => {
+    document.body.style.overflow = panelOpen ? 'hidden' : ''
+    return () => { document.body.style.overflow = '' }
+  }, [panelOpen])
+
   const fetchOverdue = useCallback(async () => {
     setLoading(true)
     try {
@@ -161,7 +166,7 @@ export default function OverduePage() {
 
         {/* Table card */}
         <div className="flex-1 flex flex-col bg-white/[0.03] rounded-xl border border-white/5 md:overflow-hidden md:min-h-0">
-          <div className="md:flex-1 md:overflow-y-auto">
+          <div className="md:flex-1 md:overflow-y-auto overflow-x-auto">
             {loading ? (
               <div className="flex items-center justify-center h-48 gap-2">
                 <div className="w-4 h-4 border-2 border-neutral-600 border-t-neutral-400 rounded-full animate-spin" />
