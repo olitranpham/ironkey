@@ -183,14 +183,14 @@ export default function DoorAccessPage() {
   }
 
   return (
-    <div className="flex-1 flex flex-col md:overflow-hidden">
+    <div className="md:flex-1 flex flex-col md:overflow-hidden">
 
       {/* Top bar */}
       <header className="h-14 shrink-0 bg-[#1c1c1c] border-b border-neutral-800 flex items-center px-6">
         <h1 className="text-sm font-semibold text-white">door access</h1>
       </header>
 
-      <main className="flex-1 flex flex-col p-5 gap-4 md:overflow-hidden md:min-h-0">
+      <main className="md:flex-1 flex flex-col p-5 gap-4 md:overflow-hidden md:min-h-0">
 
         {/* Search bar */}
         <div className="shrink-0 relative w-full sm:w-80">
@@ -205,7 +205,7 @@ export default function DoorAccessPage() {
         </div>
 
         {/* Table card */}
-        <div className="flex-1 flex flex-col bg-white/[0.03] rounded-xl border border-white/5 md:overflow-hidden md:min-h-0">
+        <div className="md:flex-1 flex flex-col bg-white/[0.03] rounded-xl border border-white/5 md:overflow-hidden md:min-h-0">
 
           {/* Body */}
           <div className="md:flex-1 md:overflow-y-auto overflow-x-auto">

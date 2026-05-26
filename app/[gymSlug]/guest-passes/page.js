@@ -258,14 +258,14 @@ export default function GuestPassesPage() {
     })
 
   return (
-    <div className="flex-1 flex flex-col md:overflow-hidden" style={{ fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif" }}>
+    <div className="md:flex-1 flex flex-col md:overflow-hidden" style={{ fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif" }}>
 
       {/* Top bar */}
       <header className="h-14 shrink-0 bg-[#1c1c1c] border-b border-neutral-800 flex items-center px-6">
         <h1 className="text-sm font-semibold text-white">guest passes</h1>
       </header>
 
-      <main className="flex-1 flex flex-col p-5 gap-4 md:overflow-hidden md:min-h-0">
+      <main className="md:flex-1 flex flex-col p-5 gap-4 md:overflow-hidden md:min-h-0">
 
         {/* Search */}
         <div className="shrink-0 relative w-80">
@@ -280,7 +280,7 @@ export default function GuestPassesPage() {
         </div>
 
         {/* Table card */}
-        <div className="flex-1 flex flex-col bg-white/[0.03] rounded-xl border border-white/5 md:overflow-hidden md:min-h-0">
+        <div className="md:flex-1 flex flex-col bg-white/[0.03] rounded-xl border border-white/5 md:overflow-hidden md:min-h-0">
 
           {/* Tabs */}
           <div className="flex border-b border-neutral-800 px-4 shrink-0">
