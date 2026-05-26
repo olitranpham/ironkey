@@ -13,6 +13,8 @@ export async function GET(request, { params }) {
   const clientId  = process.env.STRIPE_CLIENT_ID
   const appUrl    = process.env.NEXT_PUBLIC_APP_URL
 
+  console.log('[stripe/connect GET] STRIPE_CLIENT_ID:', clientId)
+
   if (!clientId) {
     return NextResponse.json({ error: 'STRIPE_CLIENT_ID is not configured' }, { status: 500 })
   }
