@@ -48,6 +48,8 @@ export async function GET(request) {
       )
     }
 
+    console.log('[stripe/callback] tokenData:', JSON.stringify(tokenData, null, 2))
+
     const stripeAccountId = tokenData.stripe_user_id
 
     // Save to the gym row
