@@ -8,18 +8,10 @@ import MemberProfileDrawer from '@/components/MemberProfileDrawer'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const CODE_STATUS_TEXT = {
-  set:     'text-emerald-600',
-  unset:   'text-zinc-500',
-  unknown: 'text-amber-600/70',
-}
-
 const CODE_TYPE_BORDER = {
-  member: 'border-blue-400/50 text-neutral-400',
-  guest:  'border-amber-600/50 text-neutral-400',
+  member: 'border-blue-400 text-blue-400',
+  guest:  'border-amber-400 text-amber-400',
 }
-
-const TABS = ['all', 'active', 'timed']
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -45,7 +37,6 @@ export default function DoorAccessPage() {
   const [codes,         setCodes]         = useState([])
   const [loading,       setLoading]       = useState(true)
   const [fetchErr,      setFetchErr]      = useState(null)
-  const [activeTab,     setActiveTab]     = useState('all')
   const [search,        setSearch]        = useState('')
   const [changeModal,   setChangeModal]   = useState(null)
   const [removeModal,   setRemoveModal]   = useState(null)
@@ -139,8 +130,6 @@ export default function DoorAccessPage() {
 
   // Tab + search filter
   const visible = codes.filter(c => {
-    if (activeTab === 'active' && (c.status !== 'set' || c.codeType === 'time_bound')) return false
-    if (activeTab === 'timed'  && c.codeType !== 'time_bound') return false
     const q = search.trim().toLowerCase()
     if (q) return `${c.name} ${c.code}`.toLowerCase().includes(q)
     return true
@@ -211,29 +200,12 @@ export default function DoorAccessPage() {
             placeholder="search name or code…"
             value={search}
             onChange={e => setSearch(e.target.value)}
-            className="w-full bg-[#1c1c1c] border border-neutral-700 rounded-lg pl-9 pr-3 py-2 text-xs text-white placeholder-neutral-600 focus:outline-none focus:border-neutral-500 focus:ring-1 focus:ring-neutral-500 transition-colors"
+            className="w-full bg-neutral-700/50 border border-neutral-600/50 rounded-lg pl-9 pr-3 py-2 text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-neutral-500 focus:ring-1 focus:ring-neutral-500 transition-colors"
           />
         </div>
 
         {/* Table card */}
-        <div className="flex-1 flex flex-col bg-[#1c1c1c] rounded-xl border border-neutral-800 overflow-hidden min-h-0">
-
-          {/* Tabs */}
-          <div className="flex border-b border-neutral-800 px-4 shrink-0">
-            {TABS.map(tab => (
-              <button
-                key={tab}
-                onClick={() => setActiveTab(tab)}
-                className={`py-2.5 px-2.5 mr-1 text-xs font-medium border-b-2 transition-colors ${
-                  activeTab === tab
-                    ? 'border-white text-white'
-                    : 'border-transparent text-neutral-500 hover:text-neutral-300'
-                }`}
-              >
-                {tab}
-              </button>
-            ))}
-          </div>
+        <div className="flex-1 flex flex-col bg-white/[0.03] rounded-xl border border-white/5 overflow-hidden min-h-0">
 
           {/* Body */}
           <div className="flex-1 overflow-y-auto">
@@ -255,63 +227,45 @@ export default function DoorAccessPage() {
               </div>
             ) : (
               <table className="w-full text-sm">
-                <thead className="sticky top-0 bg-[#1c1c1c] z-10">
-                  <tr className="border-b border-neutral-800 text-left">
-                    <th className="px-5 py-3 text-[11px] font-medium text-neutral-500">name</th>
-                    <th className="px-5 py-3 text-[11px] font-medium text-neutral-500">code</th>
-                    <th className="px-5 py-3 text-[11px] font-medium text-neutral-500"></th>
-                    <th className="px-5 py-3 text-[11px] font-medium text-neutral-500">type</th>
-                    <th className="px-5 py-3 text-[11px] font-medium text-neutral-500">time left</th>
-                    <th className="px-5 py-3 text-[11px] font-medium text-neutral-500">actions</th>
-                  </tr>
-                </thead>
                 <tbody>
-                  {visible.map(c => {
-                    const tl = c.codeType === 'time_bound' ? timeLeft(c.endsAt) : null
+                  {visible.map((c, i) => {
+                    const tl        = c.codeType === 'time_bound' ? timeLeft(c.endsAt) : null
+                    const typeLabel = tl ? `${c.type} · ${tl}` : c.type
                     return (
                       <tr
                         key={c.id}
                         onClick={() => openMemberPanel(c)}
-                        className={`border-b border-white/5 hover:bg-white/[0.025] transition-colors ${c.type === 'member' && c.memberId ? 'cursor-pointer' : ''}`}
+                        className={`group hover:bg-white/5 transition-colors ${c.type === 'member' && c.memberId ? 'cursor-pointer' : ''} ${i % 2 === 0 ? 'bg-white/[0.02]' : ''}`}
                       >
-                        <td className="px-5 py-2 text-white text-sm">{c.name}</td>
-                        <td className="px-5 py-2 font-mono text-xs text-neutral-400 tabular-nums">{c.code}</td>
-                        <td className="px-5 py-2">
-                          <span className={`text-[11px] font-medium ${CODE_STATUS_TEXT[c.status] ?? CODE_STATUS_TEXT.unknown}`}>
-                            {c.status}
-                          </span>
+                        {/* Name + type + time left */}
+                        <td className="px-5 py-3">
+                          <div className="flex items-center gap-3">
+                            <div className="w-7 h-7 rounded-full bg-white flex items-center justify-center shrink-0">
+                              <span className="text-black font-medium text-[10px] select-none">
+                                {c.name.split(' ').map(w => w[0] ?? '').slice(0, 2).join('').toUpperCase()}
+                              </span>
+                            </div>
+                            <div>
+                              <p className="text-white text-sm leading-tight">{c.name}</p>
+                              {c.type !== 'member' && (
+                                <span className={`text-[11px] mt-0.5 ${CODE_TYPE_BORDER[c.type] ?? 'text-zinc-400'} ${tl === 'expired' ? '!text-red-400' : ''}`}>
+                                  {typeLabel}
+                                </span>
+                              )}
+                            </div>
+                          </div>
                         </td>
-                        <td className="px-5 py-2">
-                          <span className={`inline-block text-[11px] font-medium border-l-2 pl-2 ${CODE_TYPE_BORDER[c.type] ?? 'border-zinc-400 text-neutral-400'}`}>
-                            {c.type}
-                          </span>
-                        </td>
-                        <td className="px-5 py-2">
-                          {tl ? (
-                            <span className={`text-xs ${tl === 'expired' ? 'text-red-400' : 'text-neutral-400'}`}>
-                              {tl}
-                            </span>
-                          ) : (
-                            <span className="text-neutral-700 text-xs">—</span>
-                          )}
-                        </td>
-                        <td className="px-5 py-2">
-                          <div className="flex items-center gap-2">
-                            {c.type === 'member' && (
-                              <button
-                                onClick={() => { setChangeModal(c); setNewCode(''); setActionError(null) }}
-                                className="text-[11px] font-medium px-2.5 py-1 rounded-md bg-neutral-500/10 text-neutral-400 hover:bg-neutral-500/20 transition-colors"
-                              >
-                                change code
-                              </button>
-                            )}
+
+                        {/* Action — remove for guests only */}
+                        <td className="px-4 py-3 text-right" onClick={e => c.type === 'guest' && e.stopPropagation()}>
+                          {c.type === 'guest' && (
                             <button
                               onClick={() => { setRemoveModal(c); setActionError(null) }}
-                              className="text-[11px] font-medium px-2.5 py-1 rounded-md bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors"
+                              className="opacity-0 group-hover:opacity-100 transition-opacity text-xs text-red-400/60 hover:text-red-400 transition-colors"
                             >
                               remove
                             </button>
-                          </div>
+                          )}
                         </td>
                       </tr>
                     )

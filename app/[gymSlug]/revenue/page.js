@@ -291,13 +291,13 @@ export default function RevenuePage() {
         ) : (
           <>
             {/* ── Monthly chart ──────────────────────────────────────────────── */}
-            <div className="bg-[#1c1c1c] border border-neutral-800 rounded-xl p-5">
+            <div className="bg-white/[0.03] border border-white/5 rounded-xl p-5">
               <div className="flex items-center justify-between mb-5">
                 <p className="text-xs font-semibold text-neutral-400">monthly revenue</p>
                 <div className="flex items-center gap-4 text-[11px] text-neutral-500">
-                  <span className="flex items-center gap-1.5"><span className="w-2.5 h-0.5 rounded bg-white inline-block opacity-80" />stripe</span>
-                  <span className="flex items-center gap-1.5"><span className="w-2.5 h-0.5 rounded bg-emerald-500 inline-block" />income</span>
-                  {hasExpenses && <span className="flex items-center gap-1.5"><span className="w-2.5 h-0.5 rounded bg-rose-500 inline-block" />expenses</span>}
+                  <span className="flex items-center gap-1.5"><span className="w-2.5 h-0.5 rounded inline-block" style={{ background: '#3a3a3a' }} />stripe</span>
+                  <span className="flex items-center gap-1.5"><span className="w-2.5 h-0.5 rounded inline-block" style={{ background: '#2a2a2a' }} />income</span>
+                  {hasExpenses && <span className="flex items-center gap-1.5"><span className="w-2.5 h-0.5 rounded inline-block" style={{ background: '#1e1e1e' }} />expenses</span>}
                 </div>
               </div>
               {loading ? (
@@ -314,64 +314,50 @@ export default function RevenuePage() {
                     <YAxis tick={{ fill: '#737373', fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={v => `$${(v / 1000).toFixed(0)}k`} width={40} />
                     <ReferenceLine y={0} stroke="#404040" />
                     <Tooltip content={<ChartTooltip />} cursor={{ fill: 'rgba(255,255,255,0.04)' }} />
-                    <Bar dataKey="stripe"   name="stripe"  stackId="pos" fill="#ffffff" opacity={0.85} radius={[0, 0, 0, 0]} />
-                    <Bar dataKey="income"   name="income"  stackId="pos" fill="#10b981" opacity={0.85} radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="expenses" name="expense" fill="#f43f5e" opacity={0.85} radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="stripe"   name="stripe"  stackId="pos" fill="#3a3a3a" radius={[0, 0, 0, 0]} />
+                    <Bar dataKey="income"   name="income"  stackId="pos" fill="#2a2a2a" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="expenses" name="expense" fill="#1e1e1e" radius={[4, 4, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               )}
             </div>
 
             {/* ── Recent Stripe transactions ─────────────────────────────────── */}
-            <div className="bg-[#1c1c1c] border border-neutral-800 rounded-xl overflow-hidden">
+            <div className="bg-white/[0.03] border border-white/5 rounded-xl overflow-hidden">
               <div className="px-5 py-4 border-b border-neutral-800 flex items-center justify-between">
                 <p className="text-sm font-semibold text-white">recent transactions</p>
-                {!loading && (data?.transactions ?? []).length > 0 && (
-                  <span className="text-xs text-neutral-500">{data.transactions.length}</span>
-                )}
               </div>
-              <div>
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b border-neutral-800 text-left">
-                      <th className="px-5 py-3 text-[11px] font-medium text-neutral-500">date</th>
-                      <th className="px-5 py-3 text-[11px] font-medium text-neutral-500">member</th>
-                      <th className="px-5 py-3 text-[11px] font-medium text-neutral-500">amount</th>
-                      <th className="px-5 py-3 text-[11px] font-medium text-neutral-500">status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {loading ? (
-                      Array.from({ length: 8 }).map((_, i) => (
-                        <tr key={i} className="border-b border-white/5">
-                          <td className="px-5 py-3"><Bone className="h-3 w-24" /></td>
-                          <td className="px-5 py-3"><Bone className="h-3 w-32" /></td>
-                          <td className="px-5 py-3"><Bone className="h-3 w-14" /></td>
-                          <td className="px-5 py-3"><Bone className="h-3 w-16" /></td>
-                        </tr>
-                      ))
-                    ) : (data?.transactions ?? []).length === 0 ? (
-                      <tr><td colSpan={4} className="px-5 py-16 text-center text-sm text-neutral-600">no transactions found</td></tr>
-                    ) : (
-                      data.transactions.slice(0, 10).map(tx => (
-                        <tr key={tx.id} className="border-b border-white/5 hover:bg-white/[0.025] transition-colors">
-                          <td className="px-5 py-3 text-neutral-400 text-xs tabular-nums whitespace-nowrap">{fmtDate(tx.date * 1000)}</td>
-                          <td className="px-5 py-3">
-                            <p className="text-white text-xs font-medium">{tx.name ?? '—'}</p>
-                            {tx.email && <p className="text-neutral-500 text-[11px] mt-0.5">{tx.email}</p>}
-                          </td>
-                          <td className="px-5 py-3 text-white text-xs tabular-nums font-medium">{fmtExact(tx.amount)}</td>
-                          <td className="px-5 py-3 text-xs text-emerald-600">{tx.status}</td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
+              <table className="w-full">
+                <tbody>
+                  {loading ? (
+                    Array.from({ length: 8 }).map((_, i) => (
+                      <tr key={i} className={i % 2 === 0 ? 'bg-white/[0.02]' : ''}>
+                        <td className="px-5 py-3"><Bone className="h-3 w-24" /></td>
+                        <td className="px-5 py-3"><Bone className="h-3 w-32" /></td>
+                        <td className="px-5 py-3"><Bone className="h-3 w-14" /></td>
+                        <td className="px-5 py-3"><Bone className="h-3 w-16" /></td>
+                      </tr>
+                    ))
+                  ) : (data?.transactions ?? []).length === 0 ? (
+                    <tr><td colSpan={4} className="px-5 py-16 text-center text-sm text-neutral-600">no transactions found</td></tr>
+                  ) : (
+                    data.transactions.slice(0, 10).map((tx, i) => (
+                      <tr key={tx.id} className={`hover:bg-white/5 transition-colors ${i % 2 === 0 ? 'bg-white/[0.02]' : ''}`}>
+                        <td className="px-5 py-3 text-neutral-400 text-xs tabular-nums whitespace-nowrap">{fmtDate(tx.date * 1000)}</td>
+                        <td className="px-5 py-3">
+                          <p className="text-white text-xs">{tx.name ?? '—'}</p>
+                        </td>
+                        <td className="px-5 py-3 text-white text-xs tabular-nums">{fmtExact(tx.amount)}</td>
+                        <td className="px-5 py-3 text-xs text-emerald-600">{tx.status}</td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
             </div>
 
             {/* ── Manual income & expenses ───────────────────────────────────── */}
-            <div className="bg-[#1c1c1c] border border-neutral-800 rounded-xl overflow-hidden">
+            <div className="bg-white/[0.03] border border-white/5 rounded-xl overflow-hidden">
               <div className="px-5 py-4 border-b border-neutral-800 flex items-center justify-between">
                 <p className="text-sm font-semibold text-white">
                   other income & expenses
@@ -387,52 +373,40 @@ export default function RevenuePage() {
                   add entry
                 </button>
               </div>
-              <div>
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b border-neutral-800 text-left">
-                      <th className="px-5 py-3 text-[11px] font-medium text-neutral-500">date</th>
-                      <th className="px-5 py-3 text-[11px] font-medium text-neutral-500">type</th>
-                      <th className="px-5 py-3 text-[11px] font-medium text-neutral-500">category</th>
-                      <th className="px-5 py-3 text-[11px] font-medium text-neutral-500">description</th>
-                      <th className="px-5 py-3 text-[11px] font-medium text-neutral-500">amount</th>
-                      <th className="px-5 py-3" />
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {entries.length === 0 ? (
-                      <tr><td colSpan={6} className="px-5 py-16 text-center text-sm text-neutral-600">no entries yet — click "add entry" to get started</td></tr>
-                    ) : (
-                      entries.map(e => (
-                        <tr key={e.id} className="border-b border-white/5 hover:bg-white/[0.025] transition-colors">
-                          <td className="px-5 py-3 text-neutral-400 text-xs tabular-nums whitespace-nowrap">{fmtDate(e.date)}</td>
-                          <td className="px-5 py-3 text-[11px]">
-                            <span className={e.type === 'income' ? 'text-emerald-600' : 'text-rose-400/70'}>
-                              {e.type}
-                            </span>
-                          </td>
-                          <td className="px-5 py-3 text-neutral-400 text-xs">{e.category}</td>
-                          <td className="px-5 py-3 text-neutral-500 text-xs max-w-[200px] truncate">{e.description ?? '—'}</td>
-                          <td className="px-5 py-3 text-xs tabular-nums font-medium">
-                            <span className={e.type === 'income' ? 'text-emerald-600' : 'text-rose-400/70'}>
-                              {e.type === 'expense' ? '−' : '+'}{fmtExact(e.amount)}
-                            </span>
-                          </td>
-                          <td className="px-5 py-3">
-                            <button
-                              onClick={() => deleteEntry(e.id)}
-                              disabled={deletingId === e.id}
-                              className="p-1.5 rounded-md text-neutral-700 hover:text-rose-400 hover:bg-rose-500/10 disabled:opacity-40 transition-colors"
-                            >
-                              <Trash2 size={13} />
-                            </button>
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
+              <table className="w-full">
+                <tbody>
+                  {entries.length === 0 ? (
+                    <tr><td colSpan={6} className="px-5 py-16 text-center text-sm text-neutral-600">no entries yet — click "add entry" to get started</td></tr>
+                  ) : (
+                    entries.map((e, i) => (
+                      <tr key={e.id} className={`group hover:bg-white/5 transition-colors ${i % 2 === 0 ? 'bg-white/[0.02]' : ''}`}>
+                        <td className="px-5 py-3 text-neutral-400 text-xs tabular-nums whitespace-nowrap">{fmtDate(e.date)}</td>
+                        <td className="px-5 py-3 text-xs">
+                          <span className={e.type === 'income' ? 'text-emerald-600' : 'text-rose-400/70'}>
+                            {e.type}
+                          </span>
+                        </td>
+                        <td className="px-5 py-3 text-neutral-400 text-xs">{e.category}</td>
+                        <td className="px-5 py-3 text-neutral-500 text-xs max-w-[200px] truncate">{e.description ?? '—'}</td>
+                        <td className="px-5 py-3 text-xs tabular-nums">
+                          <span className={e.type === 'income' ? 'text-emerald-600' : 'text-rose-400/70'}>
+                            {e.type === 'expense' ? '−' : '+'}{fmtExact(e.amount)}
+                          </span>
+                        </td>
+                        <td className="px-5 py-3 text-right">
+                          <button
+                            onClick={() => deleteEntry(e.id)}
+                            disabled={deletingId === e.id}
+                            className="opacity-0 group-hover:opacity-100 p-1.5 rounded-md text-neutral-700 hover:text-rose-400 hover:bg-rose-500/10 disabled:opacity-40 transition-colors"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
             </div>
           </>
         )}

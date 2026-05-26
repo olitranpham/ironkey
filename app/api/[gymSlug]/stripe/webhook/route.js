@@ -39,9 +39,9 @@ export async function POST(request, { params }) {
   }
 
   // ── Verify signature ──────────────────────────────────────────────────────
+  const stripe = new Stripe(gym.stripeSecretKey, { apiVersion: '2024-06-20' })
   let event
   try {
-    const stripe = new Stripe(gym.stripeSecretKey, { apiVersion: '2024-06-20' })
     event = stripe.webhooks.constructEvent(rawBody, sig, gym.stripeWebhookSecret)
   } catch (err) {
     console.error('[webhook] signature verification failed:', err.message)
@@ -142,7 +142,24 @@ export async function POST(request, { params }) {
     const phone          = meta.phone          ?? null
     const membershipType = meta.membershipType ?? 'GENERAL'
     const subId          = session.subscription ?? null
-    const priceId        = meta.priceId        ?? null
+
+    // Retrieve line items to get the price ID reliably — metadata.priceId is a
+    // fallback only, since it may not always be populated by the checkout session.
+    let priceId = meta.priceId ?? null
+    try {
+      const expanded = await stripe.checkout.sessions.retrieve(session.id, {
+        expand: ['line_items'],
+      })
+      const lineItemPrice = expanded.line_items?.data?.[0]?.price?.id
+      if (lineItemPrice) {
+        priceId = lineItemPrice
+        console.log('[webhook] priceId from line_items:', priceId)
+      } else {
+        console.warn('[webhook] no line item price found, falling back to metadata priceId:', priceId)
+      }
+    } catch (err) {
+      console.error('[webhook] failed to retrieve session line items:', err.message)
+    }
 
     // Upsert member — avoid duplicate if webhook fires more than once
     let member = await prisma.member.findFirst({

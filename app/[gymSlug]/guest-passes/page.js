@@ -270,12 +270,12 @@ export default function GuestPassesPage() {
             placeholder="search name or email…"
             value={search}
             onChange={e => setSearch(e.target.value)}
-            className="w-full bg-[#1c1c1c] border border-neutral-700 rounded-lg pl-9 pr-3 py-2 text-xs text-white placeholder-neutral-600 focus:outline-none focus:border-neutral-500 focus:ring-1 focus:ring-neutral-500 transition-colors"
+            className="w-full bg-neutral-700/50 border border-neutral-600/50 rounded-lg pl-9 pr-3 py-2 text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-neutral-500 focus:ring-1 focus:ring-neutral-500 transition-colors"
           />
         </div>
 
         {/* Table card */}
-        <div className="flex-1 flex flex-col bg-[#1c1c1c] rounded-xl border border-neutral-800 overflow-hidden min-h-0">
+        <div className="flex-1 flex flex-col bg-white/[0.03] rounded-xl border border-white/5 overflow-hidden min-h-0">
 
           {/* Tabs */}
           <div className="flex border-b border-neutral-800 px-4 shrink-0">
@@ -314,50 +314,28 @@ export default function GuestPassesPage() {
               </div>
             ) : (
               <table className="w-full text-sm">
-                <thead className="sticky top-0 bg-[#1c1c1c] z-10">
-                  <tr className="border-b border-neutral-800 text-left">
-                    <th className="px-5 py-3 text-[11px] font-medium text-neutral-500">name</th>
-                    <th className="px-5 py-3 text-[11px] font-medium text-neutral-500">email</th>
-                    <th className="px-5 py-3 text-[11px] font-medium text-neutral-500">last pass type</th>
-                    <th className="px-5 py-3 text-[11px] font-medium text-neutral-500">passes left</th>
-                    <th className="px-5 py-3 text-[11px] font-medium text-neutral-500">visits</th>
-                    <th className="px-5 py-3 text-[11px] font-medium text-neutral-500">access code</th>
-                    <th className="px-5 py-3 text-[11px] font-medium text-neutral-500">last seen</th>
-                  </tr>
-                </thead>
                 <tbody>
-                  {visible.map(g => {
+                  {visible.map((g, i) => {
                     const left     = passesLeftSummary(g)
                     const lastType = mostRecentPassType(g)
                     return (
                       <tr
                         key={g.id}
                         onClick={() => openPanel(g)}
-                        className="border-b border-white/5 hover:bg-white/[0.025] transition-colors cursor-pointer"
+                        className={`group hover:bg-white/5 transition-colors cursor-pointer ${i % 2 === 0 ? 'bg-white/[0.02]' : ''}`}
                       >
-                        <td className="px-5 py-2 text-white text-sm font-medium">{g.name}</td>
-                        <td className="px-5 py-2 text-neutral-500 text-xs">{g.email || '—'}</td>
-                        <td className="px-5 py-2">
-                          {lastType ? (
-                            <span className={`inline-block text-[11px] font-medium border-l-2 pl-2 ${passTypeBorder[lastType] ?? passTypeBorder.SINGLE}`}>
-                              {PASS_TYPE_LABEL[lastType]}
-                            </span>
-                          ) : <span className="text-neutral-600 text-xs">—</span>}
+                        {/* Name + avatar */}
+                        <td className="px-5 py-3">
+                          <div className="flex items-center gap-3">
+                            <div className="w-7 h-7 rounded-full bg-white flex items-center justify-center shrink-0">
+                              <span className="text-black font-medium text-[10px] select-none">
+                                {g.name.split(' ').map(w => w[0] ?? '').slice(0, 2).join('').toUpperCase()}
+                              </span>
+                            </div>
+                            <p className="text-white text-sm leading-tight">{g.name}</p>
+                          </div>
                         </td>
-                        <td className="px-5 py-2">
-                          {left === null ? (
-                            <span className="text-neutral-600 text-xs">—</span>
-                          ) : left === 0 ? (
-                            <span className="text-red-400 text-xs font-medium">used out</span>
-                          ) : (
-                            <span className="text-white text-xs">{left} left</span>
-                          )}
-                        </td>
-                        <td className="px-5 py-2 text-neutral-400 text-xs tabular-nums">{totalVisits(g)}</td>
-                        <td className="px-5 py-2 text-xs text-neutral-400">{g.accessCode || '—'}</td>
-                        <td className="px-5 py-2 text-neutral-600 text-xs whitespace-nowrap">
-                          {fmtDate(lastSeenDate(g))}
-                        </td>
+
                       </tr>
                     )
                   })}
@@ -421,65 +399,66 @@ function GuestProfilePanel({ profile, passTypeBorder, onClose, onSaveCode, savin
 
       <div className="flex-1 overflow-y-auto p-5 space-y-5">
 
-        {/* Identity */}
-        <div className="flex flex-col items-center text-center gap-3 pt-1 pb-2">
-          <div className="w-[60px] h-[60px] rounded-full flex items-center justify-center shrink-0 bg-white">
+        {/* Avatar + name + stats */}
+        <div className="flex flex-col items-center text-center gap-2 pt-1 pb-2">
+          <div className="w-[60px] h-[60px] rounded-full bg-white flex items-center justify-center shrink-0">
             <span className="text-black font-bold text-lg tracking-tight select-none">
               {initials.toUpperCase() || '?'}
             </span>
           </div>
-          <div>
-            <p className="text-white font-semibold text-base leading-tight">{profile.name}</p>
-            <p className="text-neutral-500 text-xs mt-0.5">{profile.email}</p>
-          </div>
-          <div className="flex items-center gap-3 text-xs text-neutral-500">
-            <span><span className="text-white font-semibold">{visits}</span> total visits</span>
+          <p className="text-white font-semibold text-base leading-tight">{profile.name}</p>
+          <div className="flex items-center gap-2.5 text-xs text-neutral-500">
+            <span><span className="text-white font-semibold">{visits}</span> visits</span>
+            <span className="text-neutral-700">·</span>
             <span><span className="text-white font-semibold">{profile.passes.length}</span> passes</span>
           </div>
         </div>
 
         {/* Contact */}
-        <Section icon={Phone} title="contact">
-          <Field label="email" value={profile.email} />
-          <Field label="phone" value={profile.phone} />
-        </Section>
+        <GSection icon={Phone} title="contact">
+          <GField label="email" value={profile.email} />
+          <GField label="phone" value={profile.phone} />
+        </GSection>
 
         {/* Access code */}
-        <Section icon={KeyRound} title="access code">
-          <div className="flex items-center gap-2 px-3 py-2.5 bg-[#1c1c1c]">
-            <input
-              type="text"
-              value={codeInput}
-              onChange={e => setCodeInput(e.target.value)}
-              placeholder={isUnlinked ? 'no profile linked' : 'enter PIN…'}
-              disabled={isUnlinked}
-              className="flex-1 bg-transparent text-xs text-white placeholder-neutral-600 focus:outline-none disabled:opacity-40"
-            />
-            {!isUnlinked && (
-              <>
-                <button
-                  type="button"
-                  onClick={() => setCodeInput(String(Math.floor(1000 + Math.random() * 9000)))}
-                  className="px-2.5 py-1 rounded-lg text-[11px] font-medium bg-neutral-800 text-neutral-400 hover:text-white hover:bg-neutral-700 border border-neutral-700 transition-colors shrink-0"
-                >
-                  randomize
-                </button>
-                <button
-                  onClick={handleSave}
-                  disabled={saving || codeInput.trim() === (profile.accessCode ?? '')}
-                  className="text-[11px] px-2.5 py-1 rounded-md bg-white/10 text-white hover:bg-white/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shrink-0"
-                >
-                  {saving ? 'saving…' : 'save'}
-                </button>
-              </>
-            )}
+        <GSection icon={KeyRound} title="access code">
+          <div className="flex items-center justify-between px-3 py-2.5 bg-[#1c1c1c]">
+            <span className="text-xs text-zinc-400 shrink-0">pin</span>
+            <div className="flex items-center gap-2 ml-4">
+              <input
+                type="text"
+                value={codeInput}
+                onChange={e => setCodeInput(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                placeholder={isUnlinked ? 'no profile linked' : '——'}
+                disabled={isUnlinked}
+                className="bg-[#252525] border border-neutral-700 rounded px-2 py-1 text-xs text-white text-right placeholder-neutral-600 focus:outline-none focus:border-neutral-500 w-20 font-mono disabled:opacity-40"
+              />
+              {!isUnlinked && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setCodeInput(String(Math.floor(1000 + Math.random() * 9000)))}
+                    className="text-[10px] px-2 py-1 rounded bg-white/5 text-neutral-400 hover:text-white hover:bg-white/10 transition-colors shrink-0"
+                  >
+                    gen
+                  </button>
+                  <button
+                    onClick={handleSave}
+                    disabled={saving || codeInput.trim() === (profile.accessCode ?? '')}
+                    className="text-[10px] px-2 py-1 rounded bg-white/10 text-white hover:bg-white/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shrink-0"
+                  >
+                    {saving ? '…' : 'save'}
+                  </button>
+                </>
+              )}
+            </div>
           </div>
-        </Section>
+        </GSection>
 
         {/* Pass history */}
         <div>
           <div className="flex items-center gap-1.5 mb-2">
-            <p className="text-[11px] font-semibold tracking-widest text-neutral-600">PASS HISTORY</p>
+            <p className="text-[11px] font-semibold tracking-widest text-neutral-500">PASS HISTORY</p>
           </div>
           <div className="rounded-lg border border-neutral-800 overflow-hidden">
             {profile.passes.length === 0 ? (
@@ -488,9 +467,9 @@ function GuestProfilePanel({ profile, passTypeBorder, onClose, onSaveCode, savin
               <table className="w-full text-xs">
                 <thead>
                   <tr className="border-b border-neutral-800 text-left bg-[#1c1c1c]">
-                    <th className="px-3 py-2 text-[10px] font-semibold text-neutral-600 tracking-wider">type</th>
-                    <th className="px-3 py-2 text-[10px] font-semibold text-neutral-600 tracking-wider">left</th>
-                    <th className="px-3 py-2 text-[10px] font-semibold text-neutral-600 tracking-wider">purchased</th>
+                    <th className="px-3 py-2 text-[10px] font-semibold text-neutral-500 tracking-wider">type</th>
+                    <th className="px-3 py-2 text-[10px] font-semibold text-neutral-500 tracking-wider">left</th>
+                    <th className="px-3 py-2 text-[10px] font-semibold text-neutral-500 tracking-wider">purchased</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-neutral-800">
@@ -522,12 +501,12 @@ function GuestProfilePanel({ profile, passTypeBorder, onClose, onSaveCode, savin
   )
 }
 
-function Section({ icon: Icon, title, children }) {
+function GSection({ icon: Icon, title, children }) {
   return (
     <div>
       <div className="flex items-center gap-1.5 mb-2">
-        <Icon size={11} className="text-neutral-600" />
-        <p className="text-[11px] font-semibold tracking-widest text-neutral-600">{title.toUpperCase()}</p>
+        <Icon size={11} className="text-neutral-500" />
+        <p className="text-[11px] font-semibold tracking-widest text-neutral-500">{title.toUpperCase()}</p>
       </div>
       <div className="rounded-lg border border-neutral-800 divide-y divide-neutral-800 overflow-hidden">
         {children}
@@ -536,10 +515,10 @@ function Section({ icon: Icon, title, children }) {
   )
 }
 
-function Field({ label, value }) {
+function GField({ label, value }) {
   return (
     <div className="flex items-center justify-between px-3 py-2.5 bg-[#1c1c1c]">
-      <span className="text-xs text-neutral-500 shrink-0">{label}</span>
+      <span className="text-xs text-zinc-400 shrink-0">{label}</span>
       <span className="text-xs text-white text-right ml-4 truncate max-w-[240px]">{value || '—'}</span>
     </div>
   )

@@ -2,19 +2,19 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams } from 'next/navigation'
-import { Search, RefreshCw, AlertTriangle, X, CreditCard } from 'lucide-react'
+import { Search, RefreshCw, AlertTriangle, X, CreditCard, Phone } from 'lucide-react'
 import { getGymTheme } from '@/lib/gymThemes'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const TYPE_FILTERS = ['all', 'founding', 'general', 'student']
 
-const STATUS_TABS = ['all', 'active', 'paused', 'canceled']
+const STATUS_TABS = ['active', 'frozen', 'canceled']
 // "paused" maps to FROZEN; "active" includes ACTIVE + OVERDUE
 const TAB_STATUSES = {
   all:      null,
   active:   ['ACTIVE', 'OVERDUE'],
-  paused:   ['FROZEN'],
+  frozen:   ['FROZEN'],
   canceled: ['CANCELLED'],
 }
 
@@ -49,7 +49,7 @@ export default function PaymentsPage() {
   const [fetchErr,   setFetchErr]   = useState(null)
   const [search,     setSearch]     = useState('')
   const [typeFilter, setTypeFilter] = useState('all')
-  const [activeTab,  setActiveTab]  = useState('all')
+  const [activeTab,  setActiveTab]  = useState('active')
 
   const [selectedMember, setSelectedMember] = useState(null)
   const [panelOpen,      setPanelOpen]      = useState(false)
@@ -156,7 +156,7 @@ export default function PaymentsPage() {
               placeholder="search name or email…"
               value={search}
               onChange={e => setSearch(e.target.value)}
-              className="w-full bg-[#1c1c1c] border border-neutral-700 rounded-lg pl-9 pr-3 py-2 text-xs text-white placeholder-neutral-600 focus:outline-none focus:border-neutral-500 focus:ring-1 focus:ring-neutral-500 transition-colors"
+              className="w-full bg-neutral-700/50 border border-neutral-600/50 rounded-lg pl-9 pr-3 py-2 text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-neutral-500 focus:ring-1 focus:ring-neutral-500 transition-colors"
             />
           </div>
           {/* Membership type filter pills */}
@@ -178,7 +178,7 @@ export default function PaymentsPage() {
         </div>
 
         {/* Table card */}
-        <div className="flex-1 flex flex-col bg-[#1c1c1c] rounded-xl border border-neutral-800 overflow-hidden min-h-0">
+        <div className="flex-1 flex flex-col bg-white/[0.03] rounded-xl border border-white/5 overflow-hidden min-h-0">
 
           {/* Tabs */}
           <div className="flex border-b border-neutral-800 px-4 shrink-0">
@@ -215,51 +215,27 @@ export default function PaymentsPage() {
               </div>
             ) : (
               <table className="w-full text-sm">
-                <thead className="sticky top-0 bg-[#1c1c1c] z-10">
-                  <tr className="border-b border-neutral-800 text-left">
-                    <th className="px-5 py-3 text-[11px] font-medium text-neutral-500">member</th>
-                    <th className="px-5 py-3 text-[11px] font-medium text-neutral-500">plan</th>
-                    <th className="px-5 py-3 text-[11px] font-medium text-neutral-500">amount</th>
-                  </tr>
-                </thead>
                 <tbody>
-                  {visible.map(m => (
+                  {visible.map((m, i) => (
                     <tr
                       key={m.id}
                       onClick={() => openPanel(m)}
-                      className="border-b border-white/5 hover:bg-white/[0.025] transition-colors cursor-pointer"
+                      className={`group hover:bg-white/5 transition-colors cursor-pointer ${i % 2 === 0 ? 'bg-white/[0.02]' : ''}`}
                     >
-                      {/* Member */}
-                      <td className="px-5 py-2">
+                      {/* Name + email + avatar */}
+                      <td className="px-5 py-3">
                         <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 bg-white">
+                          <div className="w-7 h-7 rounded-full bg-white flex items-center justify-center shrink-0">
                             <span className="text-black font-medium text-[10px] select-none">
                               {(m.firstName?.[0] ?? '') + (m.lastName?.[0] ?? '')}
                             </span>
                           </div>
                           <div className="min-w-0">
-                            <p className="text-white font-medium text-sm truncate">{m.firstName} {m.lastName}</p>
-                            <p className="text-neutral-500 text-[11px] truncate">{m.email}</p>
+                            <p className="text-white text-sm leading-tight">{m.firstName} {m.lastName}</p>
                           </div>
                         </div>
                       </td>
 
-                      {/* Plan */}
-                      <td className="px-5 py-2">
-                        <span className={`inline-block text-[11px] font-medium border-l-2 pl-2 ${membershipBorder[m.membershipType] ?? membershipBorder.GENERAL}`}>
-                          {(m.membershipType ?? 'GENERAL').toLowerCase()}
-                        </span>
-                      </td>
-
-                      {/* Amount */}
-                      <td className="px-5 py-2 text-white text-xs tabular-nums">
-                        {(() => {
-                          const entry = priceMap[m.stripeSubscriptionId] ?? priceIdMap[m.priceId]
-                          return entry
-                            ? <>${entry.amount}<span className="text-neutral-600">/{entry.interval}</span></>
-                            : <span className="text-neutral-600">—</span>
-                        })()}
-                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -345,15 +321,10 @@ function PaymentPanel({ member, priceMap, priceIdMap, onClose, onAction, actionL
   const initials = (member.firstName?.[0] ?? '') + (member.lastName?.[0] ?? '')
   const entry    = priceMap[member.stripeSubscriptionId] ?? priceIdMap[member.priceId]
 
-  const STATUS_TEXT = {
-    ACTIVE:    'text-emerald-600',
-    FROZEN:    'text-blue-400/70',
-    CANCELLED: 'text-zinc-500',
-    OVERDUE:   'text-red-400/70',
-  }
-
   return (
     <div className="flex flex-col h-full">
+
+      {/* Header */}
       <div className="flex items-center justify-between px-5 h-14 shrink-0 border-b border-neutral-800">
         <p className="text-sm font-semibold text-white">payment details</p>
         <button onClick={onClose} className="p-1.5 rounded-lg text-neutral-500 hover:text-white hover:bg-white/5 transition-colors">
@@ -362,38 +333,27 @@ function PaymentPanel({ member, priceMap, priceIdMap, onClose, onAction, actionL
       </div>
 
       <div className="flex-1 overflow-y-auto p-5 space-y-5">
+
         {/* Avatar + name */}
-        <div className="flex flex-col items-center text-center gap-3 pt-1 pb-2">
-          <div className="w-[60px] h-[60px] rounded-full flex items-center justify-center shrink-0 bg-white">
+        <div className="flex flex-col items-center text-center gap-2 pt-1 pb-2">
+          <div className="w-[60px] h-[60px] rounded-full bg-white flex items-center justify-center shrink-0">
             <span className="text-black font-bold text-lg tracking-tight select-none">{initials || '?'}</span>
           </div>
-          <div>
-            <p className="text-white font-semibold text-base leading-tight">{member.firstName} {member.lastName}</p>
-            <p className="text-neutral-500 text-xs mt-0.5">{member.email}</p>
-          </div>
-          <span className={`text-xs font-medium ${STATUS_TEXT[member.status] ?? 'text-neutral-500'}`}>
-            {member.status === 'CANCELLED' ? 'canceled' : member.status.toLowerCase()}
-          </span>
+          <p className="text-white font-semibold text-base leading-tight">{member.firstName} {member.lastName}</p>
         </div>
 
-        {/* Billing info */}
-        <div>
-          <div className="flex items-center gap-1.5 mb-2">
-            <CreditCard size={11} className="text-neutral-600" />
-            <p className="text-[11px] font-semibold tracking-widest text-neutral-600">BILLING</p>
-          </div>
-          <div className="rounded-lg border border-neutral-800 divide-y divide-neutral-800 overflow-hidden">
-            {[
-              { label: 'plan',   value: (member.membershipType ?? 'GENERAL').toLowerCase() },
-              { label: 'amount', value: entry ? `$${entry.amount}/${entry.interval}` : '—' },
-            ].map(({ label, value }) => (
-              <div key={label} className="flex items-center justify-between px-3 py-2.5 bg-[#1c1c1c]">
-                <span className="text-xs text-neutral-500 shrink-0">{label}</span>
-                <span className="text-xs text-white text-right ml-4">{value}</span>
-              </div>
-            ))}
-          </div>
-        </div>
+        {/* Contact */}
+        <PSection icon={Phone} title="contact">
+          <PField label="email" value={member.email} />
+          <PField label="phone" value={member.phone} />
+        </PSection>
+
+        {/* Billing */}
+        <PSection icon={CreditCard} title="billing">
+          <PField label="plan"   value={(member.membershipType ?? 'GENERAL').toLowerCase()} />
+          <PField label="amount" value={entry ? `$${entry.amount}/${entry.interval}` : '—'} />
+        </PSection>
+
       </div>
 
       {/* Action buttons */}
@@ -428,6 +388,29 @@ function PaymentPanel({ member, priceMap, priceIdMap, onClose, onAction, actionL
           )}
         </div>
       )}
+    </div>
+  )
+}
+
+function PSection({ icon: Icon, title, children }) {
+  return (
+    <div>
+      <div className="flex items-center gap-1.5 mb-2">
+        <Icon size={11} className="text-neutral-500" />
+        <p className="text-[11px] font-semibold tracking-widest text-neutral-500">{title.toUpperCase()}</p>
+      </div>
+      <div className="rounded-lg border border-neutral-800 divide-y divide-neutral-800 overflow-hidden">
+        {children}
+      </div>
+    </div>
+  )
+}
+
+function PField({ label, value }) {
+  return (
+    <div className="flex items-center justify-between px-3 py-2.5 bg-[#1c1c1c]">
+      <span className="text-xs text-zinc-400 shrink-0">{label}</span>
+      <span className="text-xs text-white text-right ml-4 truncate max-w-[240px]">{value || '—'}</span>
     </div>
   )
 }

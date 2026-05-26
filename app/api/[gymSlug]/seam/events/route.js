@@ -78,7 +78,8 @@ export async function GET(request, { params }) {
     // Seam access codes are created with the member's name as the code name.
     // Fetch all access codes for the connected account once, then build a
     // lookup map:  access_code_id → code name (i.e. member name).
-    let codeNameById = {}
+    // access_code_id → 4-digit PIN string
+    let codePinById = {}
 
     const codeIds = [...new Set(events.map((e) => e.access_code_id).filter(Boolean))]
 
@@ -99,8 +100,8 @@ export async function GET(request, { params }) {
       if (codesRes.ok) {
         const { access_codes = [] } = await codesRes.json()
         for (const code of access_codes) {
-          if (codeIds.includes(code.access_code_id)) {
-            codeNameById[code.access_code_id] = code.name ?? null
+          if (codeIds.includes(code.access_code_id) && code.code) {
+            codePinById[code.access_code_id] = String(code.code).trim()
           }
         }
       } else {
@@ -108,14 +109,34 @@ export async function GET(request, { params }) {
       }
     }
 
+    // ── Look up member names by PIN against DB ──────────────────────────────
+    const pins = [...new Set(Object.values(codePinById))]
+    let memberNameByPin = {}
+
+    if (pins.length > 0) {
+      const matchedMembers = await prisma.member.findMany({
+        where:  { gymId: gym.id, accessCode: { in: pins } },
+        select: { accessCode: true, firstName: true, lastName: true },
+      })
+      for (const m of matchedMembers) {
+        // Normalize key so it matches the pin strings built from Seam codes
+        const key = String(m.accessCode ?? '').trim()
+        if (key) memberNameByPin[key] = `${m.firstName} ${m.lastName}`.trim()
+      }
+    }
+
     // ── Normalise events for the dashboard ──────────────────────────────────
-    const normalized = events.slice(0, 50).map((ev) => ({
-      id:        ev.event_id,
-      name:      codeNameById[ev.access_code_id] || '—',
-      event:     eventLabel(ev.event_type, Boolean(ev.access_code_id)),
-      createdAt: ev.created_at,
-      ok:        isOkEvent(ev.event_type),
-    }))
+    const normalized = events.slice(0, 50).map((ev) => {
+      const pin  = codePinById[ev.access_code_id]   // already trimmed string
+      const name = (pin && memberNameByPin[pin]) || (ev.access_code_id ? 'unknown' : null)
+      return {
+        id:        ev.event_id,
+        name:      name || '—',
+        event:     eventLabel(ev.event_type, Boolean(ev.access_code_id)),
+        createdAt: ev.created_at,
+        ok:        isOkEvent(ev.event_type),
+      }
+    })
 
     return NextResponse.json({ events: normalized })
   } catch (error) {

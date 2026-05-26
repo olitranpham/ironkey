@@ -537,22 +537,12 @@ export default function InventoryPage() {
             </div>
 
             {/* ── Table ─────────────────────────────────────────────────────── */}
-            <div className="bg-[#1c1c1c] border border-neutral-800 rounded-xl overflow-hidden">
+            <div className="bg-white/[0.03] border border-white/5 rounded-xl overflow-hidden">
               <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-neutral-800 text-left">
-                    <th className="px-5 py-3 text-[11px] font-medium text-neutral-500">item</th>
-                    <th className="px-5 py-3 text-[11px] font-medium text-neutral-500">category</th>
-                    <th className="px-5 py-3 text-[11px] font-medium text-neutral-500">qty</th>
-                    <th className="px-5 py-3 text-[11px] font-medium text-neutral-500">unit cost</th>
-                    <th className="px-5 py-3 text-[11px] font-medium text-neutral-500">total value</th>
-                    <th className="px-5 py-3" />
-                  </tr>
-                </thead>
                 <tbody>
                   {loading ? (
                     Array.from({ length: 6 }).map((_, i) => (
-                      <tr key={i} className="border-b border-white/5">
+                      <tr key={i} className={i % 2 === 0 ? 'bg-white/[0.02]' : ''}>
                         <td className="px-5 py-3"><Bone className="h-3 w-36" /></td>
                         <td className="px-5 py-3"><Bone className="h-3 w-20" /></td>
                         <td className="px-5 py-3"><Bone className="h-3 w-10" /></td>
@@ -568,10 +558,10 @@ export default function InventoryPage() {
                       </td>
                     </tr>
                   ) : (
-                    filtered.map(item => (
+                    filtered.map((item, i) => (
                       <tr
                         key={item.id}
-                        className="border-b border-white/5 transition-colors hover:bg-white/[0.025]"
+                        className={`group transition-colors hover:bg-white/5 ${i % 2 === 0 ? 'bg-white/[0.02]' : ''}`}
                       >
                         <td className="px-5 py-2">
                           <p className="text-white text-xs font-medium">{item.name}</p>

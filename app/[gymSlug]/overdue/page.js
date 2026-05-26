@@ -160,7 +160,7 @@ export default function OverduePage() {
         )}
 
         {/* Table card */}
-        <div className="flex-1 flex flex-col bg-[#1c1c1c] rounded-xl border border-neutral-800 overflow-hidden min-h-0">
+        <div className="flex-1 flex flex-col bg-white/[0.03] rounded-xl border border-white/5 overflow-hidden min-h-0">
           <div className="flex-1 overflow-y-auto">
             {loading ? (
               <div className="flex items-center justify-center h-48 gap-2">
@@ -179,62 +179,28 @@ export default function OverduePage() {
               </div>
             ) : (
               <table className="w-full text-sm">
-                <thead className="sticky top-0 bg-[#1c1c1c] z-10">
-                  <tr className="border-b border-neutral-800 text-left">
-                    <th className="px-5 py-3 text-[11px] font-medium text-neutral-500">member</th>
-                    <th className="px-5 py-3 text-[11px] font-medium text-neutral-500">plan</th>
-                    <th className="px-5 py-3 text-[11px] font-medium text-neutral-500">amount</th>
-                    <th className="px-5 py-3 text-[11px] font-medium text-neutral-500">failed</th>
-                    <th className="px-5 py-3 text-[11px] font-medium text-neutral-500">decline reason</th>
-                  </tr>
-                </thead>
                 <tbody>
-                  {rows.map(r => (
+                  {rows.map((r, i) => (
                     <tr
                       key={r.id}
                       onClick={() => openPanel(r)}
-                      className="border-b border-white/5 hover:bg-white/[0.025] transition-colors cursor-pointer"
+                      className={`group hover:bg-white/5 transition-colors cursor-pointer ${i % 2 === 0 ? 'bg-white/[0.02]' : ''}`}
                     >
-                      {/* Member */}
-                      <td className="px-5 py-2">
-                        <div className="flex items-center gap-2.5">
-                          <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center shrink-0">
-                            <span className="text-black text-xs font-medium select-none">
+                      {/* Name + email + avatar */}
+                      <td className="px-5 py-3">
+                        <div className="flex items-center gap-3">
+                          <div className="w-7 h-7 rounded-full bg-white flex items-center justify-center shrink-0">
+                            <span className="text-black font-medium text-[10px] select-none">
                               {(r.firstName?.[0] ?? '') + (r.lastName?.[0] ?? '')}
                             </span>
                           </div>
                           <div className="min-w-0">
-                            <p className="text-white text-sm">{r.firstName} {r.lastName}</p>
-                            <p className="text-neutral-500 text-[11px] truncate">{r.email}</p>
+                            <p className="text-white text-sm leading-tight">{r.firstName} {r.lastName}</p>
                           </div>
                         </div>
                       </td>
 
-                      {/* Plan */}
-                      <td className="px-5 py-2">
-                        <span className={`inline-block text-[11px] font-medium border-l-2 pl-2 ${membershipBorder[r.membershipType] ?? membershipBorder.GENERAL}`}>
-                          {(r.membershipType ?? 'GENERAL').toLowerCase()}
-                        </span>
-                      </td>
 
-                      {/* Amount */}
-                      <td className="px-5 py-2 text-red-400/80 text-xs tabular-nums">
-                        {fmtAmount(r.amountDue, r.membershipType)}
-                      </td>
-
-                      {/* Failed date */}
-                      <td className="px-5 py-2 text-neutral-600 text-xs whitespace-nowrap">
-                        {r.failedAt ? fmtDate(r.failedAt) : '—'}
-                      </td>
-
-                      {/* Decline reason */}
-                      <td className="px-5 py-2 max-w-[200px]">
-                        {r.declineReason ? (
-                          <span className="text-xs text-amber-400/70">{r.declineReason}</span>
-                        ) : (
-                          <span className="text-xs text-neutral-700">—</span>
-                        )}
-                      </td>
                     </tr>
                   ))}
                 </tbody>

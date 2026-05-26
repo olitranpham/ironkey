@@ -17,7 +17,7 @@ import {
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const TABS = ['all', 'active', 'frozen', 'canceled', 'overdue']
+const TABS = ['active', 'frozen', 'canceled', 'overdue']
 
 const STATUS_TEXT = {
   ACTIVE:    'text-emerald-600',
@@ -249,7 +249,7 @@ export default function DashboardPage() {
         ) : (
           <>
             {/* Mid row — stacks vertically on mobile, side by side on lg+ */}
-            <div className="flex flex-col lg:flex-row gap-4 shrink-0 lg:h-[340px]">
+            <div className="flex flex-col lg:flex-row gap-4 flex-[2] min-h-0">
               <MemberDirectory
                 members={visible}
                 membershipBorder={membershipBorder}
@@ -258,13 +258,13 @@ export default function DashboardPage() {
                 activeTab={activeTab}
                 setActiveTab={setActiveTab}
                 onRowClick={openPanel}
-                className="flex-1 h-[340px] lg:h-full"
+                className="flex-1 min-h-0"
               />
               <DoorActivity
                 events={doorEvents}
                 loading={doorEventsLoading}
                 error={doorEventsError}
-                className="lg:w-80 h-[340px] lg:h-full"
+                className="lg:w-80 min-h-[280px] lg:min-h-0"
               />
             </div>
 
@@ -318,7 +318,7 @@ function ErrorState({ message, onRetry }) {
 
 function MemberDirectory({ members, membershipBorder, search, setSearch, activeTab, setActiveTab, onRowClick, className = '' }) {
   return (
-    <div className={`bg-[#1c1c1c] rounded-xl border border-neutral-800 overflow-hidden flex flex-col ${className}`}>
+    <div className={`bg-white/[0.03] rounded-xl border border-white/5 overflow-hidden flex flex-col ${className}`}>
 
       {/* Header */}
       <div className="px-5 py-3.5 border-b border-neutral-800">
@@ -334,7 +334,7 @@ function MemberDirectory({ members, membershipBorder, search, setSearch, activeT
             placeholder="search name, email…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full bg-[#252525] border border-neutral-700 rounded-lg pl-8 pr-3 py-1.5 text-xs text-white placeholder-neutral-600 focus:outline-none focus:border-neutral-500 focus:ring-1 focus:ring-neutral-500 transition-colors"
+            className="w-full bg-neutral-700/50 border border-neutral-600/50 rounded-lg pl-8 pr-3 py-1.5 text-xs text-white placeholder-neutral-600 focus:outline-none focus:border-neutral-500 focus:ring-1 focus:ring-neutral-500 transition-colors"
           />
         </div>
       </div>
@@ -364,40 +364,22 @@ function MemberDirectory({ members, membershipBorder, search, setSearch, activeT
           </div>
         ) : (
           <table className="w-full text-sm">
-            <thead className="sticky top-0 bg-[#1c1c1c] z-10">
-              <tr className="text-left border-b border-neutral-800">
-                <th className="px-5 py-2.5 text-[11px] font-medium text-neutral-500">name</th>
-                <th className="px-5 py-2.5 text-[11px] font-medium text-neutral-500">type</th>
-                <th className="px-5 py-2.5 text-[11px] font-medium text-neutral-500">{dateLabelFor(activeTab)}</th>
-              </tr>
-            </thead>
             <tbody>
-              {members.map((m) => {
+              {members.map((m, i) => {
                 const initials = (m.firstName?.[0] ?? '') + (m.lastName?.[0] ?? '')
                 return (
                   <tr
                     key={m.id}
                     onClick={() => onRowClick(m)}
-                    className="border-b border-white/5 hover:bg-white/[0.025] transition-colors cursor-pointer"
+                    className={`group hover:bg-white/5 transition-colors cursor-pointer ${i % 2 === 0 ? 'bg-white/[0.02]' : ''}`}
                   >
-                    <td className="px-5 py-2 whitespace-nowrap">
-                      <div className="flex items-center gap-2.5">
-                        <div className={`w-8 h-8 rounded-full ${AVATAR_COLOR} flex items-center justify-center shrink-0`}>
-                          <span className="text-black text-xs font-medium select-none">{initials || '?'}</span>
+                    <td className="px-5 py-3 whitespace-nowrap">
+                      <div className="flex items-center gap-3">
+                        <div className="w-7 h-7 rounded-full bg-white flex items-center justify-center shrink-0">
+                          <span className="text-black font-medium text-[10px] select-none">{initials || '?'}</span>
                         </div>
-                        <div>
-                          <p className="text-white text-sm">{m.firstName} {m.lastName}</p>
-                          <p className={`text-[11px] ${STATUS_TEXT[m.status] ?? 'text-zinc-500'}`}>{fmtStatus(m.status)}</p>
-                        </div>
+                        <p className="text-white text-sm">{m.firstName} {m.lastName}</p>
                       </div>
-                    </td>
-                    <td className="px-5 py-2">
-                      <span className={`inline-block text-[11px] font-medium border-l-2 pl-2 ${membershipBorder[m.membershipType] ?? membershipBorder.GENERAL}`}>
-                        {(m.membershipType ?? 'GENERAL').toLowerCase()}
-                      </span>
-                    </td>
-                    <td className="px-5 py-2 text-neutral-600 text-xs whitespace-nowrap">
-                      {fmtDate(statusDate(m))}
                     </td>
                   </tr>
                 )
@@ -414,7 +396,7 @@ function MemberDirectory({ members, membershipBorder, search, setSearch, activeT
 
 function DoorActivity({ events, loading, error, className = '' }) {
   return (
-    <div className={`bg-[#1c1c1c] rounded-xl border border-neutral-800 overflow-hidden flex flex-col ${className}`}>
+    <div className={`bg-white/[0.03] rounded-xl border border-white/5 overflow-hidden flex flex-col ${className}`}>
       {/* Header */}
       <div className="flex items-center gap-2 px-4 py-3.5 border-b border-neutral-800">
         <Activity size={13} className="text-neutral-400" />
@@ -440,11 +422,11 @@ function DoorActivity({ events, loading, error, className = '' }) {
             <p className="text-[11px] text-neutral-600">no events in the last 24h</p>
           </div>
         ) : (
-          events.map((ev) => {
+          events.map((ev, i) => {
             const isUnlock = ev.event?.toLowerCase().includes('unlock')
             const EventIcon = isUnlock ? Unlock : Lock
             return (
-              <div key={ev.id} className="flex items-center gap-3 px-4 py-2.5">
+              <div key={ev.id} className={`flex items-center gap-3 px-4 py-2.5 ${i % 2 === 0 ? 'bg-white/[0.02]' : ''}`}>
                 <EventIcon size={13} className={`shrink-0 ${ev.ok ? 'text-emerald-500' : 'text-red-400'}`} />
                 <div className="min-w-0 flex-1">
                   <p className="text-xs text-white font-medium truncate">{ev.name || 'unknown'}</p>
@@ -478,7 +460,7 @@ const CUSTOM_TOOLTIP = ({ active, payload, label }) => {
 
 function RetentionChart({ data }) {
   return (
-    <div className="min-w-0 overflow-hidden bg-[#1c1c1c] rounded-xl px-5 pt-4 pb-4 flex flex-col">
+    <div className="flex-1 min-h-0 min-w-0 overflow-hidden bg-white/[0.03] border border-white/5 rounded-xl px-5 pt-4 pb-4 flex flex-col">
       <div className="flex items-center justify-between mb-3 shrink-0">
         <div className="flex items-center gap-2">
           <TrendingUp size={13} className="text-neutral-400" />
@@ -492,7 +474,7 @@ function RetentionChart({ data }) {
         </div>
       </div>
 
-      <div className="h-[280px] min-w-0 w-full overflow-hidden">
+      <div className="flex-1 min-h-0 min-w-0 w-full overflow-hidden">
         <ResponsiveContainer width="100%" height="100%" minWidth={0}>
           <AreaChart data={data} margin={{ top: 4, right: 4, left: -24, bottom: 0 }}>
             <defs>
