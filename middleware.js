@@ -9,6 +9,7 @@ export async function middleware(request) {
     pathname.startsWith('/api/auth') ||
     pathname === '/api/stripe/callback' ||
     (request.method === 'POST' && pathname === '/api/stripe/webhook') ||
+    /^\/api\/[^/]+\/stripe\/connect$/.test(pathname) ||
     pathname === '/api/admin/login' ||
     (request.method === 'POST' && /^\/api\/[^/]+\/members$/.test(pathname)) ||
     (request.method === 'POST' && /^\/api\/[^/]+\/guest-passes$/.test(pathname)) ||
