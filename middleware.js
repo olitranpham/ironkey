@@ -8,6 +8,7 @@ export async function middleware(request) {
   if (
     pathname.startsWith('/api/auth') ||
     pathname === '/api/stripe/callback' ||
+    (request.method === 'POST' && pathname === '/api/stripe/webhook') ||
     pathname === '/api/admin/login' ||
     (request.method === 'POST' && /^\/api\/[^/]+\/members$/.test(pathname)) ||
     (request.method === 'POST' && /^\/api\/[^/]+\/guest-passes$/.test(pathname)) ||
