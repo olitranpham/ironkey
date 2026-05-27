@@ -281,6 +281,11 @@ export default function MembersPage() {
                         </div>
                       </td>
 
+                      {/* Joined date */}
+                      <td className="px-5 py-3 text-right">
+                        <span className="text-xs text-neutral-500">{fmtDate(m.createdAt)}</span>
+                      </td>
+
                     </tr>
                   ))}
                 </tbody>

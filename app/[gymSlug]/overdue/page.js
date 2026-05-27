@@ -343,6 +343,18 @@ function OverduePanel({ row, membershipBorder, onClose, onAction }) {
               <span className="text-xs text-amber-400/70 text-right">{row.declineReason}</span>
             </div>
           )}
+          {row.stripeSubscriptionId && (
+            <div className="flex items-start justify-between px-3 py-2.5 bg-[#1c1c1c] gap-4">
+              <span className="text-xs text-neutral-500 shrink-0">subscription</span>
+              <span className="text-xs text-neutral-400 text-right break-all">{row.stripeSubscriptionId}</span>
+            </div>
+          )}
+          {row.stripeCustomerId && (
+            <div className="flex items-start justify-between px-3 py-2.5 bg-[#1c1c1c] gap-4">
+              <span className="text-xs text-neutral-500 shrink-0">customer</span>
+              <span className="text-xs text-neutral-400 text-right break-all">{row.stripeCustomerId}</span>
+            </div>
+          )}
         </div>
 
       </div>

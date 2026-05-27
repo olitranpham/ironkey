@@ -98,7 +98,7 @@ export default function DashboardPage() {
   const [fetchErr, setFetchErr] = useState(null)
 
   const [search,    setSearch]    = useState('')
-  const [activeTab, setActiveTab] = useState('all')
+  const [activeTab, setActiveTab] = useState('active')
 
   const [doorEvents,        setDoorEvents]        = useState([])
   const [doorEventsLoading, setDoorEventsLoading] = useState(true)

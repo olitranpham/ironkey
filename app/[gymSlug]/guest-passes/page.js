@@ -341,6 +341,13 @@ export default function GuestPassesPage() {
                           </div>
                         </td>
 
+                        {/* Last seen date */}
+                        <td className="px-5 py-3 text-right">
+                          <span className="text-xs text-neutral-500">
+                            {fmtDate(lastSeenDate(g))}
+                          </span>
+                        </td>
+
                       </tr>
                     )
                   })}
