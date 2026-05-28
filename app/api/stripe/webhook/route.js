@@ -141,6 +141,18 @@ export async function POST(request) {
         console.error('[platform/webhook] guest-passes notify error:', e.message)
       }
 
+      const zapierGuestUrl = process.env.ZAPIER_GUEST_WEBHOOK_URL
+      console.log('[platform/webhook] firing Zapier guest webhook:', zapierGuestUrl)
+      if (zapierGuestUrl) {
+        fetch(zapierGuestUrl, {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify({ name: guestName, email, accessCode, passType, passesLeft }),
+        })
+          .then(r => console.log('[platform/webhook] Zapier guest webhook status:', r.status))
+          .catch(e => console.error('[platform/webhook] Zapier guest webhook error:', e.message))
+      }
+
       return NextResponse.json({ received: true })
     }
 
