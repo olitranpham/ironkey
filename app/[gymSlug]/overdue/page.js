@@ -313,12 +313,6 @@ function OverduePanel({ row, membershipBorder, onClose, onAction }) {
           <div>
             <p className="text-white font-semibold text-base leading-tight">{row.firstName} {row.lastName}</p>
           </div>
-          <div className="flex items-center gap-3">
-            <span className="text-[11px] text-red-400/70">{row.invoiceStatus === 'unpaid' ? 'unpaid' : row.invoiceStatus === 'open' ? 'open invoice' : 'past due'}</span>
-            <span className={`text-[11px] font-medium border-l-2 pl-2 ${membershipBorder[row.membershipType] ?? membershipBorder.GENERAL}`}>
-              {(row.membershipType ?? 'GENERAL').toLowerCase()}
-            </span>
-          </div>
         </div>
 
         {/* Details */}
