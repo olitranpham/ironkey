@@ -178,7 +178,9 @@ export default function MembersPage() {
   const visible = members
     .filter(m => {
       const tabStatus = activeTab === 'canceled' ? 'cancelled' : activeTab
-      const matchTab = m.status.toLowerCase() === tabStatus.toLowerCase()
+      const matchTab = activeTab === 'active'
+        ? (m.status === 'ACTIVE' || m.status === 'OVERDUE')
+        : m.status.toLowerCase() === tabStatus.toLowerCase()
       const q = search.trim().toLowerCase()
       const matchSearch = !q ||
         `${m.firstName} ${m.lastName} ${m.email} ${m.phone ?? ''}`.toLowerCase().includes(q)

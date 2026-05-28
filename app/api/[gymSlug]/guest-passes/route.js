@@ -101,7 +101,9 @@ export async function POST(request, { params }) {
         guestEmail:     email,
         guestPhone:     body.phone ?? null,
         passType,
-        passesLeft:     body.passesLeft != null ? Number(body.passesLeft) : null,
+        passesLeft:     body.passesLeft != null && passType !== 'SINGLE'
+                          ? Math.max(0, Number(body.passesLeft) - 1)
+                          : null,
         usedAt:         new Date(),
         expiresAt:      new Date(Date.now() + 24 * 60 * 60 * 1000),
       },

@@ -26,27 +26,27 @@ export default function GuestSuccessPage() {
         <div>
           <h1 className="text-xl font-bold text-white">you're all set!</h1>
           <p className="text-sm text-neutral-400 mt-1">
-            Welcome to {gymName || gymSlug}.
+            welcome to {gymName || gymSlug}.
           </p>
         </div>
 
         <div className="w-full bg-neutral-900 rounded-xl p-4 text-left space-y-2">
           <p className="text-xs text-neutral-400 flex items-start gap-2">
             <span className="text-emerald-400 font-bold shrink-0">✓</span>
-            Your guest pass is now active.
+            your guest pass is now active.
           </p>
           <p className="text-xs text-neutral-400 flex items-start gap-2">
             <span className="text-emerald-400 font-bold shrink-0">✓</span>
-            Your access code will be sent to your email shortly.
+            your access code will be sent to your email shortly.
           </p>
           <p className="text-xs text-neutral-400 flex items-start gap-2">
             <span className="text-emerald-400 font-bold shrink-0">✓</span>
-            A receipt has been sent from Stripe.
+            a receipt has been sent from stripe.
           </p>
         </div>
 
         <p className="text-[11px] text-neutral-600">
-          Questions? Contact {gymName || 'the gym'} directly.
+          questions? contact triumphbarbell@gmail.com
         </p>
 
       </div>

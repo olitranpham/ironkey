@@ -187,6 +187,7 @@ export default function GuestPage() {
   const [checkinResult,   setCheckinResult]    = useState(null)
 
   useEffect(() => {
+    document.title = 'guest pass registration'
     fetch(`/api/${gymSlug}/guest`)
       .then(r => r.json())
       .then(({ gym, plans }) => {
