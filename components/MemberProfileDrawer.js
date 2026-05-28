@@ -95,15 +95,6 @@ function DrawerContent({ member, membershipBorder, onClose, onStatusChange, onSa
           <p className="text-white font-semibold text-base leading-tight">
             {member.firstName} {member.lastName}
           </p>
-          <div className="flex items-center gap-2.5">
-            <span className={`text-xs font-medium ${STATUS_TEXT[member.status] ?? 'text-zinc-500'}`}>
-              {fmtStatus(member.status)}
-            </span>
-            <span className="text-neutral-700">·</span>
-            <span className={`text-xs font-medium ${membershipBorder[member.membershipType] ?? membershipBorder.GENERAL}`}>
-              {(member.membershipType ?? 'GENERAL').toLowerCase()}
-            </span>
-          </div>
         </div>
 
         {/* Contact */}

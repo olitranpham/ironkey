@@ -381,6 +381,9 @@ function MemberDirectory({ members, membershipBorder, search, setSearch, activeT
                         <p className="text-white text-sm">{m.firstName} {m.lastName}</p>
                       </div>
                     </td>
+                    <td className="px-5 py-3 text-right whitespace-nowrap">
+                      <span className="text-xs text-neutral-500">{fmtDate(statusDate(m))}</span>
+                    </td>
                   </tr>
                 )
               })}

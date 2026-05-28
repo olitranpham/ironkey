@@ -194,9 +194,10 @@ export async function GET(request, { params }) {
       // 5. Manual override — force to member type even without a DB match
       const isOverride = c.name && MEMBER_NAME_OVERRIDES.has(c.name.toLowerCase().trim())
 
+      const dbName = member ? `${member.firstName} ${member.lastName}`.trim() : null
       return {
         id:           c.access_code_id,
-        name:         c.name ?? '—',
+        name:         dbName || c.name || '—',
         code:         c.code,
         status:       c.status,       // 'set' | 'unset' | 'unknown'
         type:         (member || isOverride) ? 'member' : 'guest',
