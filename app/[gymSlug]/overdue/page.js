@@ -178,9 +178,8 @@ export default function OverduePage() {
                 <button onClick={fetchOverdue} className="text-xs text-neutral-400 border border-neutral-700 rounded-lg px-3 py-1.5 hover:text-white transition-colors">retry</button>
               </div>
             ) : rows.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-48 gap-2">
-                <p className="text-sm text-neutral-500">no overdue members</p>
-                <p className="text-xs text-neutral-700">all memberships are current</p>
+              <div className="flex flex-col items-center justify-center h-48">
+                <p className="text-sm text-neutral-500">all caught up!</p>
               </div>
             ) : (
               <table className="w-full text-sm">

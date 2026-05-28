@@ -39,7 +39,7 @@ export async function DELETE(request, { params }) {
           data:  { accessCode: null },
         }),
         prisma.guest.updateMany({
-          where: { gymId, accessCode: pin },
+          where: { accessCode: pin },
           data:  { accessCode: null },
         }),
       ])
