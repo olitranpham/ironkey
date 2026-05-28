@@ -94,12 +94,17 @@ export async function POST(request) {
         })
       }
 
+      let firstTime = true
       if (guestProfile) {
-        await prisma.guestWaiver.upsert({
-          where:  { guestProfileId_gymId: { guestProfileId: guestProfile.id, gymId: gym.id } },
-          update: {},
-          create: { guestProfileId: guestProfile.id, gymId: gym.id },
+        const existingWaiver = await prisma.guestWaiver.findUnique({
+          where: { guestProfileId_gymId: { guestProfileId: guestProfile.id, gymId: gym.id } },
         })
+        firstTime = !existingWaiver
+        if (!existingWaiver) {
+          await prisma.guestWaiver.create({
+            data: { guestProfileId: guestProfile.id, gymId: gym.id },
+          })
+        }
       }
 
       let accessCode = guestProfile?.accessCode ?? null
@@ -147,7 +152,7 @@ export async function POST(request) {
         fetch(zapierGuestUrl, {
           method:  'POST',
           headers: { 'Content-Type': 'application/json' },
-          body:    JSON.stringify({ name: guestName, email, accessCode, passType, passesLeft }),
+          body:    JSON.stringify({ name: guestName, email, accessCode, passType, passesLeft, firstTime }),
         })
           .then(r => console.log('[platform/webhook] Zapier guest webhook status:', r.status))
           .catch(e => console.error('[platform/webhook] Zapier guest webhook error:', e.message))
