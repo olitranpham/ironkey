@@ -313,7 +313,6 @@ function OverduePanel({ row, membershipBorder, onClose, onAction }) {
           </div>
           <div>
             <p className="text-white font-semibold text-base leading-tight">{row.firstName} {row.lastName}</p>
-            <p className="text-neutral-500 text-xs mt-0.5">{row.email}</p>
           </div>
           <div className="flex items-center gap-3">
             <span className="text-[11px] text-red-400/70">{row.invoiceStatus === 'unpaid' ? 'unpaid' : row.invoiceStatus === 'open' ? 'open invoice' : 'past due'}</span>

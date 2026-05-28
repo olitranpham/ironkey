@@ -355,8 +355,10 @@ function PaymentPanel({ member, priceMap, priceIdMap, onClose, onAction, actionL
 
         {/* Billing */}
         <PSection icon={CreditCard} title="billing">
-          <PField label="plan"   value={(member.membershipType ?? 'GENERAL').toLowerCase()} />
-          <PField label="amount" value={entry ? `$${entry.amount}/${entry.interval}` : '—'} />
+          <PField label="plan"         value={(member.membershipType ?? 'GENERAL').toLowerCase()} />
+          <PField label="amount"       value={entry ? `$${entry.amount}/${entry.interval}` : '—'} />
+          <PField label="subscription" value={member.stripeSubscriptionId} wrap />
+          <PField label="customer"     value={member.stripeCustomerId} wrap />
         </PSection>
 
       </div>
@@ -411,11 +413,11 @@ function PSection({ icon: Icon, title, children }) {
   )
 }
 
-function PField({ label, value }) {
+function PField({ label, value, wrap }) {
   return (
-    <div className="flex items-center justify-between px-3 py-2.5 bg-[#1c1c1c]">
+    <div className="flex items-start justify-between px-3 py-2.5 bg-[#1c1c1c] gap-4">
       <span className="text-xs text-zinc-400 shrink-0">{label}</span>
-      <span className="text-xs text-white text-right ml-4 truncate max-w-[240px]">{value || '—'}</span>
+      <span className={`text-xs text-white text-right ${wrap ? 'break-all' : 'truncate max-w-[240px]'}`}>{value || '—'}</span>
     </div>
   )
 }
