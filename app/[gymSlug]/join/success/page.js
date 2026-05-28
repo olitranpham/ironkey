@@ -39,10 +39,6 @@ export default function JoinSuccessPage() {
             <span className="text-emerald-400 font-bold shrink-0">✓</span>
             your access code will be sent to your email shortly.
           </p>
-          <p className="text-xs text-neutral-400 flex items-start gap-2">
-            <span className="text-emerald-400 font-bold shrink-0">✓</span>
-            a receipt has been sent from stripe.
-          </p>
         </div>
 
         <p className="text-[11px] text-neutral-600">
