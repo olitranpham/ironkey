@@ -266,7 +266,7 @@ export default function JoinPage() {
       {/* Header */}
       <div className="text-center mb-8">
 <h1 className="text-2xl font-bold text-white">{gymName}</h1>
-        <p className="text-neutral-500 text-sm mt-1">membership signup</p>
+        <p className="text-neutral-500 text-sm mt-1">membership registration</p>
       </div>
 
       {/* Form card */}
