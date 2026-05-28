@@ -368,7 +368,7 @@ export default function GuestPage() {
       {/* Header */}
       <div className="text-center mb-8">
         <h1 className="text-2xl font-bold text-white">{gymName}</h1>
-        <p className="text-neutral-500 text-sm mt-1">guest pass</p>
+        <p className="text-neutral-500 text-sm mt-1">guest pass registration</p>
       </div>
 
       <div className="w-full max-w-md">

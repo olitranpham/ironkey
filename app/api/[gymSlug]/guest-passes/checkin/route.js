@@ -116,11 +116,6 @@ export async function POST(request, { params }) {
         await deactivateSeamCode(profile.accessCode, gym.seamApiKey, gym.seamDeviceId)
       }
 
-      // ── Notify Zapier (fire-and-forget) ─────────────────────────────────
-      if (profile?.accessCode) {
-        notifyZapier(request, gymSlug, { name: profile.name, email, phone: body.phone, accessCode: profile.accessCode })
-      }
-
       return NextResponse.json({ ok: true, passesLeft: updated.passesLeft, passType: updated.passType, passTypeLabel: PASS_TYPE_LABEL[updated.passType] ?? updated.passType, accessCode: profile?.accessCode ?? null })
     }
 
