@@ -12,7 +12,7 @@ const PLAN_AMOUNT = { FOUNDING: 50, GENERAL: 65, STUDENT: 55 }
 const CONFIRM_COPY = {
   retry: {
     title:   'retry charge?',
-    bullets: ['stripe will attempt to charge the card on file', 'the member will be notified if payment succeeds'],
+    bullets: ['stripe will attempt to charge the card on file'],
     cta: 'yes, retry', ctaCls: 'bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20',
   },
   resolve: {

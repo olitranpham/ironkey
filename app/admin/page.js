@@ -67,11 +67,6 @@ function GymCard({ gym, onEdit, onOpenPortal }) {
 
       {/* Header */}
       <div className="flex items-start gap-3">
-        <div className="w-9 h-9 rounded-lg bg-white flex items-center justify-center shrink-0">
-          <span className="text-[#1c1c1c] font-black text-[11px] tracking-tighter select-none">
-            {gymInitials(gym.name)}
-          </span>
-        </div>
         <div className="min-w-0 flex-1">
           <p className="text-sm font-semibold text-white truncate">{gym.name.toLowerCase()}</p>
           <p className="text-[11px] text-neutral-600 font-mono">{gym.slug}</p>
@@ -346,16 +341,6 @@ export default function AdminDashboard() {
           <span className="text-sm font-semibold text-white">ironkey admin portal</span>
         </div>
         <div className="flex items-center gap-3">
-          <span className="text-xs text-neutral-600 hidden sm:block">
-            {totalGyms} gym{totalGyms !== 1 ? 's' : ''} · {totalActive} active members
-          </span>
-          <button
-            onClick={fetchGyms}
-            disabled={loading}
-            className="flex items-center gap-1.5 rounded-lg border border-neutral-700 px-3 py-1.5 text-xs text-neutral-400 hover:text-white hover:border-neutral-600 disabled:opacity-40 transition-colors"
-          >
-            <RefreshCw size={11} className={loading ? 'animate-spin' : ''} /> refresh
-          </button>
           <button
             onClick={logout}
             className="rounded-lg border border-neutral-700 px-3 py-1.5 text-xs text-neutral-400 hover:text-white hover:border-neutral-600 transition-colors"
@@ -369,8 +354,7 @@ export default function AdminDashboard() {
       <main className="max-w-6xl mx-auto px-6 py-8">
 
         {/* Toolbar */}
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-xs font-semibold text-neutral-500 tracking-wider">gyms</h2>
+        <div className="flex items-center justify-end mb-6">
           <button
             onClick={() => setAddModal(true)}
             className="flex items-center gap-1.5 rounded-lg bg-white text-[#1c1c1c] px-3 py-1.5 text-xs font-semibold hover:bg-neutral-200 transition-colors"
