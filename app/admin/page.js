@@ -242,9 +242,7 @@ function EditGymModal({ gym, onClose, onUpdated, onDeleted, adminToken }) {
         <form onSubmit={handleSubmit} className="space-y-3">
           <Field label="gym name" value={name} onChange={setName} />
           <Field label="slug"     value={slug} onChange={setSlug} mono />
-          <MaskedInput label={`seam api key${gym.hasSeam ? ' (set — blank to keep)' : ''}`}      value={seamApiKey}      onChange={setSeamApiKey}      />
-          <Field       label="seam device id"                                                  value={seamDeviceId}    onChange={setSeamDeviceId}    mono />
-          <MaskedInput label={`stripe account id${gym.hasStripe ? ' (set — blank to keep)' : ''}`} value={stripeAccountId} onChange={setStripeAccountId} />
+          <Field label="seam device id" value={seamDeviceId} onChange={setSeamDeviceId} mono />
           <Field label="zapier member webhook url" value={zapierMemberWebhookUrl} onChange={setZapierMemberWebhookUrl} placeholder="https://hooks.zapier.com/…" />
           <Field label="zapier guest webhook url"  value={zapierGuestWebhookUrl}  onChange={setZapierGuestWebhookUrl}  placeholder="https://hooks.zapier.com/…" />
           {error && <p className="text-xs text-red-400">{error}</p>}
