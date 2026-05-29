@@ -56,6 +56,7 @@ const [curPw,     setCurPw]     = useState('')
   const [pwSaved,   setPwSaved]   = useState(false)
   const [pwError,   setPwError]   = useState(null)
 
+
   const token = () => localStorage.getItem('ik_token')
 
   // ── Load settings ──────────────────────────────────────────────────────────

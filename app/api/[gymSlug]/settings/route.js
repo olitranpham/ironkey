@@ -24,8 +24,8 @@ export async function GET(request) {
 
     return NextResponse.json({
       settings: {
-        name:                  gym.name,
-        slug:                  gym.slug,
+        name:             gym.name,
+        slug:             gym.slug,
         hasStripeConnect: Boolean(gym.stripeAccountId),
         hasSeam:          Boolean(gym.seamApiKey),
       },

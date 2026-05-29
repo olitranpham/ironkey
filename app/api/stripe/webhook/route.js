@@ -49,11 +49,13 @@ export async function POST(request) {
   const gym = await prisma.gym.findFirst({
     where:  { stripeAccountId: connectedAccountId },
     select: {
-      id:          true,
-      slug:        true,
-      stripeSecretKey: true,
-      seamApiKey:  true,
-      seamDeviceId: true,
+      id:                     true,
+      slug:                   true,
+      stripeSecretKey:        true,
+      seamApiKey:             true,
+      seamDeviceId:           true,
+      zapierMemberWebhookUrl: true,
+      zapierGuestWebhookUrl:  true,
     },
   })
 
@@ -146,7 +148,7 @@ export async function POST(request) {
         console.error('[platform/webhook] guest-passes notify error:', e.message)
       }
 
-      const zapierGuestUrl = process.env.ZAPIER_GUEST_WEBHOOK_URL
+      const zapierGuestUrl = gym.zapierGuestWebhookUrl || process.env.ZAPIER_GUEST_WEBHOOK_URL
       console.log('[platform/webhook] firing Zapier guest webhook:', zapierGuestUrl)
       if (zapierGuestUrl) {
         fetch(zapierGuestUrl, {
@@ -229,8 +231,9 @@ export async function POST(request) {
     })
     console.log('[platform/webhook] access code generated for member:', member.id, '| code:', accessCode)
 
-    const zapierMemberUrl = process.env.ZAPIER_MEMBER_WEBHOOK_URL
+    const zapierMemberUrl = gym.zapierMemberWebhookUrl || process.env.ZAPIER_MEMBER_WEBHOOK_URL
     console.log('[platform/webhook] firing Zapier member webhook:', zapierMemberUrl)
+    console.log('[platform/webhook] Zapier member payload: firstName=%s lastName=%s email=%s accessCode=%s membershipType=%s', firstName, lastName, email, accessCode, membershipType)
     if (zapierMemberUrl) {
       fetch(zapierMemberUrl, {
         method:  'POST',
