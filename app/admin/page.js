@@ -78,21 +78,6 @@ function GymCard({ gym, onEdit, onOpenPortal }) {
         </div>
       </div>
 
-      {/* Member counts */}
-      <div className="grid grid-cols-4 gap-2">
-        {[
-          { label: 'active',   value: gym.active,   cls: 'text-emerald-400' },
-          { label: 'frozen',   value: gym.frozen,   cls: 'text-blue-400' },
-          { label: 'canceled', value: gym.canceled, cls: 'text-neutral-400' },
-          { label: 'overdue',  value: gym.overdue,  cls: 'text-red-400' },
-        ].map(({ label, value, cls }) => (
-          <div key={label} className="bg-[#252525] rounded-lg px-2 py-2 text-center">
-            <p className={`text-base font-semibold tabular-nums ${cls}`}>{value}</p>
-            <p className="text-[10px] text-neutral-600 mt-0.5">{label}</p>
-          </div>
-        ))}
-      </div>
-
       {/* Integrations */}
       <div className="flex items-center gap-4">
         <div className="flex items-center gap-1.5">
