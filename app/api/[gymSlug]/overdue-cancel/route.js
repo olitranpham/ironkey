@@ -43,8 +43,8 @@ export async function POST(request, { params }) {
 
     // ── Fetch all past_due + unpaid subscriptions ─────────────────────────────
     const [r1, r2] = await Promise.all([
-      stripe.subscriptions.list({ status: 'past_due', limit: 100, expand: ['data.customer'] }),
-      stripe.subscriptions.list({ status: 'unpaid',   limit: 100, expand: ['data.customer'] }),
+      stripe.subscriptions.list({ status: 'past_due', limit: 100, expand: ['data.customer', 'data.latest_invoice'] }),
+      stripe.subscriptions.list({ status: 'unpaid',   limit: 100, expand: ['data.customer', 'data.latest_invoice'] }),
     ])
     const subs = [...r1.data, ...r2.data]
 
@@ -82,8 +82,27 @@ export async function POST(request, { params }) {
         : (sub.customer?.name?.trim() ?? email ?? 'Unknown')
       const accessCode = member?.accessCode ?? null
 
-      // days since current_period_end (when the unpaid invoice was due)
-      const daysOverdue = Math.max(0, Math.floor((nowSecs - sub.current_period_end) / 86400))
+      // Determine when this subscription actually became overdue.
+      //
+      // For past_due/unpaid subs, Stripe advances current_period_end to the END
+      // of the NEW billing period (in the future), so it can't be used directly.
+      // Instead, use the latest invoice's created timestamp — that's when Stripe
+      // first attempted to collect and failed, which is the true "overdue since" date.
+      // Fall back to current_period_end only if it's already in the past.
+      const inv = sub.latest_invoice
+      const invoiceCreated = typeof inv === 'object' && inv !== null ? inv.created : null
+      const periodEnd      = sub.current_period_end
+
+      let overdueSince = null
+      if (invoiceCreated && invoiceCreated < nowSecs) {
+        overdueSince = invoiceCreated
+      } else if (periodEnd && periodEnd < nowSecs) {
+        overdueSince = periodEnd
+      }
+
+      const daysOverdue = overdueSince
+        ? Math.max(0, Math.floor((nowSecs - overdueSince) / 86400))
+        : 0
 
       console.log(
         '[overdue-cancel] sub=%s email=%s daysOverdue=%d status=%s',
