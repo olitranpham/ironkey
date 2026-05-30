@@ -168,8 +168,9 @@ function EditGymModal({ gym, onClose, onUpdated, onDeleted, adminToken }) {
   const [seamApiKey,             setSeamApiKey]             = useState('')
   const [seamDeviceId,           setSeamDeviceId]           = useState(gym.seamDeviceId ?? '')
   const [stripeAccountId,        setStripeAccountId]        = useState('')
-  const [zapierMemberWebhookUrl, setZapierMemberWebhookUrl] = useState(gym.zapierMemberWebhookUrl ?? '')
-  const [zapierGuestWebhookUrl,  setZapierGuestWebhookUrl]  = useState(gym.zapierGuestWebhookUrl  ?? '')
+  const [zapierMemberWebhookUrl,  setZapierMemberWebhookUrl]  = useState(gym.zapierMemberWebhookUrl  ?? '')
+  const [zapierGuestWebhookUrl,   setZapierGuestWebhookUrl]   = useState(gym.zapierGuestWebhookUrl   ?? '')
+  const [zapierOverdueWebhookUrl, setZapierOverdueWebhookUrl] = useState(gym.zapierOverdueWebhookUrl ?? '')
   const [loading,         setLoading]         = useState(false)
   const [error,           setError]           = useState(null)
   const [confirmDelete,   setConfirmDelete]   = useState(false)
@@ -182,7 +183,7 @@ function EditGymModal({ gym, onClose, onUpdated, onDeleted, adminToken }) {
       const res  = await fetch(`/api/admin/gyms/${gym.id}`, {
         method:  'PATCH',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
-        body:    JSON.stringify({ name, slug, seamApiKey, seamDeviceId, stripeAccountId, zapierMemberWebhookUrl, zapierGuestWebhookUrl }),
+        body:    JSON.stringify({ name, slug, seamApiKey, seamDeviceId, stripeAccountId, zapierMemberWebhookUrl, zapierGuestWebhookUrl, zapierOverdueWebhookUrl }),
       })
       const data = await res.json()
       if (!res.ok) { setError(data.error); return }
@@ -223,8 +224,9 @@ function EditGymModal({ gym, onClose, onUpdated, onDeleted, adminToken }) {
           <Field label="gym name" value={name} onChange={setName} />
           <Field label="slug"     value={slug} onChange={setSlug} mono />
           <Field label="seam device id" value={seamDeviceId} onChange={setSeamDeviceId} mono />
-          <Field label="zapier member webhook url" value={zapierMemberWebhookUrl} onChange={setZapierMemberWebhookUrl} placeholder="https://hooks.zapier.com/…" />
-          <Field label="zapier guest webhook url"  value={zapierGuestWebhookUrl}  onChange={setZapierGuestWebhookUrl}  placeholder="https://hooks.zapier.com/…" />
+          <Field label="zapier member webhook url"  value={zapierMemberWebhookUrl}  onChange={setZapierMemberWebhookUrl}  placeholder="https://hooks.zapier.com/…" />
+          <Field label="zapier guest webhook url"   value={zapierGuestWebhookUrl}   onChange={setZapierGuestWebhookUrl}   placeholder="https://hooks.zapier.com/…" />
+          <Field label="zapier overdue webhook url" value={zapierOverdueWebhookUrl} onChange={setZapierOverdueWebhookUrl} placeholder="https://hooks.zapier.com/…" />
           {error && <p className="text-xs text-red-400">{error}</p>}
           <div className="flex gap-2 pt-2">
             <button type="button" onClick={onClose} disabled={loading} className="flex-1 py-2 rounded-lg text-xs font-medium border border-neutral-700 text-neutral-400 hover:text-white disabled:opacity-40 transition-colors">

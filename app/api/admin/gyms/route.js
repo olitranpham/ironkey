@@ -17,8 +17,9 @@ export async function GET() {
           seamApiKey: true,
           seamDeviceId: true,
           createdAt: true,
-          zapierMemberWebhookUrl: true,
-          zapierGuestWebhookUrl:  true,
+          zapierMemberWebhookUrl:  true,
+          zapierGuestWebhookUrl:   true,
+          zapierOverdueWebhookUrl: true,
         },
       }),
       prisma.member.groupBy({
@@ -46,8 +47,9 @@ export async function GET() {
       frozen:                 countsMap[gym.id]?.FROZEN    ?? 0,
       canceled:               countsMap[gym.id]?.CANCELLED ?? 0,
       overdue:                countsMap[gym.id]?.OVERDUE   ?? 0,
-      zapierMemberWebhookUrl: gym.zapierMemberWebhookUrl ?? '',
-      zapierGuestWebhookUrl:  gym.zapierGuestWebhookUrl  ?? '',
+      zapierMemberWebhookUrl:  gym.zapierMemberWebhookUrl  ?? '',
+      zapierGuestWebhookUrl:   gym.zapierGuestWebhookUrl   ?? '',
+      zapierOverdueWebhookUrl: gym.zapierOverdueWebhookUrl ?? '',
     }))
 
     return NextResponse.json({ gyms: result })

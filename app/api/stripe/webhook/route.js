@@ -298,6 +298,54 @@ export async function POST(request) {
     }).catch(e => console.error('[platform/webhook] members notify error:', e.message))
   }
 
+  // ── customer.subscription.updated ────────────────────────────────────────
+  if (event.type === 'customer.subscription.updated') {
+    const sub   = event.data.object
+    const subId = sub.id
+
+    const member = await prisma.member.findFirst({
+      where:  { gymId: gym.id, stripeSubscriptionId: subId },
+      select: { id: true, stripeCustomerId: true, priceId: true, status: true },
+    })
+
+    if (!member) {
+      console.warn('[platform/webhook] subscription.updated — no member found for sub:', subId)
+      return NextResponse.json({ received: true })
+    }
+
+    const update = {}
+
+    // Sync customer ID if it changed or was missing
+    const newCustomerId = typeof sub.customer === 'string' ? sub.customer : sub.customer?.id
+    if (newCustomerId && newCustomerId !== member.stripeCustomerId) {
+      update.stripeCustomerId = newCustomerId
+    }
+
+    // Sync price ID from first line item if it changed
+    const newPriceId = sub.items?.data?.[0]?.price?.id ?? null
+    if (newPriceId && newPriceId !== member.priceId) {
+      update.priceId = newPriceId
+    }
+
+    // Map Stripe status → member status
+    // past_due is handled by the overdue-cancel cron — leave DB status unchanged
+    if (sub.status === 'active') {
+      update.status = 'ACTIVE'
+    } else if (sub.status === 'canceled') {
+      update.status = 'CANCELLED'
+    }
+    // past_due / unpaid / trialing / paused — no change here
+
+    if (Object.keys(update).length > 0) {
+      await prisma.member.update({ where: { id: member.id }, data: update })
+      console.log('[platform/webhook] subscription.updated — member %s updated: %j', member.id, update)
+    } else {
+      console.log('[platform/webhook] subscription.updated — no changes for member %s', member.id)
+    }
+
+    return NextResponse.json({ received: true })
+  }
+
   // ── customer.subscription.deleted ────────────────────────────────────────
   if (event.type === 'customer.subscription.deleted') {
     const sub    = event.data.object

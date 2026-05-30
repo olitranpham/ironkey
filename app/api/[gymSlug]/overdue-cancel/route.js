@@ -29,11 +29,11 @@ export async function POST(request, { params }) {
     const gym = await prisma.gym.findUnique({
       where:  { slug: gymSlug },
       select: {
-        id:                    true,
-        stripeSecretKey:       true,
-        seamApiKey:            true,
-        seamDeviceId:          true,
-        zapierMemberWebhookUrl: true,
+        id:                     true,
+        stripeSecretKey:        true,
+        seamApiKey:             true,
+        seamDeviceId:           true,
+        zapierOverdueWebhookUrl: true,
       },
     })
     if (!gym)                  return NextResponse.json({ error: 'Gym not found' },        { status: 404 })
@@ -68,7 +68,7 @@ export async function POST(request, { params }) {
       if (m.email) memberByEmail[m.email.toLowerCase()] = m
     }
 
-    const zapierUrl = gym.zapierMemberWebhookUrl || process.env.ZAPIER_MEMBER_WEBHOOK_URL
+    const zapierUrl = gym.zapierOverdueWebhookUrl || process.env.ZAPIER_OVERDUE_WEBHOOK_URL
     const nowSecs   = Math.floor(Date.now() / 1000)
 
     let warnings  = 0
