@@ -147,17 +147,16 @@ export async function POST(request, { params }) {
 
         cancelled++
       } else {
-        // ── Warning (1–13 days) ────────────────────────────────────────────────
+        // ── Warning (day 1, 7, or 13 only) ───────────────────────────────────────
 
-        if (zapierUrl) {
+        if (zapierUrl && [1, 7, 13].includes(daysOverdue)) {
           fetch(zapierUrl, {
             method:  'POST',
             headers: { 'Content-Type': 'application/json' },
             body:    JSON.stringify({ name, email, accessCode, status: 'overdue_warning', daysOverdue }),
           }).catch(e => console.error('[overdue-cancel] zapier warning webhook error:', e.message))
+          warnings++
         }
-
-        warnings++
       }
     }
 
