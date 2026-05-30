@@ -43,8 +43,12 @@ export async function POST(request, { params }) {
 
     const stripe = new Stripe(gym.stripeSecretKey, { apiVersion: '2024-06-20' })
 
-    // Build base URL from request origin for redirect URLs
-    const origin = request.headers.get('origin') ?? `https://${request.headers.get('host')}`
+    // Build base URL for redirect URLs — prefer explicit env var so mobile Safari
+    // (which sometimes omits the Origin header on same-origin fetches) always gets
+    // a valid success/cancel URL.
+    const origin = process.env.NEXT_PUBLIC_APP_URL
+      ?? request.headers.get('origin')
+      ?? `https://${request.headers.get('host')}`
 
     const lineItems = [{ price: priceId, quantity: 1 }]
     if (addonPriceId) lineItems.push({ price: addonPriceId, quantity: 1 })

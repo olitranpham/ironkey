@@ -294,6 +294,7 @@ export default function GuestPage() {
       })
       const json = await res.json()
       if (!res.ok) throw new Error(json.error ?? 'something went wrong')
+      if (!json.url) throw new Error('no checkout URL returned — please try again.')
       window.location.href = json.url
     } catch (e) {
       setError(e.message)
@@ -323,6 +324,7 @@ export default function GuestPage() {
       })
       const json = await res.json()
       if (!res.ok) throw new Error(json.error ?? 'something went wrong')
+      if (!json.url) throw new Error('no checkout URL returned — please try again.')
       window.location.href = json.url
     } catch (e) {
       setError(e.message)

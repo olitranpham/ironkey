@@ -37,7 +37,9 @@ export async function POST(request, { params }) {
     if (!gym.stripeSecretKey) return NextResponse.json({ error: 'Stripe not configured' }, { status: 400 })
 
     const stripe    = new Stripe(gym.stripeSecretKey, { apiVersion: '2024-06-20' })
-    const origin    = request.headers.get('origin') ?? `https://${request.headers.get('host')}`
+    const origin    = process.env.NEXT_PUBLIC_APP_URL
+      ?? request.headers.get('origin')
+      ?? `https://${request.headers.get('host')}`
     // Accept pre-built name (returning guest) or construct from first/last
     const guestName = body.name?.trim() || [firstName, lastName].filter(Boolean).join(' ').trim() || email.trim()
 

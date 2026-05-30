@@ -245,6 +245,7 @@ export default function JoinPage() {
       }
       const json = await res.json()
       if (!res.ok) throw new Error(json.error ?? 'Something went wrong')
+      if (!json.url) throw new Error('No checkout URL returned — please try again.')
       window.location.href = json.url
     } catch (e) {
       setError(e.message)

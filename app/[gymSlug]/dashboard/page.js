@@ -509,9 +509,9 @@ function RetentionChart({ data }) {
             />
             <Tooltip content={<CUSTOM_TOOLTIP />} cursor={{ stroke: '#404040', strokeWidth: 1 }} />
 
-            <Area type="monotone" dataKey="active"   name="Active"   stroke="#10b981" strokeWidth={2}   fill="url(#gActive)"    dot={false} />
-            <Area type="monotone" dataKey="frozen"   name="Frozen"   stroke="#0ea5e9" strokeWidth={2}   fill="url(#gFrozen)"    dot={false} />
-            <Area type="monotone" dataKey="canceled" name="Canceled" stroke="#525252" strokeWidth={1.5} fill="url(#gCancelled)" dot={false} />
+            <Area type="monotone" dataKey="active"   name="active"   stroke="#10b981" strokeWidth={2}   fill="url(#gActive)"    dot={false} />
+            <Area type="monotone" dataKey="frozen"   name="frozen"   stroke="#0ea5e9" strokeWidth={2}   fill="url(#gFrozen)"    dot={false} />
+            <Area type="monotone" dataKey="canceled" name="canceled" stroke="#525252" strokeWidth={1.5} fill="url(#gCancelled)" dot={false} />
           </AreaChart>
         </ResponsiveContainer>
       </div>
