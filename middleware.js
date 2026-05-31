@@ -17,7 +17,6 @@ export async function middleware(request) {
     (request.method === 'POST' && /^\/api\/[^/]+\/stripe\/webhook$/.test(pathname)) ||
     /^\/api\/[^/]+\/join(\/|$)/.test(pathname) ||
     /^\/api\/[^/]+\/guest(\/|$)/.test(pathname) ||
-    /^\/api\/[^/]+\/jotform(\/|$)/.test(pathname) ||
     (request.method === 'POST' && /^\/api\/[^/]+\/overdue-cancel$/.test(pathname))
   ) {
     return NextResponse.next()

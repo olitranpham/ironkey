@@ -1,8 +1,7 @@
 import { NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import prisma from '@/lib/prisma'
-
-const SEAM_API = 'https://connect.getseam.com'
+import { deleteSeamCodeByPin } from '@/lib/seam'
 
 /**
  * POST /api/[gymSlug]/stripe/webhook
@@ -283,35 +282,8 @@ export async function POST(request, { params }) {
     console.log('[webhook] subscription deleted for member:', member.id, '| accessCode:', member.accessCode)
 
     // ── Delete Seam access code ─────────────────────────────────────────────
-    if (member.accessCode && gym.seamApiKey && gym.seamDeviceId) {
-      try {
-        const seamHeaders = {
-          Authorization:  `Bearer ${gym.seamApiKey}`,
-          'Content-Type': 'application/json',
-        }
-        const listRes = await fetch(`${SEAM_API}/access_codes/list`, {
-          method:  'POST',
-          headers: seamHeaders,
-          body:    JSON.stringify({ device_id: gym.seamDeviceId }),
-        })
-        const { access_codes = [] } = await listRes.json()
-        const match = access_codes.find(
-          c => String(c.code).trim() === String(member.accessCode).trim()
-        )
-
-        if (match) {
-          const delRes = await fetch(`${SEAM_API}/access_codes/delete`, {
-            method:  'POST',
-            headers: seamHeaders,
-            body:    JSON.stringify({ access_code_id: match.access_code_id }),
-          })
-          console.log('[webhook] Seam delete status:', delRes.status, '| code:', member.accessCode)
-        } else {
-          console.log('[webhook] Seam code not found on device (may already be removed):', member.accessCode)
-        }
-      } catch (seamErr) {
-        console.error('[webhook] Seam error:', seamErr.message)
-      }
+    if (member.accessCode && gym.seamApiKey) {
+      await deleteSeamCodeByPin(gym.seamApiKey, member.accessCode, gym.seamDeviceId, '[webhook]')
     }
 
     // ── Ensure DB status is CANCELLED ───────────────────────────────────────

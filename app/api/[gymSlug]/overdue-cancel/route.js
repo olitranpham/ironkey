@@ -1,8 +1,7 @@
 import { NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import prisma from '@/lib/prisma'
-
-const SEAM_API = 'https://connect.getseam.com'
+import { deleteSeamCodeByPin } from '@/lib/seam'
 
 /**
  * POST /api/[gymSlug]/overdue-cancel
@@ -131,9 +130,15 @@ export async function POST(request, { params }) {
           console.log('[overdue-cancel] set member %s CANCELLED', member.id)
         }
 
-        // 3. Delete Seam access code
+        // 3. Delete Seam access code and clear from DB
         if (accessCode) {
-          await deleteSeamAccessCode(gym, accessCode, member?.id)
+          const seamKey = gym.seamApiKey ?? process.env.SEAM_API_KEY
+          if (seamKey) {
+            await deleteSeamCodeByPin(seamKey, accessCode, gym.seamDeviceId ?? process.env.SEAM_DEVICE_ID, '[overdue-cancel]')
+          }
+          if (member) {
+            await prisma.member.update({ where: { id: member.id }, data: { accessCode: null } })
+          }
         }
 
         // 4. Zapier cancel webhook (fire-and-forget)
@@ -169,86 +174,5 @@ export async function POST(request, { params }) {
   } catch (error) {
     console.error('[overdue-cancel]', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
-  }
-}
-
-/**
- * Finds the Seam access_code_id for a given PIN, deletes it, and clears it
- * from the member record in the DB.
- */
-async function deleteSeamAccessCode(gym, pin, memberId) {
-  const apiKey   = gym.seamApiKey   ?? process.env.SEAM_API_KEY
-  const deviceId = gym.seamDeviceId ?? process.env.SEAM_DEVICE_ID
-
-  if (!apiKey) {
-    console.warn('[overdue-cancel/seam] no API key configured — skipping code deletion')
-    return
-  }
-
-  const seamHeaders = {
-    Authorization:  `Bearer ${apiKey}`,
-    'Content-Type': 'application/json',
-  }
-
-  try {
-    // List codes for the device to find the access_code_id matching this PIN
-    let devices = deviceId ? [{ device_id: deviceId }] : []
-
-    if (!deviceId) {
-      const devRes = await fetch(`${SEAM_API}/devices/list`, {
-        method:  'POST',
-        headers: seamHeaders,
-        body:    JSON.stringify({}),
-      })
-      if (devRes.ok) {
-        const devBody = await devRes.json()
-        devices = devBody.devices ?? []
-      }
-    }
-
-    // Collect all codes across devices, find matching PIN
-    let targetCodeId = null
-    for (const device of devices) {
-      const codesRes = await fetch(`${SEAM_API}/access_codes/list`, {
-        method:  'POST',
-        headers: seamHeaders,
-        body:    JSON.stringify({ device_id: device.device_id }),
-      })
-      if (!codesRes.ok) continue
-      const codesBody = await codesRes.json()
-      const match = (codesBody.access_codes ?? []).find(
-        c => String(c.code).trim() === String(pin).trim()
-      )
-      if (match) { targetCodeId = match.access_code_id; break }
-    }
-
-    if (!targetCodeId) {
-      console.warn('[overdue-cancel/seam] no code found for PIN %s — skipping delete', pin)
-      // Still clear the DB field even if Seam code not found
-      if (memberId) {
-        await prisma.member.update({ where: { id: memberId }, data: { accessCode: null } })
-      }
-      return
-    }
-
-    // Delete from Seam
-    const delRes = await fetch(`${SEAM_API}/access_codes/delete`, {
-      method:  'POST',
-      headers: seamHeaders,
-      body:    JSON.stringify({ access_code_id: targetCodeId }),
-    })
-    if (!delRes.ok) {
-      const text = await delRes.text()
-      console.error('[overdue-cancel/seam] delete error %s: %s', delRes.status, text)
-    } else {
-      console.log('[overdue-cancel/seam] deleted code %s (PIN %s)', targetCodeId, pin)
-    }
-
-    // Clear DB regardless of Seam result
-    if (memberId) {
-      await prisma.member.update({ where: { id: memberId }, data: { accessCode: null } })
-    }
-  } catch (err) {
-    console.error('[overdue-cancel/seam] unexpected error:', err.message)
   }
 }

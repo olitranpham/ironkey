@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
-
-const SEAM_API = 'https://connect.getseam.com'
+import { deleteSeamCodeById } from '@/lib/seam'
 
 /**
  * DELETE /api/[gymSlug]/seam/codes/[codeId]
@@ -18,17 +17,8 @@ export async function DELETE(request, { params }) {
     const apiKey = gym.seamApiKey ?? process.env.SEAM_API_KEY
     if (!apiKey) return NextResponse.json({ error: 'Seam not configured' }, { status: 422 })
 
-    // ── Seam API call ─────────────────────────────────────────────────────────
-    const deleteRes = await fetch(`${SEAM_API}/access_codes/delete`, {
-      method:  'POST',
-      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ access_code_id: codeId }),
-    })
-    if (!deleteRes.ok) {
-      const text = await deleteRes.text()
-      console.error('[seam/codes DELETE]', deleteRes.status, text)
-      return NextResponse.json({ error: 'Seam API error' }, { status: 502 })
-    }
+    const { ok } = await deleteSeamCodeById(apiKey, codeId, '[seam/codes DELETE]')
+    if (!ok) return NextResponse.json({ error: 'Seam API error' }, { status: 502 })
 
     // ── Clear from DB by PIN (passed as ?code=) ───────────────────────────────
     const pin = new URL(request.url).searchParams.get('code')

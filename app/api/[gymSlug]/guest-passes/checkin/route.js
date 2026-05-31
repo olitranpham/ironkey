@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
-
-const SEAM_API = 'https://connect.getseam.com'
+import { deleteSeamCodeByPin } from '@/lib/seam'
 
 const PASS_TYPE_LABEL = {
   SINGLE:     'Day Pass',
@@ -10,36 +9,6 @@ const PASS_TYPE_LABEL = {
   TEN_PACK:   '10-Pack',
 }
 
-/**
- * Deletes the guest's Seam access code from the lock.
- * Looks up the code by its value in the device's code list, then deletes by ID.
- */
-async function deactivateSeamCode(accessCode, seamApiKey, seamDeviceId) {
-  try {
-    const seamHeaders = {
-      Authorization:  `Bearer ${seamApiKey}`,
-      'Content-Type': 'application/json',
-    }
-    const listRes = await fetch(`${SEAM_API}/access_codes/list`, {
-      method:  'POST',
-      headers: seamHeaders,
-      body:    JSON.stringify({ device_id: seamDeviceId }),
-    })
-    const { access_codes = [] } = await listRes.json()
-    const match = access_codes.find(
-      c => String(c.code).trim() === String(accessCode).trim()
-    )
-    if (match) {
-      await fetch(`${SEAM_API}/access_codes/delete`, {
-        method:  'POST',
-        headers: seamHeaders,
-        body:    JSON.stringify({ access_code_id: match.access_code_id }),
-      })
-    }
-  } catch (err) {
-    console.error('[checkin] Seam deactivate error:', err.message)
-  }
-}
 
 function notifyZapier(request, gymSlug, { name, email, phone, accessCode }) {
   const host   = request.headers.get('host') ?? ''
@@ -113,7 +82,7 @@ export async function POST(request, { params }) {
 
       // ── Deactivate Seam code if pack is now exhausted ────────────────────
       if (newCount === 0 && profile?.accessCode && gym.seamApiKey && gym.seamDeviceId) {
-        await deactivateSeamCode(profile.accessCode, gym.seamApiKey, gym.seamDeviceId)
+        await deleteSeamCodeByPin(gym.seamApiKey, profile.accessCode, gym.seamDeviceId, '[checkin]')
       }
 
       return NextResponse.json({ ok: true, passesLeft: updated.passesLeft, passType: updated.passType, passTypeLabel: PASS_TYPE_LABEL[updated.passType] ?? updated.passType, accessCode: profile?.accessCode ?? null })
@@ -135,7 +104,7 @@ export async function POST(request, { params }) {
 
     // Single pass — deactivate immediately after use
     if (profile?.accessCode && gym.seamApiKey && gym.seamDeviceId) {
-      await deactivateSeamCode(profile.accessCode, gym.seamApiKey, gym.seamDeviceId)
+      await deleteSeamCodeByPin(gym.seamApiKey, profile.accessCode, gym.seamDeviceId, '[checkin]')
     }
 
     // ── Notify Zapier (fire-and-forget) ─────────────────────────────────

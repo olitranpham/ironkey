@@ -1,8 +1,7 @@
 import { NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import prisma from '@/lib/prisma'
-
-const SEAM_API = 'https://connect.getseam.com'
+import { deleteSeamCodeByPin } from '@/lib/seam'
 
 export async function POST(request) {
   try {
@@ -51,36 +50,10 @@ export async function POST(request) {
     const seamDeviceId = gym?.seamDeviceId
     const accessCode   = existing.accessCode
 
-    console.log('[freeze] Seam — accessCode:', accessCode, '| deviceId:', seamDeviceId, '| key set:', Boolean(seamKey))
-
-    if (seamKey && seamDeviceId && accessCode) {
-      try {
-        const seamHeaders = { Authorization: `Bearer ${seamKey}`, 'Content-Type': 'application/json' }
-
-        // List codes for the device and find the matching one
-        const listRes = await fetch(`${SEAM_API}/access_codes/list`, {
-          method:  'POST',
-          headers: seamHeaders,
-          body:    JSON.stringify({ device_id: seamDeviceId }),
-        })
-        const { access_codes = [] } = await listRes.json()
-        const match = access_codes.find(c => String(c.code).trim() === String(accessCode).trim())
-
-        console.log('[freeze] Seam codes on device:', access_codes.length, '| match found:', Boolean(match), match?.access_code_id ?? '')
-
-        if (match) {
-          const delRes = await fetch(`${SEAM_API}/access_codes/delete`, {
-            method:  'POST',
-            headers: seamHeaders,
-            body:    JSON.stringify({ access_code_id: match.access_code_id }),
-          })
-          console.log('[freeze] Seam delete status:', delRes.status)
-        }
-      } catch (seamErr) {
-        console.error('[freeze] Seam error:', seamErr.message)
-      }
+    if (seamKey && accessCode) {
+      await deleteSeamCodeByPin(seamKey, accessCode, seamDeviceId, '[freeze]')
     } else {
-      console.warn('[freeze] Skipping Seam — accessCode:', accessCode, '| deviceId:', seamDeviceId, '| key present:', Boolean(seamKey))
+      console.warn('[freeze] Skipping Seam — accessCode:', accessCode, '| key present:', Boolean(seamKey))
     }
 
     // ── Update DB ─────────────────────────────────────────────────────────

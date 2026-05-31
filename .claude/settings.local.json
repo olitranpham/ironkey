@@ -40,7 +40,15 @@
       "Bash(git add:*)",
       "Bash(git commit:*)",
       "Bash(git push:*)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(grep:*)",
+      "Bash(xargs -I {} basename {})",
+      "Bash(find:*)",
+      "Bash(rm \"/Users/olitranpham/ironkey/app/api/[gymSlug]/seam/codes/delete/route.js\")",
+      "Bash(rmdir \"/Users/olitranpham/ironkey/app/api/[gymSlug]/seam/codes/delete\")",
+      "Bash(rm \"/Users/olitranpham/ironkey/app/api/[gymSlug]/seam/codes/update/route.js\")",
+      "Bash(rmdir \"/Users/olitranpham/ironkey/app/api/[gymSlug]/seam/codes/update\")",
+      "Bash(rm \"/Users/olitranpham/ironkey/app/api/[gymSlug]/seam/sync/route.js\")"
     ]
   }
 }
