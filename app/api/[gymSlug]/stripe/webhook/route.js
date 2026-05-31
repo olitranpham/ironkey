@@ -3,6 +3,8 @@ import Stripe from 'stripe'
 import prisma from '@/lib/prisma'
 import { deleteSeamCodeByPin } from '@/lib/seam'
 
+const SEAM_API = 'https://connect.getseam.com'
+
 /**
  * POST /api/[gymSlug]/stripe/webhook
  * Public route — registered in the gym's Stripe dashboard.
