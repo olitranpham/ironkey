@@ -123,6 +123,50 @@ export async function POST(request) {
         console.log('[platform/webhook] reusing accessCode', accessCode, 'for returning guest', email)
       }
 
+      // ── Program time-bound Seam access code for guest (24-hour window) ────────
+      if (gym.seamApiKey) {
+        const deviceId    = gym.seamDeviceId ?? process.env.SEAM_DEVICE_ID
+        const seamHeaders = {
+          Authorization:  `Bearer ${gym.seamApiKey}`,
+          'Content-Type': 'application/json',
+        }
+        const nowMs       = Date.now()
+        const startDt     = new Date(nowMs).toISOString()
+        const endDt       = new Date(nowMs + 24 * 60 * 60 * 1000).toISOString()
+        try {
+          let devices = deviceId ? [{ device_id: deviceId }] : []
+          if (!deviceId) {
+            const devRes = await fetch(`${SEAM_API}/devices/list`, {
+              method: 'POST', headers: seamHeaders, body: JSON.stringify({}),
+            })
+            if (devRes.ok) {
+              const { devices: devList = [] } = await devRes.json()
+              devices = devList
+            }
+          }
+          await Promise.all(
+            devices.map(dev =>
+              fetch(`${SEAM_API}/access_codes/create`, {
+                method:  'POST',
+                headers: seamHeaders,
+                body:    JSON.stringify({
+                  device_id:      dev.device_id,
+                  name:           guestName || email,
+                  code:           accessCode,
+                  starts_at:      startDt,
+                  ends_at:        endDt,
+                }),
+              })
+                .then(r => r.json())
+                .then(r => console.log('[platform/webhook] Seam guest code programmed — device=%s code=%s ends_at=%s result=%s', dev.device_id, accessCode, endDt, r.access_code?.access_code_id ?? r.error?.type ?? 'unknown'))
+                .catch(e  => console.error('[platform/webhook] Seam guest code error:', e.message))
+            )
+          )
+        } catch (seamErr) {
+          console.error('[platform/webhook] Seam guest error:', seamErr.message)
+        }
+      }
+
       const host    = request.headers.get('host') ?? ''
       const scheme  = host.startsWith('localhost') ? 'http' : 'https'
       const baseUrl = `${scheme}://${host}`
