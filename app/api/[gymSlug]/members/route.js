@@ -34,9 +34,7 @@ export async function POST(request, { params }) {
     const subId          = body.subId       ?? null
     const accessCode     = body.accessCode  ? String(body.accessCode).trim() : null
 
-    const MEMBERSHIP_TYPE_MAP = { founding: 'FOUNDING', general: 'GENERAL', student: 'STUDENT' }
-    const rawType        = (body.membershipType ?? '').toLowerCase().trim()
-    const membershipType = MEMBERSHIP_TYPE_MAP[rawType] ?? 'GENERAL'
+    const membershipType = (body.membershipType ?? '').toLowerCase().trim()
 
     const gym = await prisma.gym.findUnique({ where: { slug: gymSlug }, select: { id: true } })
     if (!gym) {

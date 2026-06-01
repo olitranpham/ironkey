@@ -15,20 +15,13 @@ import prisma from '@/lib/prisma'
 export async function POST(request, { params }) {
   try {
     const { gymSlug } = await params
-    const contentType = request.headers.get('content-type') ?? ''
-    const body = contentType.includes('multipart/form-data')
-      ? Object.fromEntries(await request.formData())
-      : await request.json()
-
-    // Support both JSON and multipart/form-data (student ID upload)
-    let fields = body
-    if (!(body instanceof Object) || body === null) fields = {}
+    const body = await request.json()
 
     const {
       firstName, lastName, email, phone, dob, address,
       emergencyName, emergencyPhone, emergencyRelationship,
       priceId, membershipType, addonPriceId,
-    } = fields
+    } = body
 
     if (!firstName || !lastName || !email || !priceId) {
       return NextResponse.json({ error: 'firstName, lastName, email, and priceId are required' }, { status: 400 })
@@ -54,9 +47,10 @@ export async function POST(request, { params }) {
     if (addonPriceId) lineItems.push({ price: addonPriceId, quantity: 1 })
 
     const session = await stripe.checkout.sessions.create({
-      mode:           'subscription',
-      customer_email: email,
-      line_items:     lineItems,
+      mode:                  'subscription',
+      customer_email:        email,
+      line_items:            lineItems,
+      allow_promotion_codes: true,
       success_url: `${origin}/${gymSlug}/join/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url:  `${origin}/${gymSlug}/join`,
       metadata: {
@@ -70,9 +64,8 @@ export async function POST(request, { params }) {
         emergencyName:         emergencyName         ?? '',
         emergencyPhone:        emergencyPhone        ?? '',
         emergencyRelationship: emergencyRelationship ?? '',
-        membershipType:        membershipType        ?? 'GENERAL',
+        membershipType:        membershipType        ?? '',
         addonPriceId:          addonPriceId          ?? '',
-        studentIdUploaded:     body.studentId ? 'yes' : '',
       },
     })
 

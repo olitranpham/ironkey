@@ -161,8 +161,6 @@ export default function JoinPage() {
     addonPriceId:          '',
     waiver:                false,
   })
-  const [studentId, setStudentId] = useState(null)
-
   useEffect(() => {
     fetch(`/api/${gymSlug}/join`)
       .then(r => r.json())
@@ -184,7 +182,7 @@ export default function JoinPage() {
 
   function selectPlan(priceId) {
     const plan = membershipPlans.find(p => p.priceId === priceId)
-    setForm(f => ({ ...f, priceId, membershipType: plan?.membershipType ?? 'GENERAL' }))
+    setForm(f => ({ ...f, priceId, membershipType: plan?.membershipType ?? '' }))
   }
 
   async function handleSubmit(e) {
@@ -199,51 +197,29 @@ export default function JoinPage() {
     if (!form.priceId)         { setError('Please select a membership type.'); return }
     const dobAge = (Date.now() - new Date(form.dob).getTime()) / (365.25 * 24 * 60 * 60 * 1000)
     if (dobAge < 18) { setError('Members under 18 must have a parent or guardian complete this form on their behalf (see Section 14 of the terms).'); return }
-    if (form.membershipType === 'STUDENT' && !studentId) { setError('Please upload your student ID to qualify for the student membership.'); return }
-
     if (!form.emergencyName.trim() || !form.emergencyPhone.trim()) { setError('Emergency contact name and phone are required.'); return }
     if (!form.waiver)          { setError('You must agree to the membership terms.'); return }
 
     setSubmitting(true)
     try {
-      // If student ID was uploaded, send it as a multipart form so the file goes with the request
-      let res
-      if (form.membershipType === 'STUDENT' && studentId) {
-        const fd = new FormData()
-        fd.append('firstName',             form.firstName.trim())
-        fd.append('lastName',              form.lastName.trim())
-        fd.append('email',                 form.email.trim())
-        fd.append('phone',                 form.phone.trim())
-        fd.append('dob',                   form.dob)
-        fd.append('address',               form.address.trim())
-        fd.append('emergencyName',         form.emergencyName.trim())
-        fd.append('emergencyPhone',        form.emergencyPhone.trim())
-        fd.append('emergencyRelationship', form.emergencyRelationship.trim())
-        fd.append('priceId',               form.priceId)
-        fd.append('membershipType',        form.membershipType)
-        fd.append('addonPriceId',          form.addonPriceId)
-        fd.append('studentId',             studentId)
-        res = await fetch(`/api/${gymSlug}/join/checkout`, { method: 'POST', body: fd })
-      } else {
-        res = await fetch(`/api/${gymSlug}/join/checkout`, {
-          method:  'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body:    JSON.stringify({
-            firstName:             form.firstName.trim(),
-            lastName:              form.lastName.trim(),
-            email:                 form.email.trim(),
-            phone:                 form.phone.trim(),
-            dob:                   form.dob,
-            address:               form.address.trim(),
-            emergencyName:         form.emergencyName.trim(),
-            emergencyPhone:        form.emergencyPhone.trim(),
-            emergencyRelationship: form.emergencyRelationship.trim(),
-            priceId:               form.priceId,
-            membershipType:        form.membershipType,
-            addonPriceId:          form.addonPriceId,
-          }),
-        })
-      }
+      const res = await fetch(`/api/${gymSlug}/join/checkout`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({
+          firstName:             form.firstName.trim(),
+          lastName:              form.lastName.trim(),
+          email:                 form.email.trim(),
+          phone:                 form.phone.trim(),
+          dob:                   form.dob,
+          address:               form.address.trim(),
+          emergencyName:         form.emergencyName.trim(),
+          emergencyPhone:        form.emergencyPhone.trim(),
+          emergencyRelationship: form.emergencyRelationship.trim(),
+          priceId:               form.priceId,
+          membershipType:        form.membershipType,
+          addonPriceId:          form.addonPriceId,
+        }),
+      })
       const json = await res.json()
       if (!res.ok) throw new Error(json.error ?? 'Something went wrong')
       if (!json.url) throw new Error('No checkout URL returned — please try again.')
@@ -397,37 +373,6 @@ export default function JoinPage() {
                 </svg>
               </div>
             </div>
-          </Field>
-        )}
-
-        {/* Student ID upload — shown only for student plans */}
-        {form.membershipType === 'STUDENT' && (
-          <Field label="student ID" required>
-            <label className="flex flex-col items-center justify-center gap-2 border border-dashed border-neutral-700 rounded-lg px-4 py-5 cursor-pointer hover:border-neutral-500 transition-colors bg-neutral-900/50">
-              <input
-                type="file"
-                accept="image/*,.pdf"
-                className="sr-only"
-                onChange={e => setStudentId(e.target.files?.[0] ?? null)}
-              />
-              {studentId ? (
-                <span className="text-xs text-emerald-400 font-medium">{studentId.name}</span>
-              ) : (
-                <>
-                  <span className="text-xs text-neutral-500">click to upload student ID</span>
-                  <span className="text-[11px] text-neutral-700">JPG, PNG, or PDF</span>
-                </>
-              )}
-            </label>
-            {studentId && (
-              <button
-                type="button"
-                onClick={() => setStudentId(null)}
-                className="text-[11px] text-neutral-600 hover:text-rose-400 transition-colors mt-1"
-              >
-                remove
-              </button>
-            )}
           </Field>
         )}
 

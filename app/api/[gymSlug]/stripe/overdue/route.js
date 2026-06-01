@@ -56,7 +56,7 @@ export async function GET(request, { params }) {
             firstName:            member?.firstName            ?? sub.customer?.name?.split(' ')[0] ?? '—',
             lastName:             member?.lastName             ?? sub.customer?.name?.split(' ').slice(1).join(' ') ?? '',
             email:                email                        ?? null,
-            membershipType:       member?.membershipType       ?? 'GENERAL',
+            membershipType:       member?.membershipType       ?? '',
             stripeSubscriptionId: member?.stripeSubscriptionId ?? null,
             stripeCustomerId:     member?.stripeCustomerId     ?? null,
 

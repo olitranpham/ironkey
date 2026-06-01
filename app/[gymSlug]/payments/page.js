@@ -7,8 +7,6 @@ import { getGymTheme } from '@/lib/gymThemes'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const TYPE_FILTERS = ['all', 'founding', 'general', 'student']
-
 const STATUS_TABS = ['active', 'frozen', 'canceled']
 // "paused" maps to FROZEN; "active" includes ACTIVE + OVERDUE
 const TAB_STATUSES = {
@@ -47,9 +45,8 @@ export default function PaymentsPage() {
   const [priceIdMap, setPriceIdMap] = useState({})
   const [loading,    setLoading]    = useState(true)
   const [fetchErr,   setFetchErr]   = useState(null)
-  const [search,     setSearch]     = useState('')
-  const [typeFilter, setTypeFilter] = useState('all')
-  const [activeTab,  setActiveTab]  = useState('active')
+  const [search,    setSearch]    = useState('')
+  const [activeTab, setActiveTab] = useState('active')
 
   const [selectedMember, setSelectedMember] = useState(null)
   const [panelOpen,      setPanelOpen]      = useState(false)
@@ -107,11 +104,10 @@ export default function PaymentsPage() {
   const visible = members
     .filter(m => {
       const statuses = TAB_STATUSES[activeTab]
-      const matchTab  = !statuses || statuses.includes(m.status)
-      const matchType = typeFilter === 'all' || m.membershipType.toLowerCase() === typeFilter
-      const q         = search.trim().toLowerCase()
+      const matchTab    = !statuses || statuses.includes(m.status)
+      const q           = search.trim().toLowerCase()
       const matchSearch = !q || `${m.firstName} ${m.lastName} ${m.email}`.toLowerCase().includes(q)
-      return matchTab && matchType && matchSearch
+      return matchTab && matchSearch
     })
     .sort((a, b) => {
       const order = { ACTIVE: 0, OVERDUE: 1, FROZEN: 2, CANCELLED: 3 }
@@ -152,8 +148,8 @@ export default function PaymentsPage() {
 
       <main className="md:flex-1 flex flex-col p-5 gap-4 md:overflow-hidden md:min-h-0">
 
-        {/* Search + type filter */}
-        <div className="shrink-0 flex flex-wrap items-center gap-3">
+        {/* Search */}
+        <div className="shrink-0">
           <div className="relative w-full sm:w-80">
             <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500 pointer-events-none" />
             <input
@@ -163,22 +159,6 @@ export default function PaymentsPage() {
               onChange={e => setSearch(e.target.value)}
               className="w-full bg-neutral-700/50 border border-neutral-600/50 rounded-lg pl-9 pr-3 py-2 text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-neutral-500 focus:ring-1 focus:ring-neutral-500 transition-colors"
             />
-          </div>
-          {/* Membership type filter pills */}
-          <div className="flex items-center gap-1.5">
-            {TYPE_FILTERS.map(f => (
-              <button
-                key={f}
-                onClick={() => setTypeFilter(f)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                  typeFilter === f
-                    ? 'bg-white/10 text-white'
-                    : 'text-neutral-500 hover:text-neutral-300 hover:bg-white/5'
-                }`}
-              >
-                {f}
-              </button>
-            ))}
           </div>
         </div>
 
@@ -355,7 +335,7 @@ function PaymentPanel({ member, priceMap, priceIdMap, onClose, onAction, actionL
 
         {/* Billing */}
         <PSection icon={CreditCard} title="billing">
-          <PField label="plan"         value={(member.membershipType ?? 'GENERAL').toLowerCase()} />
+          <PField label="plan"         value={member.membershipType?.toLowerCase() || '—'} />
           <PField label="amount"       value={entry ? `$${entry.amount}/${entry.interval}` : '—'} />
           <PField label="subscription" value={member.stripeSubscriptionId} wrap />
           <PField label="customer"     value={member.stripeCustomerId} wrap />

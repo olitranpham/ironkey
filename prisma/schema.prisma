@@ -54,8 +54,8 @@ model Member {
   email     String
   phone     String?
 
-  status         MemberStatus   @default(ACTIVE)
-  membershipType MembershipType @default(GENERAL)
+  status         MemberStatus @default(ACTIVE)
+  membershipType String       @default("general")
 
   // Stripe
   stripeCustomerId     String?
@@ -89,14 +89,6 @@ enum MemberStatus {
   FROZEN
   CANCELLED
   OVERDUE
-}
-
-enum MembershipType {
-  FOUNDING
-  GENERAL
-  STUDENT
-  WEEKEND
-  FLEX
 }
 
 // ─── Guest ────────────────────────────────────────────────────────────────────

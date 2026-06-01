@@ -7,8 +7,6 @@ import { getGymTheme } from '@/lib/gymThemes'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const PLAN_AMOUNT = { FOUNDING: 50, GENERAL: 65, STUDENT: 55 }
-
 const CONFIRM_COPY = {
   retry: {
     title:   'retry charge?',
@@ -29,10 +27,9 @@ const CONFIRM_COPY = {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function fmtAmount(cents, membershipType) {
+function fmtAmount(cents) {
   if (cents != null) return `$${(cents / 100).toFixed(2)}`
-  const flat = PLAN_AMOUNT[membershipType]
-  return flat ? `$${flat}.00` : '—'
+  return '—'
 }
 
 function fmtDate(unix) {
@@ -320,7 +317,7 @@ function OverduePanel({ row, membershipBorder, onClose, onAction }) {
           <div className="flex items-center justify-between px-3 py-2.5 bg-[#1c1c1c]">
             <span className="text-xs text-neutral-500">amount due</span>
             <span className="text-xs text-red-400/80 tabular-nums font-medium">
-              {row.amountDue != null ? `$${(row.amountDue / 100).toFixed(2)}` : PLAN_AMOUNT[row.membershipType] ? `$${PLAN_AMOUNT[row.membershipType]}.00` : '—'}
+              {fmtAmount(row.amountDue)}
             </span>
           </div>
           {row.failedAt && (

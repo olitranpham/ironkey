@@ -147,7 +147,7 @@ export async function POST(request, { params }) {
     const lastName       = meta.lastName       ?? ''
     const email          = session.customer_email ?? meta.email ?? ''
     const phone          = formatPhone(meta.phone ?? null)
-    const membershipType = meta.membershipType ?? 'GENERAL'
+    const membershipType = (meta.membershipType ?? '').toLowerCase()
     const subId          = session.subscription ?? null
 
     // Retrieve line items to get the price ID reliably — metadata.priceId is a

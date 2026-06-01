@@ -105,7 +105,7 @@ function DrawerContent({ member, membershipBorder, onClose, onStatusChange, onSa
 
         {/* Membership */}
         <DrawerSection icon={KeyRound} title="membership">
-          <DrawerField label="type" value={(member.membershipType ?? 'GENERAL').toLowerCase()} />
+          <DrawerField label="type" value={member.membershipType?.toLowerCase() || '—'} />
 
           {/* Access code — inline editor */}
           <DrawerField label="access code">

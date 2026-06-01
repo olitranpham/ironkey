@@ -214,7 +214,7 @@ export async function POST(request) {
     const lastName       = meta.lastName       ?? ''
     const email          = (session.customer_email ?? meta.email ?? '').toLowerCase()
     const phone          = formatPhone(meta.phone ?? null)
-    const membershipType = meta.membershipType ?? 'GENERAL'
+    const membershipType = (meta.membershipType ?? '').toLowerCase()
     const subId          = session.subscription ?? null
 
     let priceId = meta.priceId ?? null
