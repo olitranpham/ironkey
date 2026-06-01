@@ -14,7 +14,7 @@ export async function DELETE(request, { params }) {
     const gym = await prisma.gym.findUnique({ where: { id: gymId } })
     if (!gym) return NextResponse.json({ error: 'Gym not found' }, { status: 404 })
 
-    const apiKey = gym.seamApiKey ?? process.env.SEAM_API_KEY
+    const apiKey = process.env.SEAM_API_KEY
     if (!apiKey) return NextResponse.json({ error: 'Seam not configured' }, { status: 422 })
 
     const { ok } = await deleteSeamCodeById(apiKey, codeId, '[seam/codes DELETE]')
