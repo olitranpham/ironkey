@@ -5,7 +5,7 @@ import { useParams } from 'next/navigation'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine,
 } from 'recharts'
-import { Plus, Trash2 } from 'lucide-react'
+import { Plus, Trash2, Pencil } from 'lucide-react'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -60,11 +60,16 @@ function ChartTooltip({ active, payload, label }) {
   )
 }
 
-// ── Add Entry Modal ───────────────────────────────────────────────────────────
+// ── Add / Edit Entry Modal ────────────────────────────────────────────────────
 
-function EntryModal({ gymSlug, onSave, onClose }) {
+function EntryModal({ gymSlug, entry, onSave, onClose }) {
+  const editing = Boolean(entry)
   const [form, setForm] = useState({
-    type: 'income', category: 'Merchandise', amount: '', description: '', date: todayISO(),
+    type:        entry?.type        ?? 'income',
+    category:    entry?.category    ?? INCOME_CATEGORIES[0],
+    amount:      entry?.amount      != null ? String(entry.amount) : '',
+    description: entry?.description ?? '',
+    date:        entry?.date        ? new Date(entry.date).toISOString().split('T')[0] : todayISO(),
   })
   const [saving, setSaving] = useState(false)
   const [err,    setErr]    = useState(null)
@@ -85,8 +90,12 @@ function EntryModal({ gymSlug, onSave, onClose }) {
     setSaving(true); setErr(null)
     try {
       const token = localStorage.getItem('ik_token')
-      const res   = await fetch(`/api/${gymSlug}/financial-entries`, {
-        method:  'POST',
+      const url    = editing
+        ? `/api/${gymSlug}/financial-entries/${entry.id}`
+        : `/api/${gymSlug}/financial-entries`
+      const method = editing ? 'PATCH' : 'POST'
+      const res    = await fetch(url, {
+        method,
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body:    JSON.stringify({ ...form, amount: parseFloat(form.amount) }),
       })
@@ -104,7 +113,7 @@ function EntryModal({ gymSlug, onSave, onClose }) {
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/70" onClick={onClose} />
       <div className="relative bg-[#1c1c1c] border border-neutral-800 rounded-xl w-full max-w-sm p-6 shadow-2xl flex flex-col gap-4">
-        <p className="text-sm font-semibold text-white">add entry</p>
+        <p className="text-sm font-semibold text-white">{editing ? 'edit entry' : 'add entry'}</p>
 
         {/* Type toggle */}
         <div className="flex rounded-lg bg-neutral-900 p-1 gap-1">
@@ -189,7 +198,7 @@ function EntryModal({ gymSlug, onSave, onClose }) {
             disabled={saving}
             className="flex-1 py-2 rounded-lg text-xs font-medium bg-white/10 text-white hover:bg-white/15 disabled:opacity-40 transition-colors"
           >
-            {saving ? 'saving…' : 'save'}
+            {saving ? 'saving…' : editing ? 'update' : 'save'}
           </button>
         </div>
       </div>
@@ -207,7 +216,9 @@ export default function RevenuePage() {
   const [err,          setErr]          = useState(null)
   const [entries,      setEntries]      = useState([])
   const [modalOpen,    setModalOpen]    = useState(false)
+  const [editingEntry, setEditingEntry] = useState(null)
   const [deletingId,   setDeletingId]   = useState(null)
+  const [confirmId,    setConfirmId]    = useState(null)
 
   const load = useCallback(async () => {
     setLoading(true); setErr(null)
@@ -254,12 +265,17 @@ export default function RevenuePage() {
 
   // ── Handlers ──────────────────────────────────────────────────────────────
   function handleSaved(entry) {
-    setEntries(prev => [entry, ...prev])
-    setModalOpen(false)
+    if (editingEntry) {
+      setEntries(prev => prev.map(e => e.id === entry.id ? entry : e))
+      setEditingEntry(null)
+    } else {
+      setEntries(prev => [entry, ...prev])
+      setModalOpen(false)
+    }
   }
 
   async function deleteEntry(id) {
-    setDeletingId(id)
+    setDeletingId(id); setConfirmId(null)
     try {
       const token = localStorage.getItem('ik_token')
       await fetch(`/api/${gymSlug}/financial-entries/${id}`, {
@@ -394,13 +410,21 @@ export default function RevenuePage() {
                           </span>
                         </td>
                         <td className="px-5 py-3 text-right">
-                          <button
-                            onClick={() => deleteEntry(e.id)}
-                            disabled={deletingId === e.id}
-                            className="opacity-0 group-hover:opacity-100 p-1.5 rounded-md text-neutral-700 hover:text-rose-400 hover:bg-rose-500/10 disabled:opacity-40 transition-colors"
-                          >
-                            <Trash2 size={13} />
-                          </button>
+                          <div className="flex items-center justify-end gap-1">
+                            <button
+                              onClick={() => setEditingEntry(e)}
+                              className="opacity-0 group-hover:opacity-100 p-1.5 rounded-md text-neutral-500 hover:text-neutral-200 hover:bg-white/10 transition-colors"
+                            >
+                              <Pencil size={13} />
+                            </button>
+                            <button
+                              onClick={() => setConfirmId(e.id)}
+                              disabled={deletingId === e.id}
+                              className="opacity-0 group-hover:opacity-100 p-1.5 rounded-md text-neutral-500 hover:text-rose-400 hover:bg-rose-500/10 disabled:opacity-40 transition-colors"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))
@@ -412,7 +436,37 @@ export default function RevenuePage() {
         )}
       </main>
 
-      {modalOpen && <EntryModal gymSlug={gymSlug} onSave={handleSaved} onClose={() => setModalOpen(false)} />}
+      {modalOpen && (
+        <EntryModal gymSlug={gymSlug} onSave={handleSaved} onClose={() => setModalOpen(false)} />
+      )}
+
+      {editingEntry && (
+        <EntryModal gymSlug={gymSlug} entry={editingEntry} onSave={handleSaved} onClose={() => setEditingEntry(null)} />
+      )}
+
+      {confirmId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/70" onClick={() => setConfirmId(null)} />
+          <div className="relative bg-[#1c1c1c] border border-neutral-800 rounded-xl w-full max-w-xs p-6 shadow-2xl flex flex-col gap-4">
+            <p className="text-sm font-semibold text-white">delete entry?</p>
+            <p className="text-xs text-neutral-400">this can't be undone.</p>
+            <div className="flex gap-2 pt-1">
+              <button
+                onClick={() => setConfirmId(null)}
+                className="flex-1 py-2 rounded-lg text-xs font-medium text-neutral-400 border border-neutral-700 hover:text-white hover:border-neutral-600 transition-colors"
+              >
+                cancel
+              </button>
+              <button
+                onClick={() => deleteEntry(confirmId)}
+                className="flex-1 py-2 rounded-lg text-xs font-medium bg-rose-500/20 text-rose-400 hover:bg-rose-500/30 transition-colors"
+              >
+                delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
