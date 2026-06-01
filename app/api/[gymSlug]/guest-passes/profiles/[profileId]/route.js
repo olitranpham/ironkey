@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
+import { formatPhone } from '@/lib/phone'
 
 /**
  * PATCH /api/[gymSlug]/guest-passes/profiles/[profileId]
@@ -28,7 +29,7 @@ export async function PATCH(request, { params }) {
 
     const data = {}
     if (body.name        !== undefined) data.name       = body.name
-    if (body.phone       !== undefined) data.phone      = body.phone
+    if (body.phone       !== undefined) data.phone      = formatPhone(body.phone)
     if (body.accessCode  !== undefined) data.accessCode = body.accessCode
       ? String(body.accessCode).trim()
       : null

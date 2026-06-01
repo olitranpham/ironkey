@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useParams } from 'next/navigation'
 import { Loader2, X, ShoppingCart, LogIn, CheckCircle2, ChevronLeft } from 'lucide-react'
+import { formatPhone } from '@/lib/phone'
 
 // ── Waiver text (Triumph Barbell membership T&C) ──────────────────────────────
 
@@ -454,6 +455,7 @@ export default function GuestPage() {
               <input
                 type="tel" placeholder="(555) 000-0000"
                 value={form.phone} onChange={e => setField('phone', e.target.value)}
+                onBlur={e => setField('phone', formatPhone(e.target.value))}
                 className={INPUT} required
               />
             </Field>
@@ -492,6 +494,7 @@ export default function GuestPage() {
                 <input
                   type="tel" placeholder="(555) 000-0000"
                   value={form.emergencyPhone} onChange={e => setField('emergencyPhone', e.target.value)}
+                  onBlur={e => setField('emergencyPhone', formatPhone(e.target.value))}
                   className={INPUT} required
                 />
               </Field>

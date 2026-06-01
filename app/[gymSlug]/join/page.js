@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useParams } from 'next/navigation'
 import { Loader2, X } from 'lucide-react'
+import { formatPhone } from '@/lib/phone'
 
 // ── Waiver text ───────────────────────────────────────────────────────────────
 
@@ -319,6 +320,7 @@ export default function JoinPage() {
             placeholder="(555) 000-0000"
             value={form.phone}
             onChange={e => set('phone', e.target.value)}
+            onBlur={e => set('phone', formatPhone(e.target.value))}
             className={INPUT}
             required
           />
@@ -450,6 +452,7 @@ export default function JoinPage() {
               placeholder="(555) 000-0000"
               value={form.emergencyPhone}
               onChange={e => set('emergencyPhone', e.target.value)}
+              onBlur={e => set('emergencyPhone', formatPhone(e.target.value))}
               className={INPUT}
               required
             />

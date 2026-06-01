@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
+import { formatPhone } from '@/lib/phone'
 
 /**
  * POST /api/[gymSlug]/members
@@ -28,7 +29,7 @@ export async function POST(request, { params }) {
       lastName  = (body.lastName  ?? '').trim() || ''
     }
 
-    const phone          = body.phone       ?? null
+    const phone          = formatPhone(body.phone ?? null)
     const customerId     = body.customerId  ?? null
     const subId          = body.subId       ?? null
     const accessCode     = body.accessCode  ? String(body.accessCode).trim() : null

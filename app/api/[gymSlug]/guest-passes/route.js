@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { getAllowedPassTypes } from '@/lib/gymPassTypes'
+import { formatPhone } from '@/lib/phone'
 
 const PASS_TYPE_MAP = {
   single:     'SINGLE',
@@ -61,6 +62,7 @@ export async function POST(request, { params }) {
       )
     }
     const email    = (body.email ?? '').trim().toLowerCase() || null
+    const phone    = formatPhone(body.phone ?? null)
 
     //  Upsert guest profile (global — keyed by email only)
     let profile = null
@@ -69,12 +71,12 @@ export async function POST(request, { params }) {
         where:  { email },
         update: {
           name:  guestName,
-          phone: body.phone ?? undefined,
+          phone: phone ?? undefined,
         },
         create: {
           name:  guestName,
           email,
-          phone: body.phone ?? null,
+          phone: phone ?? null,
         },
       })
 
@@ -99,7 +101,7 @@ export async function POST(request, { params }) {
         guestProfileId: profile?.id ?? null,
         guestName,
         guestEmail:     email,
-        guestPhone:     body.phone ?? null,
+        guestPhone:     phone ?? null,
         passType,
         passesLeft:     body.passesLeft != null && passType !== 'SINGLE'
                           ? Math.max(0, Number(body.passesLeft) - 1)

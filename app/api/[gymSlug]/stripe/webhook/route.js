@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import prisma from '@/lib/prisma'
 import { deleteSeamCodeByPin } from '@/lib/seam'
+import { formatPhone } from '@/lib/phone'
 
 const SEAM_API = 'https://connect.getseam.com'
 
@@ -72,7 +73,7 @@ export async function POST(request, { params }) {
     if (meta.source === 'guest_pass') {
       const guestName  = meta.guestName ?? ''
       const email      = (session.customer_email ?? meta.email ?? '').toLowerCase()
-      const phone      = meta.phone || null
+      const phone      = formatPhone(meta.phone || null)
       const passType   = meta.passType ?? 'SINGLE'
       const passesLeft = parseInt(meta.passesLeft, 10) || 1
 
@@ -145,7 +146,7 @@ export async function POST(request, { params }) {
     const firstName      = meta.firstName      ?? ''
     const lastName       = meta.lastName       ?? ''
     const email          = session.customer_email ?? meta.email ?? ''
-    const phone          = meta.phone          ?? null
+    const phone          = formatPhone(meta.phone ?? null)
     const membershipType = meta.membershipType ?? 'GENERAL'
     const subId          = session.subscription ?? null
 
