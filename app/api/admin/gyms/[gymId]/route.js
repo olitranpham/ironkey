@@ -38,7 +38,7 @@ export async function PATCH(request, { params }) {
         name:                   gym.name,
         slug:                   gym.slug,
         hasStripe:              Boolean(gym.stripeAccountId),
-        hasSeam:                Boolean(gym.seamApiKey),
+        hasSeam:                Boolean(gym.seamApiKey || gym.seamDeviceId),
         zapierMemberWebhookUrl:  gym.zapierMemberWebhookUrl  ?? '',
         zapierGuestWebhookUrl:   gym.zapierGuestWebhookUrl   ?? '',
         zapierOverdueWebhookUrl: gym.zapierOverdueWebhookUrl ?? '',

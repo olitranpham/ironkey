@@ -40,7 +40,7 @@ export async function GET() {
       name:         gym.name,
       slug:         gym.slug,
       hasStripe:    Boolean(gym.stripeAccountId),
-      hasSeam:      Boolean(gym.seamApiKey),
+      hasSeam:      Boolean(gym.seamApiKey || gym.seamDeviceId),
       seamDeviceId: gym.seamDeviceId ?? '',
       createdAt:    gym.createdAt,
       active:                 countsMap[gym.id]?.ACTIVE    ?? 0,
