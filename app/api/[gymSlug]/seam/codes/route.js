@@ -16,7 +16,7 @@ export async function GET(request, { params }) {
     const gym = await prisma.gym.findUnique({ where: { slug: gymSlug } })
     if (!gym) return NextResponse.json({ error: 'Gym not found' }, { status: 404 })
 
-    const apiKey   = process.env.SEAM_API_KEY
+    const apiKey   = gym.seamApiKey ?? process.env.SEAM_API_KEY
     const deviceId = gym.seamDeviceId ?? process.env.SEAM_DEVICE_ID
     if (!apiKey) return NextResponse.json({ error: 'Seam not configured' }, { status: 422 })
 
@@ -57,12 +57,9 @@ export async function GET(request, { params }) {
       return NextResponse.json({ codes: [] })
     }
 
-    // ── 2. Fetch managed + unmanaged access codes per device ─────────────────
-    // access_codes/list       — codes managed by this Seam workspace
-    // access_codes/unmanaged/list — codes that originated outside this workspace
-    //   (e.g. migrated from Triumph's old Seam account)
+    // ── 2. Fetch access codes per device ──────────────────────────────────────
     const codeResults = await Promise.all(
-      devices.flatMap(device => [
+      devices.map(device =>
         fetch(`${SEAM_API}/access_codes/list`, {
           method: 'POST',
           headers: seamHeaders,
@@ -70,19 +67,11 @@ export async function GET(request, { params }) {
         })
           .then(r => r.ok ? r.json() : { access_codes: [] })
           .then(body => body.access_codes ?? [])
-          .catch(() => []),
-        fetch(`${SEAM_API}/access_codes/unmanaged/list`, {
-          method: 'POST',
-          headers: seamHeaders,
-          body: JSON.stringify({ device_id: device.device_id }),
-        })
-          .then(r => r.ok ? r.json() : { access_codes: [] })
-          .then(body => body.access_codes ?? [])
-          .catch(() => []),
-      ])
+          .catch(() => [])
+      )
     )
 
-    // Deduplicate by access_code_id (managed and unmanaged lists can overlap)
+    // Deduplicate by access_code_id (same code can appear on multiple devices)
     const seen = new Set()
     const access_codes = codeResults.flat().filter(c => {
       if (seen.has(c.access_code_id)) return false
