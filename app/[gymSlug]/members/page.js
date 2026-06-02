@@ -8,7 +8,7 @@ import MemberProfileDrawer from '@/components/MemberProfileDrawer'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const TABS = ['active', 'frozen', 'canceled']
+const TABS = ['active', 'flex', 'frozen', 'canceled']
 
 const STATUS_TEXT = {
   ACTIVE:    'text-emerald-600',
@@ -166,7 +166,8 @@ export default function MembersPage() {
       setMembers(prev => prev.map(m => m.id === updated.id ? { ...m, ...updated } : m))
       setSelectedMember(prev => prev?.id === updated.id ? { ...prev, ...updated } : prev)
       setConfirmModal(null)
-    } catch {
+    } catch (err) {
+      console.error('[confirmAction]', err)
       setActionError('something went wrong — please try again')
     } finally {
       setActionLoading(false)
@@ -175,23 +176,26 @@ export default function MembersPage() {
 
   // ── Derived ──────────────────────────────────────────────────────────────
 
-  const tabCount = members.filter(m => {
-    const tabStatus = activeTab === 'canceled' ? 'cancelled' : activeTab
-    return activeTab === 'active'
-      ? (m.status === 'ACTIVE' || m.status === 'OVERDUE')
-      : m.status.toLowerCase() === tabStatus.toLowerCase()
-  }).length
+  function isFlex(m) {
+    return m.membershipType?.toLowerCase().includes('flex')
+  }
+
+  function matchesTab(m, tab) {
+    if (tab === 'active')   return (m.status === 'ACTIVE' || m.status === 'OVERDUE') && !isFlex(m)
+    if (tab === 'flex')     return isFlex(m)
+    if (tab === 'frozen')   return m.status === 'FROZEN'
+    if (tab === 'canceled') return m.status === 'CANCELLED'
+    return true
+  }
+
+  const tabCount = members.filter(m => matchesTab(m, activeTab)).length
 
   const visible = members
     .filter(m => {
-      const tabStatus = activeTab === 'canceled' ? 'cancelled' : activeTab
-      const matchTab = activeTab === 'active'
-        ? (m.status === 'ACTIVE' || m.status === 'OVERDUE')
-        : m.status.toLowerCase() === tabStatus.toLowerCase()
       const q = search.trim().toLowerCase()
       const matchSearch = !q ||
         `${m.firstName} ${m.lastName} ${m.email} ${m.phone ?? ''}`.toLowerCase().includes(q)
-      return matchTab && matchSearch
+      return matchesTab(m, activeTab) && matchSearch
     })
     .sort((a, b) => {
       if (activeTab === 'frozen')   return new Date(b.dateFrozen   ?? 0) - new Date(a.dateFrozen   ?? 0)

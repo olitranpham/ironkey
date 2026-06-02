@@ -66,23 +66,45 @@ function dateLabelFor(tab) {
 }
 
 // Builds last-7-months chart data from the loaded members array.
+// Each member enters the cohort from their createdAt date. For each month we
+// then check whether they had been cancelled or frozen BY that month's end,
+// so a member who joined in Jan and cancelled in Apr shows as active in Jan–Mar
+// and cancelled from Apr onwards — rather than only appearing after cancellation.
 function buildChartData(members) {
-  const plotDate = (m) => {
-    if (m.status === 'FROZEN')    return new Date(m.dateFrozen   ?? m.createdAt)
-    if (m.status === 'CANCELLED') return new Date(m.dateCanceled ?? m.createdAt)
-    return new Date(m.createdAt)
-  }
-
   const now = new Date()
   return Array.from({ length: 7 }, (_, i) => {
     const d          = new Date(now.getFullYear(), now.getMonth() - (6 - i), 1)
     const endOfMonth = new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59, 999)
-    const cohort     = members.filter(m => plotDate(m) <= endOfMonth)
+
+    let active = 0, frozen = 0, canceled = 0
+
+    for (const m of members) {
+      if (new Date(m.createdAt) > endOfMonth) continue  // hadn't joined yet
+
+      // For cancelled members without a dateCanceled, fall back to createdAt so
+      // they still register in the cancelled bucket rather than the active bucket.
+      const effectiveCancelDate = m.status === 'CANCELLED'
+        ? new Date(m.dateCanceled ?? m.createdAt)
+        : null
+      const canceledByThen = effectiveCancelDate && effectiveCancelDate <= endOfMonth
+      // For frozen members without a dateFrozen, fall back to createdAt.
+      // Only treat as frozen-by-then if the member is still frozen today;
+      // if they've since re-activated we don't have an unfreeze date to go on.
+      const effectiveFreezeDate = m.status === 'FROZEN'
+        ? new Date(m.dateFrozen ?? m.createdAt)
+        : null
+      const frozenByThen = effectiveFreezeDate && effectiveFreezeDate <= endOfMonth
+
+      if (canceledByThen)    canceled++
+      else if (frozenByThen) frozen++
+      else                   active++
+    }
+
     return {
-      month:    d.toLocaleDateString('en-US', { month: 'short' }),
-      active:   cohort.filter(m => m.status === 'ACTIVE' || m.status === 'OVERDUE').length,
-      frozen:   cohort.filter(m => m.status === 'FROZEN').length,
-      canceled: cohort.filter(m => m.status === 'CANCELLED').length,
+      month: d.toLocaleDateString('en-US', { month: 'short' }),
+      active,
+      frozen,
+      canceled,
     }
   })
 }

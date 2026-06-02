@@ -7,7 +7,34 @@ import { formatPhone } from '@/lib/phone'
 
 // ── Waiver text ───────────────────────────────────────────────────────────────
 
-const WAIVER_SECTIONS = [
+const OASIS_WAIVER_SECTIONS = [
+  {
+    title: 'Membership Agreement',
+    body: 'This Membership Agreement is entered into as of the date signed below between the Member ("Member") and Oasis Powerlifting LLC ("Gym"). By signing this, the Member acknowledges and agrees to the following terms regarding membership cancellation and payment policies:',
+  },
+  {
+    title: '1. Payments and Refunds',
+    body: '1.1. All membership payments are final and non-refundable. This applies to payments made for the current billing cycle as well as any prior cycles.\n\n1.2. The Member understands and agrees that failure to use the Gym\'s facilities or services does not entitle them to a refund or credit.\n\n1.3. If any payment remains outstanding for more than 30 days, the Member\'s access to the Gym will be AUTOMATICALLY & IMMEDIATELY frozen until all outstanding fees are paid in full.',
+  },
+  {
+    title: '2. Membership Cancellation Requests',
+    body: '2.1. Cancellation requests must be submitted online through the Gym\'s official cancellation request form, which can be found on the Gym\'s website or provided upon request.\n\n2.2. To be effective for the upcoming billing cycle, all cancellation requests must be received by the Gym before the next billing cycle begins. Requests received after the billing cycle begins will be processed for the subsequent billing cycle.\n\n2.3. If a membership is canceled, any special pricing or benefits associated with the Member\'s account will be forfeited. Should the Member wish to sign up for a membership again, any applicable new pricing and fees may apply.\n\n2.4. If the Member plans to continue their membership in the near future but requires a temporary pause, the Gym offers membership freeze options. Members are encouraged to inquire about this alternative.',
+  },
+  {
+    title: '3. Membership Termination by Gym',
+    body: '3.1. Ownership reserves the right to cancel any Member\'s membership for any reason at any time.\n\n3.2. Memberships may also be terminated if the Member violates the Gym\'s rules or if their behavior does not contribute to the positive, supportive environment the Gym strives to maintain. In such cases, any pre-paid amounts for future billing cycles will be refunded.',
+  },
+  {
+    title: '4. Recurring Billing Terms & Authorization',
+    body: '4.1. By becoming a member of Oasis Powerlifting LLC, the Member agrees that all membership fees will be automatically billed on a recurring basis using the payment method provided. The billing cycle and amount will be determined based on the membership plan selected at the time of enrollment.\n\n4.2. Valid Payment Method Requirement: All Members are required to maintain a valid credit card or debit card on file at all times, regardless of the type or duration of membership purchased. The card on file will be used for monthly membership dues, as well as any other fees or charges associated with the Member\'s account (e.g., late fees, additional services, or merchandise purchases, if applicable). It is the Member\'s responsibility to ensure that the payment method on file remains current and valid. Members must promptly notify Oasis Gym of any changes to their payment details, such as a new card number or expiration date. Failure to do so may result in declined payments and additional fees.\n\n4.3. Failed Payments and Late Fees: If a recurring payment is declined or fails for any reason, the Member will be notified and must provide updated payment details within 7 days. If payment is not received within this timeframe, the management reserves the right of a one-time fine of $50.00 for each instance of late payment and risk having their membership temporarily suspended until the balance is paid.\n\n4.4. Agreement to Automated Charges: By signing this agreement, the Member authorizes Oasis Powerlifting LLC to charge the card on file for all recurring dues and fees, as outlined in the membership terms.\n\n4.5. Termination of Membership Due to Non-Payment: Failure to maintain an active, valid payment method or failure to resolve overdue balances within 30 days may result in the termination of the Member\'s contract. Any outstanding balances must be cleared before reactivating a membership or signing a new contract.',
+  },
+  {
+    title: '5. Additional Terms',
+    body: '5.1. Bringing a non-member who does not pay for a day pass or sign a waiver is strictly prohibited. Members who violate this policy will be subject to a $100 fine and will assume full liability for the non-member.\n\n5.2. Acknowledgment: By signing below, the Member acknowledges that they have read, understood, and agree to the terms outlined in this contract. The Member further agrees that these terms are binding.',
+  },
+]
+
+const TRIUMPH_WAIVER_SECTIONS = [
   {
     title: '1. Member Access',
     body: "Access to Triumph Barbell is permitted only when payment for that day (or membership dues) has been made in advance.\n\nDo not open or close external windows unless authorized by staff.\n\nMembers are strictly prohibited from entering any other areas of the building (e.g. freight elevator, other tenants' spaces). Wandering into any spaces beyond Triumph Barbell is not allowed.",
@@ -76,7 +103,7 @@ const WAIVER_SECTIONS = [
 
 // ── Waiver Modal ──────────────────────────────────────────────────────────────
 
-function WaiverModal({ onClose }) {
+function WaiverModal({ sections, onClose }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/80" onClick={onClose} />
@@ -93,7 +120,7 @@ function WaiverModal({ onClose }) {
         </div>
         {/* Scrollable body */}
         <div className="overflow-y-auto px-6 py-5 space-y-6 flex-1">
-          {WAIVER_SECTIONS.map(s => (
+          {sections.map(s => (
             <div key={s.title}>
               <p className="text-xs font-semibold text-white mb-2">{s.title}</p>
               {s.body.split('\n\n').map((para, i) => (
@@ -116,9 +143,10 @@ function WaiverModal({ onClose }) {
   )
 }
 
-function fmt(n, interval) {
-  const amt = Number(n).toLocaleString('en-US', { style: 'currency', currency: 'USD' })
-  return `${amt}/${interval}`
+function fmt(n, interval, intervalCount = 1) {
+  const amt   = Number(n).toLocaleString('en-US', { style: 'currency', currency: 'USD' })
+  const label = intervalCount > 1 ? ` every ${intervalCount} ${interval}s` : `/${interval}`
+  return `${amt}${label}`
 }
 
 function Field({ label, required, children }) {
@@ -153,7 +181,11 @@ export default function JoinPage() {
     email:                 '',
     phone:                 '',
     dob:                   '',
-    address:               '',
+    address1:              '',
+    address2:              '',
+    city:                  '',
+    state:                 '',
+    zip:                   '',
     emergencyName:         '',
     emergencyPhone:        '',
     emergencyRelationship: '',
@@ -164,7 +196,7 @@ export default function JoinPage() {
   })
 
   const isTriumph  = gymSlug === 'triumph-barbell'
-  const isStudent  = isTriumph && form.membershipType.toLowerCase().includes('student')
+  const isStudent  = form.membershipType.toLowerCase().includes('student')
   useEffect(() => {
     fetch(`/api/${gymSlug}/join`)
       .then(r => r.json())
@@ -173,7 +205,8 @@ export default function JoinPage() {
         setMembershipPlans(membershipPlans)
         setAddonPlans(addonPlans)
         if (membershipPlans.length) {
-          setForm(f => ({ ...f, priceId: membershipPlans[0].priceId, membershipType: membershipPlans[0].membershipType }))
+          const defaultPlan = membershipPlans.find(p => p.name.toLowerCase().includes('general')) ?? membershipPlans[0]
+          setForm(f => ({ ...f, priceId: defaultPlan.priceId, membershipType: defaultPlan.membershipType }))
         }
       })
       .catch(() => setError('Could not load membership options.'))
@@ -199,7 +232,10 @@ export default function JoinPage() {
     if (!form.email.trim())    { setError('Email is required.'); return }
     if (!form.phone.trim())    { setError('Phone number is required.'); return }
     if (!form.dob)             { setError('Date of birth is required.'); return }
-    if (!form.address.trim())  { setError('Address is required.'); return }
+    if (!form.address1.trim()) { setError('Address is required.'); return }
+    if (!form.city.trim())     { setError('City is required.'); return }
+    if (!form.state.trim())    { setError('State is required.'); return }
+    if (!form.zip.trim())      { setError('Zip code is required.'); return }
     if (!form.priceId)         { setError('Please select a membership type.'); return }
     const dobAge = (Date.now() - new Date(form.dob).getTime()) / (365.25 * 24 * 60 * 60 * 1000)
     if (dobAge < 18) { setError('Members under 18 must have a parent or guardian complete this form on their behalf (see Section 14 of the terms).'); return }
@@ -218,7 +254,12 @@ export default function JoinPage() {
           email:                 form.email.trim(),
           phone:                 form.phone.trim(),
           dob:                   form.dob,
-          address:               form.address.trim(),
+          address:               [form.address1.trim(), form.address2.trim()].filter(Boolean).join(', '),
+          address1:              form.address1.trim(),
+          address2:              form.address2.trim(),
+          city:                  form.city.trim(),
+          state:                 form.state.trim(),
+          zip:                   form.zip.trim(),
           emergencyName:         form.emergencyName.trim(),
           emergencyPhone:        form.emergencyPhone.trim(),
           emergencyRelationship: form.emergencyRelationship.trim(),
@@ -322,12 +363,53 @@ export default function JoinPage() {
         </Field>
 
         {/* Address */}
-        <Field label="address" required>
+        <Field label="address line 1" required>
           <input
             type="text"
-            placeholder="123 Main St, Boston, MA 02101"
-            value={form.address}
-            onChange={e => set('address', e.target.value)}
+            placeholder="123 main st"
+            value={form.address1}
+            onChange={e => set('address1', e.target.value)}
+            className={INPUT}
+            required
+          />
+        </Field>
+        <Field label="address line 2">
+          <input
+            type="text"
+            placeholder="apt, suite, unit (optional)"
+            value={form.address2}
+            onChange={e => set('address2', e.target.value)}
+            className={INPUT}
+          />
+        </Field>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="city" required>
+            <input
+              type="text"
+              placeholder="boston"
+              value={form.city}
+              onChange={e => set('city', e.target.value)}
+              className={INPUT}
+              required
+            />
+          </Field>
+          <Field label="state" required>
+            <input
+              type="text"
+              placeholder="MA"
+              value={form.state}
+              onChange={e => set('state', e.target.value)}
+              className={INPUT}
+              required
+            />
+          </Field>
+        </div>
+        <Field label="zip code" required>
+          <input
+            type="text"
+            placeholder="02101"
+            value={form.zip}
+            onChange={e => set('zip', e.target.value)}
             className={INPUT}
             required
           />
@@ -346,7 +428,7 @@ export default function JoinPage() {
               >
                 {membershipPlans.map(p => (
                   <option key={p.priceId} value={p.priceId}>
-                    {p.name} — {fmt(p.amount, p.interval)}
+                    {p.name} — {fmt(p.amount, p.interval, p.intervalCount)}
                   </option>
                 ))}
               </select>
@@ -394,7 +476,7 @@ export default function JoinPage() {
                 <option value="">None</option>
                 {addonPlans.map(p => (
                   <option key={p.priceId} value={p.priceId}>
-                    {p.name} — {fmt(p.amount, p.interval)}
+                    {p.name} — {fmt(p.amount, p.interval, p.intervalCount)}
                   </option>
                 ))}
               </select>
@@ -499,7 +581,12 @@ export default function JoinPage() {
 
       </form>
 
-      {waiverOpen && <WaiverModal onClose={() => setWaiverOpen(false)} />}
+      {waiverOpen && (
+        <WaiverModal
+          sections={gymSlug === 'oasis-boston' ? OASIS_WAIVER_SECTIONS : TRIUMPH_WAIVER_SECTIONS}
+          onClose={() => setWaiverOpen(false)}
+        />
+      )}
     </div>
   )
 }

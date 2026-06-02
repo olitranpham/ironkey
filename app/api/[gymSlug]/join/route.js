@@ -36,6 +36,7 @@ export async function GET(request, { params }) {
           name,
           amount:         p.unit_amount / 100,
           interval:       p.recurring.interval,
+          intervalCount:  p.recurring.interval_count ?? 1,
           membershipType: name,
         }
       }
@@ -58,6 +59,18 @@ export async function GET(request, { params }) {
             const n = (p.nickname ?? p.product?.name ?? '').toLowerCase()
             return n.includes('programming') || n.includes('communication')
           })
+          .map(toplan)
+          .sort((a, b) => a.amount - b.amount)
+      } else if (gymSlug === 'oasis-boston') {
+        const OASIS_PRODUCT_IDS = new Set([
+          'prod_Ucv94U6uvm7am9', // Semiannual Student Membership
+          'prod_Ucv9fkBOT5aDKS', // Semiannual General Membership
+          'prod_Ucv729ZXdrh80c', // Student Membership
+          'prod_Ucv6OCNGmeTpA7', // General Membership
+          'prod_T4wCwq1jBQDqhy', // Flex Membership
+        ])
+        membershipPlans = recurring
+          .filter(p => OASIS_PRODUCT_IDS.has(p.product?.id))
           .map(toplan)
           .sort((a, b) => a.amount - b.amount)
       } else {

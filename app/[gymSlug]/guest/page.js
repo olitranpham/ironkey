@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useParams } from 'next/navigation'
-import { Loader2, X, ShoppingCart, LogIn, CheckCircle2, ChevronLeft } from 'lucide-react'
+import { Loader2, X, ShoppingCart, LogIn, CheckCircle2, ChevronLeft, Dumbbell } from 'lucide-react'
 import { formatPhone } from '@/lib/phone'
 
 // ── Waiver text (Triumph Barbell membership T&C) ──────────────────────────────
@@ -74,9 +74,16 @@ const WAIVER_SECTIONS = [
   },
 ]
 
+const OASIS_WAIVER_SECTIONS = [
+  {
+    title: 'Liability Waiver',
+    body: 'In consideration of my use in the exercise equipment and facilities by Oasis Powerlifting LLC, I expressly agree and contract on behalf of myself, my heirs, executors, administrators, successors and assigns, that Oasis Powerlifting LLC and its insurers, employees, officers, directors, and associates shall not be liable from any damages arising from personal injuries (including death) sustained by me, or my guest in, on, or about the premises, or as a result in the use in the equipment or facilities, regardless of whether such injuries result, in whole or in part, from the negligence Oasis Powerlifting LLC.',
+  },
+]
+
 // ── Waiver Modal ───────────────────────────────────────────────────────────────
 
-function WaiverModal({ onClose }) {
+function WaiverModal({ sections, onClose }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/80" onClick={onClose} />
@@ -91,7 +98,7 @@ function WaiverModal({ onClose }) {
           </button>
         </div>
         <div className="overflow-y-auto px-6 py-5 space-y-6 flex-1">
-          {WAIVER_SECTIONS.map(s => (
+          {sections.map(s => (
             <div key={s.title}>
               <p className="text-xs font-semibold text-white mb-2">{s.title}</p>
               {s.body.split('\n\n').map((para, i) => (
@@ -166,16 +173,17 @@ export default function GuestPage() {
   const [plans,      setPlans]      = useState([])
   const [pageLoading, setPageLoading] = useState(true)
 
-  // step: intent | email-input | new-form | returning-confirm | checkin-confirm | checkin-done
+  // step: intent | email-input | new-form | returning-confirm | checkin-confirm | checkin-done | flex-confirm | flex-done
   const [step,       setStep]       = useState('intent')
-  const [mode,       setMode]       = useState(null)   // 'purchase' | 'checkin'
+  const [mode,       setMode]       = useState(null)   // 'purchase' | 'checkin' | 'flex'
   const [submitting, setSubmitting] = useState(false)
   const [error,      setError]      = useState(null)
   const [waiverOpen, setWaiverOpen] = useState(false)
 
   // New guest form fields
   const [form, setForm] = useState({
-    firstName: '', lastName: '', email: '', phone: '', dob: '', address: '',
+    firstName: '', lastName: '', email: '', phone: '', dob: '',
+    address1: '', address2: '', city: '', state: '', zip: '',
     emergencyName: '', emergencyPhone: '', emergencyRelationship: '',
     waiver: false,
   })
@@ -186,6 +194,8 @@ export default function GuestPage() {
   const [lookupResult,    setLookupResult]     = useState(null)   // { profile, hasSignedWaiver, passesLeft, packs }
   const [returningName,   setReturningName]    = useState('')
   const [checkinResult,   setCheckinResult]    = useState(null)
+  const [flexMember,      setFlexMember]       = useState(null)   // { id, firstName, lastName, email, accessCode }
+  const [flexResult,      setFlexResult]       = useState(null)   // { checkInsUsed, checkInsRemaining }
 
   useEffect(() => {
     document.title = 'guest pass registration'
@@ -206,10 +216,15 @@ export default function GuestPage() {
 
   function goBack() {
     clearError()
-    if (step === 'email-input')        { setStep('intent'); setMode(null) }
-    else if (step === 'new-form')      { setStep('email-input') }
-    else if (step === 'returning-confirm') { setStep('email-input') }
+    if (step === 'email-input')            { setStep('intent'); setMode(null) }
+    else if (step === 'new-form')          { setStep('email-input') }
+    else if (step === 'returning-confirm') {
+      // If we jumped here from checkin-confirm (0 passes), go back there
+      if (lookupResult?.passesLeft === 0) { setStep('checkin-confirm') }
+      else { setStep('email-input') }
+    }
     else if (step === 'checkin-confirm')   { setStep('email-input') }
+    else if (step === 'flex-confirm')      { setStep('email-input') }
     else { setStep('intent'); setMode(null) }
   }
 
@@ -266,7 +281,10 @@ export default function GuestPage() {
     if (!form.dob)             { setError('date of birth is required.'); return }
     const dobAge = (Date.now() - new Date(form.dob).getTime()) / (365.25 * 24 * 60 * 60 * 1000)
     if (dobAge < 18) { setError('guests under 18 must have a parent or guardian complete this form on their behalf (see section 14 of the terms).'); return }
-    if (!form.address.trim())  { setError('address is required.'); return }
+    if (!form.address1.trim()) { setError('address is required.'); return }
+    if (!form.city.trim())     { setError('city is required.'); return }
+    if (!form.state.trim())    { setError('state is required.'); return }
+    if (!form.zip.trim())      { setError('zip code is required.'); return }
     if (!form.emergencyName.trim() || !form.emergencyPhone.trim()) { setError('emergency contact name and phone are required.'); return }
     if (!form.waiver)          { setError('you must agree to the liability waiver.'); return }
     if (!selectedPriceId)      { setError('please select a pass type.'); return }
@@ -286,7 +304,12 @@ export default function GuestPage() {
           email:                 form.email.trim(),
           phone:                 form.phone.trim(),
           dob:                   form.dob,
-          address:               form.address.trim(),
+          address:               [form.address1.trim(), form.address2.trim()].filter(Boolean).join(', '),
+          address1:              form.address1.trim(),
+          address2:              form.address2.trim(),
+          city:                  form.city.trim(),
+          state:                 form.state.trim(),
+          zip:                   form.zip.trim(),
           emergencyName:         form.emergencyName.trim(),
           emergencyPhone:        form.emergencyPhone.trim(),
           emergencyRelationship: form.emergencyRelationship.trim(),
@@ -357,6 +380,47 @@ export default function GuestPage() {
     }
   }
 
+  // ── Flex member lookup ────────────────────────────────────────────────────
+  async function handleFlexLookup(e) {
+    e.preventDefault()
+    clearError()
+    if (!lookupEmail.trim()) { setError('please enter your email address.'); return }
+    setSubmitting(true)
+    try {
+      const res  = await fetch(`/api/${gymSlug}/flex-checkin?email=${encodeURIComponent(lookupEmail.trim())}`)
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error ?? 'lookup failed')
+      setFlexMember(json.member)
+      setFlexResult({ checkInsUsed: json.checkInsUsed, checkInsRemaining: json.checkInsRemaining })
+      setStep('flex-confirm')
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  // ── Flex check-in ─────────────────────────────────────────────────────────
+  async function handleFlexCheckin() {
+    clearError()
+    setSubmitting(true)
+    try {
+      const res  = await fetch(`/api/${gymSlug}/flex-checkin`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ email: lookupEmail.trim() }),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error ?? 'check-in failed')
+      setFlexResult(json)
+      setStep('flex-done')
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
   if (pageLoading) {
     return (
       <div className="min-h-screen bg-[#292929] flex items-center justify-center">
@@ -377,7 +441,7 @@ export default function GuestPage() {
       <div className="w-full max-w-md">
 
         {/* ── Back button ─────────────────────────────────────────────────── */}
-        {step !== 'intent' && step !== 'checkin-done' && (
+        {step !== 'intent' && step !== 'checkin-done' && step !== 'flex-done' && (
           <button
             onClick={goBack}
             className="flex items-center gap-1.5 text-xs text-neutral-500 hover:text-neutral-300 transition-colors mb-4"
@@ -412,6 +476,19 @@ export default function GuestPage() {
               <div>
                 <p className="text-sm font-semibold text-white">check in with existing pack</p>
                 <p className="text-xs text-neutral-500 mt-0.5">use a pack you've already purchased</p>
+              </div>
+            </button>
+
+            <button
+              onClick={() => { clearError(); setMode('flex'); setStep('email-input') }}
+              className="w-full bg-[#1c1c1c] border border-neutral-800 rounded-2xl p-6 flex items-center gap-4 text-left hover:border-neutral-600 transition-colors group"
+            >
+              <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center shrink-0 group-hover:bg-white/15 transition-colors">
+                <Dumbbell size={18} className="text-white" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-white">check in with flex membership</p>
+                <p className="text-xs text-neutral-500 mt-0.5">up to 5 check-ins per month</p>
               </div>
             </button>
           </div>
@@ -470,10 +547,40 @@ export default function GuestPage() {
             </Field>
 
             {/* Address */}
-            <Field label="address" required>
+            <Field label="address line 1" required>
               <input
-                type="text" placeholder="123 Main St, Boston, MA 02101"
-                value={form.address} onChange={e => setField('address', e.target.value)}
+                type="text" placeholder="123 main st"
+                value={form.address1} onChange={e => setField('address1', e.target.value)}
+                className={INPUT} required
+              />
+            </Field>
+            <Field label="address line 2">
+              <input
+                type="text" placeholder="apt, suite, unit (optional)"
+                value={form.address2} onChange={e => setField('address2', e.target.value)}
+                className={INPUT}
+              />
+            </Field>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="city" required>
+                <input
+                  type="text" placeholder="boston"
+                  value={form.city} onChange={e => setField('city', e.target.value)}
+                  className={INPUT} required
+                />
+              </Field>
+              <Field label="state" required>
+                <input
+                  type="text" placeholder="MA"
+                  value={form.state} onChange={e => setField('state', e.target.value)}
+                  className={INPUT} required
+                />
+              </Field>
+            </div>
+            <Field label="zip code" required>
+              <input
+                type="text" placeholder="02101"
+                value={form.zip} onChange={e => setField('zip', e.target.value)}
                 className={INPUT} required
               />
             </Field>
@@ -572,20 +679,22 @@ export default function GuestPage() {
           </form>
         )}
 
-        {/* ── Step: email-input (returning purchase or check-in) ─────────── */}
+        {/* ── Step: email-input (returning purchase, check-in, or flex) ──── */}
         {step === 'email-input' && (
           <form
-            onSubmit={handleLookup}
+            onSubmit={mode === 'flex' ? handleFlexLookup : handleLookup}
             className="bg-[#1c1c1c] border border-neutral-800 rounded-2xl p-6 flex flex-col gap-5 shadow-2xl"
           >
             <div>
               <p className="text-sm font-semibold text-white">
-                {mode === 'checkin' ? 'check in' : 'enter your email'}
+                {mode === 'flex' ? 'flex check-in' : mode === 'checkin' ? 'check in' : 'enter your email'}
               </p>
               <p className="text-xs text-neutral-500 mt-1">
-                {mode === 'checkin'
-                  ? 'enter the email you used when you purchased your pass.'
-                  : "we'll check if you've visited before."}
+                {mode === 'flex'
+                  ? 'enter the email associated with your flex membership.'
+                  : mode === 'checkin'
+                    ? 'enter the email you used when you purchased your pass.'
+                    : "we'll check if you've visited before."}
               </p>
             </div>
 
@@ -725,13 +834,93 @@ export default function GuestPage() {
                   <p className="text-xs text-neutral-600 mt-1">purchase a new pass to continue.</p>
                 </div>
                 <button
-                  onClick={() => { clearError(); setStep('email-input'); setMode('purchase') }}
+                  onClick={() => {
+                    clearError()
+                    setMode('purchase')
+                    setReturningName(lookupResult.profile?.name ?? '')
+                    setStep('returning-confirm')
+                  }}
                   className="w-full py-3 rounded-xl text-sm font-semibold bg-white text-[#1c1c1c] hover:bg-neutral-200 transition-colors"
                 >
                   purchase a pass
                 </button>
               </>
             )}
+          </div>
+        )}
+
+        {/* ── Step: flex-confirm ──────────────────────────────────────────── */}
+        {step === 'flex-confirm' && flexMember && (
+          <div className="bg-[#1c1c1c] border border-neutral-800 rounded-2xl p-6 flex flex-col gap-5 shadow-2xl">
+            {/* Profile card */}
+            <div className="bg-neutral-900 rounded-xl p-4 flex flex-col gap-1">
+              <p className="text-sm font-semibold text-white">
+                {flexMember.firstName} {flexMember.lastName}
+              </p>
+              <p className="text-xs text-neutral-500">{lookupEmail}</p>
+            </div>
+
+            {/* Check-in counter */}
+            <div className="flex items-center justify-between bg-neutral-900 rounded-xl px-4 py-3">
+              <span className="text-xs text-neutral-400">check-ins this month</span>
+              <span className={`text-xs font-semibold ${flexResult?.checkInsRemaining === 0 ? 'text-red-400' : 'text-white'}`}>
+                {flexResult?.checkInsUsed ?? 0} / 5 used
+              </span>
+            </div>
+
+            {flexResult?.checkInsRemaining === 0 ? (
+              <div className="text-center py-2">
+                <p className="text-sm text-red-400">monthly limit reached.</p>
+                <p className="text-xs text-neutral-600 mt-1">you've used all 5 check-ins for this month.</p>
+              </div>
+            ) : (
+              <>
+                {error && (
+                  <p className="text-xs text-rose-400 bg-rose-500/10 border border-rose-500/20 rounded-lg px-3 py-2">
+                    {error}
+                  </p>
+                )}
+                <button
+                  onClick={handleFlexCheckin}
+                  disabled={submitting}
+                  className="w-full py-3 rounded-xl text-sm font-semibold bg-white text-[#1c1c1c] hover:bg-neutral-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+                >
+                  {submitting
+                    ? <><Loader2 size={15} className="animate-spin" /> checking in…</>
+                    : 'check in'
+                  }
+                </button>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* ── Step: flex-done ─────────────────────────────────────────────── */}
+        {step === 'flex-done' && (
+          <div className="bg-[#1c1c1c] border border-neutral-800 rounded-2xl p-8 flex flex-col items-center text-center gap-5 shadow-2xl">
+            <div className="w-14 h-14 rounded-full bg-emerald-500/15 flex items-center justify-center">
+              <CheckCircle2 size={28} className="text-emerald-400" />
+            </div>
+            <div>
+              <h2 className="text-xl font-bold text-white">checked in!</h2>
+              <p className="text-sm text-neutral-400 mt-1">
+                welcome{flexMember?.firstName ? `, ${flexMember.firstName.toLowerCase()}` : ''}.
+              </p>
+            </div>
+            {flexResult && (
+              <div className="w-full bg-neutral-900 rounded-xl p-4">
+                <p className="text-xs text-neutral-400">
+                  <span className="text-white font-semibold">{flexResult.checkInsRemaining}</span>{' '}
+                  flex check-in{flexResult.checkInsRemaining !== 1 ? 's' : ''} remaining this month
+                </p>
+              </div>
+            )}
+            <button
+              onClick={() => { setStep('intent'); setMode(null); setLookupEmail(''); setFlexMember(null); setFlexResult(null); clearError() }}
+              className="text-xs text-neutral-500 hover:text-neutral-300 transition-colors"
+            >
+              done
+            </button>
           </div>
         )}
 
@@ -770,7 +959,12 @@ export default function GuestPage() {
         powered by <span className="text-neutral-600 font-medium">ironkey</span>
       </p>
 
-      {waiverOpen && <WaiverModal onClose={() => setWaiverOpen(false)} />}
+      {waiverOpen && (
+        <WaiverModal
+          sections={gymSlug === 'oasis-boston' ? OASIS_WAIVER_SECTIONS : WAIVER_SECTIONS}
+          onClose={() => setWaiverOpen(false)}
+        />
+      )}
     </div>
   )
 }

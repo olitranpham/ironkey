@@ -20,7 +20,8 @@ export async function POST(request, { params }) {
 
     const {
       priceId, passType, passesLeft,
-      firstName, lastName, email, phone, dob, address,
+      firstName, lastName, email, phone, dob,
+      address, address1, address2, city, state, zip,
       emergencyName, emergencyPhone, emergencyRelationship,
       isNewGuest,
     } = body
@@ -59,6 +60,11 @@ export async function POST(request, { params }) {
         phone:                 phone                 ?? '',
         dob:                   dob                   ?? '',
         address:               address               ?? '',
+        address1:              address1              ?? '',
+        address2:              address2              ?? '',
+        city:                  city                  ?? '',
+        state:                 state                 ?? '',
+        zip:                   zip                   ?? '',
         emergencyName:         emergencyName         ?? '',
         emergencyPhone:        emergencyPhone        ?? '',
         emergencyRelationship: emergencyRelationship ?? '',

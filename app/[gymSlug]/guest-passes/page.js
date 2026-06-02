@@ -160,10 +160,12 @@ export default function GuestPassesPage() {
   const { gymSlug } = useParams()
   const { passTypeBorder } = getGymTheme(gymSlug)
 
-  const [profiles,  setProfiles]  = useState([])
-  const [unlinked,  setUnlinked]  = useState([])
-  const [loading,   setLoading]   = useState(true)
-  const [fetchErr,  setFetchErr]  = useState(null)
+  const [profiles,    setProfiles]    = useState([])
+  const [unlinked,    setUnlinked]    = useState([])
+  const [totalCount,  setTotalCount]  = useState(null)
+  const [countByType, setCountByType] = useState({})
+  const [loading,     setLoading]     = useState(true)
+  const [fetchErr,    setFetchErr]    = useState(null)
   const [search,    setSearch]    = useState('')
   const [activeTab, setActiveTab] = useState('all')
 
@@ -188,6 +190,8 @@ export default function GuestPassesPage() {
       const data = await res.json()
       setProfiles(data.profiles ?? [])
       setUnlinked(data.unlinked ?? [])
+      setTotalCount(data.totalCount ?? null)
+      setCountByType(data.countByType ?? {})
       setFetchErr(null)
     } catch {
       setFetchErr('could not load guest passes')
@@ -261,6 +265,11 @@ export default function GuestPassesPage() {
       return new Date(db) - new Date(da)
     })
 
+  const visiblePassCount = visible.reduce((sum, g) => {
+    const passes = typeFilter ? g.passes.filter(p => p.passType === typeFilter) : g.passes
+    return sum + passes.length
+  }, 0)
+
   return (
     <div className="md:flex-1 flex flex-col md:overflow-hidden" style={{ fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif" }}>
 
@@ -269,7 +278,11 @@ export default function GuestPassesPage() {
         <div className="flex items-center gap-2">
           <h1 className="text-sm font-semibold text-white">guest passes</h1>
           {!loading && (
-            <span className="text-sm font-normal text-white opacity-40 tabular-nums">{visible.length}</span>
+            <span className="text-sm font-normal text-white opacity-40 tabular-nums">
+            {!search.trim() && totalCount != null
+              ? (activeTab === 'all' ? totalCount : (countByType[PASS_TAB_TYPE[activeTab]] ?? 0))
+              : visiblePassCount}
+          </span>
           )}
         </div>
       </header>

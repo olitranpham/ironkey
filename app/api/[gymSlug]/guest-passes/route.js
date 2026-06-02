@@ -140,15 +140,44 @@ export async function GET(request, { params }) {
     }
     const gymId = gym.id
 
-    // Find profile IDs that have passes at this gym (GuestProfile is now global)
-    const gymPassLinks = await prisma.guestVisit.findMany({
-      where:    { gymId, guestProfileId: { not: null } },
-      select:   { guestProfileId: true },
-      distinct: ['guestProfileId'],
-    })
-    const profileIds = gymPassLinks.map(p => p.guestProfileId)
+    // ── Fetch all pass records for this gym upfront ─────────────────────────────
+    // We deliberately avoid using the nested `passes` relation on Guest, because
+    // Guest is a global (cross-gym) model and the nested where: { gymId } filter
+    // can return records from other gyms in some Prisma versions. Instead we query
+    // GuestVisit directly with an explicit gymId filter, then attach manually.
 
-    const profiles = await prisma.guest.findMany({
+    const allLinkedPasses = await prisma.guestVisit.findMany({
+      where:   { gymId, guestProfileId: { not: null } },
+      orderBy: { usedAt: { sort: 'desc', nulls: 'last' } },
+      select: {
+        id:             true,
+        guestProfileId: true,
+        passType:       true,
+        passesLeft:     true,
+        usedAt:         true,
+        expiresAt:      true,
+        createdAt:      true,
+      },
+    })
+
+    // Build a map of profileId → passes (already gym-scoped)
+    const passesByProfileId = new Map()
+    for (const pass of allLinkedPasses) {
+      const pid = pass.guestProfileId
+      if (!passesByProfileId.has(pid)) passesByProfileId.set(pid, [])
+      passesByProfileId.get(pid).push({
+        id:         pass.id,
+        passType:   pass.passType,
+        passesLeft: pass.passesLeft,
+        usedAt:     pass.usedAt,
+        expiresAt:  pass.expiresAt,
+        createdAt:  pass.createdAt,
+      })
+    }
+
+    const profileIds = [...passesByProfileId.keys()]
+
+    const profileRecords = await prisma.guest.findMany({
       where:   { id: { in: profileIds } },
       orderBy: { updatedAt: 'desc' },
       select: {
@@ -157,20 +186,13 @@ export async function GET(request, { params }) {
         email:      true,
         phone:      true,
         accessCode: true,
-        passes: {
-          where:   { gymId },   // only this gym's passes
-          orderBy: { usedAt: { sort: 'desc', nulls: 'last' } },
-          select: {
-            id:         true,
-            passType:   true,
-            passesLeft: true,
-            usedAt:     true,
-            expiresAt:  true,
-            createdAt:  true,
-          },
-        },
       },
     })
+
+    const profiles = profileRecords.map(p => ({
+      ...p,
+      passes: passesByProfileId.get(p.id) ?? [],
+    }))
 
     // Also fetch unlinked passes (no profile / no email)
     const unlinked = await prisma.guestVisit.findMany({
@@ -195,8 +217,22 @@ export async function GET(request, { params }) {
       },
     })
 
-    console.log(`[guest-passes GET] ${profiles.length} profile(s), ${unlinked.length} unlinked pass(es) for gym ${gymId}`)
-    return NextResponse.json({ profiles, unlinked })
+    // Authoritative counts — single DB query, not derived from in-memory arrays
+    const [totalCount, typeRows] = await Promise.all([
+      prisma.guestVisit.count({ where: { gymId } }),
+      prisma.guestVisit.groupBy({
+        by:    ['passType'],
+        where: { gymId },
+        _count: { passType: true },
+      }),
+    ])
+
+    const countByType = Object.fromEntries(
+      typeRows.map(r => [r.passType, r._count.passType])
+    )
+
+    console.log(`[guest-passes GET] ${profiles.length} profile(s), ${unlinked.length} unlinked, ${totalCount} total passes for gym ${gymId}`)
+    return NextResponse.json({ profiles, unlinked, totalCount, countByType })
   } catch (error) {
     console.error('[guest-passes GET]', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

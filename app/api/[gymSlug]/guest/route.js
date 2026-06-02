@@ -38,9 +38,16 @@ export async function GET(request, { params }) {
       const stripe = new Stripe(gym.stripeSecretKey, { apiVersion: '2024-06-20' })
       const prices = await stripe.prices.list({ active: true, limit: 100, expand: ['data.product'] })
 
+      const OASIS_GUEST_PRODUCT_IDS = new Set([
+        'prod_UdG5qNSMCuYDhN', // Single — $22.50
+        'prod_UdG5tLURJQAEog', // Value  — $85
+        'prod_UdG5qpIhMMjmyA', // Deluxe — $135
+      ])
+
       plans = prices.data
         .filter(p => !p.recurring && p.unit_amount != null)   // one-time only, not subscriptions
         .filter(p => {
+          if (gymSlug === 'oasis-boston') return OASIS_GUEST_PRODUCT_IDS.has(p.product?.id)
           const name = p.nickname ?? p.product?.name ?? ''
           return isGuestPassPrice(name)
         })

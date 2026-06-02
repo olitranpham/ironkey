@@ -76,6 +76,10 @@ model Member {
   dateCanceled DateTime?
   maxFreeze    DateTime?
 
+  // Flex membership monthly check-in tracking
+  flexCheckInCount     Int       @default(0)
+  flexCheckInResetDate DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
