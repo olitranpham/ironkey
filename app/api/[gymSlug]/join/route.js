@@ -19,6 +19,7 @@ export async function GET(request, { params }) {
     if (!gym) return NextResponse.json({ error: 'Gym not found' }, { status: 404 })
 
     let membershipPlans = []
+    let addonPlans      = []
 
     if (gym.stripeSecretKey) {
       const stripe = new Stripe(gym.stripeSecretKey, { apiVersion: '2024-06-20' })
@@ -28,22 +29,43 @@ export async function GET(request, { params }) {
         expand: ['data.product'],
       })
 
-      membershipPlans = prices.data
-        .filter(p => p.recurring && p.unit_amount != null)
-        .map(p => {
-          const name = p.nickname ?? p.product?.name ?? 'Membership'
-          return {
-            priceId:        p.id,
-            name,
-            amount:         p.unit_amount / 100,
-            interval:       p.recurring.interval,
-            membershipType: name,
-          }
-        })
-        .sort((a, b) => a.amount - b.amount)
+      const toplan = p => {
+        const name = p.nickname ?? p.product?.name ?? 'Membership'
+        return {
+          priceId:        p.id,
+          name,
+          amount:         p.unit_amount / 100,
+          interval:       p.recurring.interval,
+          membershipType: name,
+        }
+      }
+
+      const recurring = prices.data.filter(p => p.recurring && p.unit_amount != null)
+
+      if (gymSlug === 'triumph-barbell') {
+        // Membership plans: only General and Student products
+        membershipPlans = recurring
+          .filter(p => {
+            const n = (p.nickname ?? p.product?.name ?? '').toLowerCase()
+            return n.includes('general') || n.includes('student')
+          })
+          .map(toplan)
+          .sort((a, b) => a.amount - b.amount)
+
+        // Coaching add-ons: Programming / Communication products
+        addonPlans = recurring
+          .filter(p => {
+            const n = (p.nickname ?? p.product?.name ?? '').toLowerCase()
+            return n.includes('programming') || n.includes('communication')
+          })
+          .map(toplan)
+          .sort((a, b) => a.amount - b.amount)
+      } else {
+        membershipPlans = recurring.map(toplan).sort((a, b) => a.amount - b.amount)
+      }
     }
 
-    return NextResponse.json({ gym: { name: gym.name, slug: gymSlug }, membershipPlans, addonPlans: [] })
+    return NextResponse.json({ gym: { name: gym.name, slug: gymSlug }, membershipPlans, addonPlans })
   } catch (error) {
     console.error('[join GET]', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

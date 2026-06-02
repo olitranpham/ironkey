@@ -175,6 +175,13 @@ export default function MembersPage() {
 
   // ── Derived ──────────────────────────────────────────────────────────────
 
+  const tabCount = members.filter(m => {
+    const tabStatus = activeTab === 'canceled' ? 'cancelled' : activeTab
+    return activeTab === 'active'
+      ? (m.status === 'ACTIVE' || m.status === 'OVERDUE')
+      : m.status.toLowerCase() === tabStatus.toLowerCase()
+  }).length
+
   const visible = members
     .filter(m => {
       const tabStatus = activeTab === 'canceled' ? 'cancelled' : activeTab
@@ -202,7 +209,7 @@ export default function MembersPage() {
         <div className="flex items-center gap-2">
           <h1 className="text-sm font-semibold text-white">members</h1>
           {!loading && (
-            <span className="text-sm font-normal text-white opacity-40 tabular-nums">{members.length}</span>
+            <span className="text-sm font-normal text-white opacity-40 tabular-nums">{tabCount}</span>
           )}
         </div>
       </header>

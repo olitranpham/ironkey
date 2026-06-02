@@ -80,7 +80,7 @@ function buildChartData(members) {
     const cohort     = members.filter(m => plotDate(m) <= endOfMonth)
     return {
       month:    d.toLocaleDateString('en-US', { month: 'short' }),
-      active:   cohort.filter(m => m.status === 'ACTIVE').length,
+      active:   cohort.filter(m => m.status === 'ACTIVE' || m.status === 'OVERDUE').length,
       frozen:   cohort.filter(m => m.status === 'FROZEN').length,
       canceled: cohort.filter(m => m.status === 'CANCELLED').length,
     }

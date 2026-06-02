@@ -145,6 +145,7 @@ export default function JoinPage() {
   const [submitting,       setSubmitting]       = useState(false)
   const [error,            setError]            = useState(null)
   const [waiverOpen,       setWaiverOpen]       = useState(false)
+  const [studentIdFile,    setStudentIdFile]    = useState(null)
 
   const [form, setForm] = useState({
     firstName:             '',
@@ -161,6 +162,9 @@ export default function JoinPage() {
     addonPriceId:          '',
     waiver:                false,
   })
+
+  const isTriumph  = gymSlug === 'triumph-barbell'
+  const isStudent  = isTriumph && form.membershipType.toLowerCase().includes('student')
   useEffect(() => {
     fetch(`/api/${gymSlug}/join`)
       .then(r => r.json())
@@ -183,6 +187,8 @@ export default function JoinPage() {
   function selectPlan(priceId) {
     const plan = membershipPlans.find(p => p.priceId === priceId)
     setForm(f => ({ ...f, priceId, membershipType: plan?.membershipType ?? '' }))
+    // Clear student ID if switching away from a student plan
+    if (!plan?.membershipType?.toLowerCase().includes('student')) setStudentIdFile(null)
   }
 
   async function handleSubmit(e) {
@@ -199,6 +205,7 @@ export default function JoinPage() {
     if (dobAge < 18) { setError('Members under 18 must have a parent or guardian complete this form on their behalf (see Section 14 of the terms).'); return }
     if (!form.emergencyName.trim() || !form.emergencyPhone.trim()) { setError('Emergency contact name and phone are required.'); return }
     if (!form.waiver)          { setError('You must agree to the membership terms.'); return }
+    if (isStudent && !studentIdFile) { setError('A student ID photo is required for student memberships.'); return }
 
     setSubmitting(true)
     try {
@@ -218,6 +225,7 @@ export default function JoinPage() {
           priceId:               form.priceId,
           membershipType:        form.membershipType,
           addonPriceId:          form.addonPriceId,
+          studentIdUploaded:     isStudent && Boolean(studentIdFile),
         }),
       })
       const json = await res.json()
@@ -351,9 +359,32 @@ export default function JoinPage() {
           )}
         </Field>
 
+        {/* Student ID upload — triumph-barbell student plans only */}
+        {isStudent && (
+          <Field label="student ID" required>
+            <div className="flex flex-col gap-2">
+              <label className="flex items-center justify-center gap-2 w-full border border-dashed border-neutral-600 rounded-lg px-3 py-4 cursor-pointer hover:border-neutral-400 transition-colors">
+                <svg className="w-4 h-4 text-neutral-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+                </svg>
+                <span className="text-xs text-neutral-400">
+                  {studentIdFile ? studentIdFile.name : 'upload student ID photo'}
+                </span>
+                <input
+                  type="file"
+                  accept="image/*,.pdf"
+                  className="sr-only"
+                  onChange={e => setStudentIdFile(e.target.files?.[0] ?? null)}
+                />
+              </label>
+              <p className="text-[11px] text-neutral-600">photo or scan of a valid student ID — membership will be verified before activation</p>
+            </div>
+          </Field>
+        )}
+
         {/* Coaching / Programming Add-on */}
         {addonPlans.length > 0 && (
-          <Field label="coaching / programming add-on">
+          <Field label="coaching / programming add-on (optional)">
             <div className="relative">
               <select
                 value={form.addonPriceId}

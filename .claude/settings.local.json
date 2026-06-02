@@ -48,7 +48,12 @@
       "Bash(rmdir \"/Users/olitranpham/ironkey/app/api/[gymSlug]/seam/codes/delete\")",
       "Bash(rm \"/Users/olitranpham/ironkey/app/api/[gymSlug]/seam/codes/update/route.js\")",
       "Bash(rmdir \"/Users/olitranpham/ironkey/app/api/[gymSlug]/seam/codes/update\")",
-      "Bash(rm \"/Users/olitranpham/ironkey/app/api/[gymSlug]/seam/sync/route.js\")"
+      "Bash(rm \"/Users/olitranpham/ironkey/app/api/[gymSlug]/seam/sync/route.js\")",
+      "Bash(sips -s format png \"/Users/olitranpham/Downloads/ik pfp.png\" --out /tmp/favicon_src.png --resampleSize 64)",
+      "Bash(sips -z 64 64 \"/Users/olitranpham/Downloads/ik pfp.png\" --out /tmp/favicon_64.png)",
+      "Bash(DRY_RUN=1 node scripts/import-oasis.js)",
+      "Bash(awk -F',' 'NR>1 && \\($4==\"\" || $2==\"\"\\)' \"/Users/olitranpham/Downloads/[OASIS] Codes - Flex Members.csv\")",
+      "Bash(awk -F',' 'NR>1 && $4==\"\"' \"/Users/olitranpham/Downloads/[OASIS] Codes - Flex Members.csv\")"
     ]
   }
 }

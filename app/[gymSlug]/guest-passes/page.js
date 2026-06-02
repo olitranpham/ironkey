@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams } from 'next/navigation'
 import { Search, RefreshCw, X, KeyRound, Phone } from 'lucide-react'
-import { getAllowedPassTypes } from '@/lib/gymPassTypes'
 import { getGymTheme } from '@/lib/gymThemes'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -236,10 +235,15 @@ export default function GuestPassesPage() {
   const allPasses   = unified.flatMap(g => g.passes)
   const typeFilter  = PASS_TAB_TYPE[activeTab]
 
-  // Map allowed enum values (e.g. 'THREE_PACK') back to tab keys (e.g. '3-pack')
+  // Map enum values (e.g. 'THREE_PACK') back to tab keys (e.g. '3-pack')
   const TYPE_TO_TAB = Object.fromEntries(Object.entries(PASS_TAB_TYPE).map(([k, v]) => [v, k]))
-  const allowedTypes = getAllowedPassTypes(gymSlug)
-  const visibleTabs  = ['all', ...allowedTypes.map(t => TYPE_TO_TAB[t]).filter(Boolean)]
+
+  // Build filter tabs from pass types actually present in the data
+  const presentTypes = [...new Set(allPasses.map(p => p.passType))]
+  const visibleTabs  = ['all', ...PASS_TABS.slice(1).filter(tab => {
+    const type = PASS_TAB_TYPE[tab]
+    return type && presentTypes.includes(type)
+  })]
 
   const visible = unified
     .filter(g => {
@@ -262,7 +266,12 @@ export default function GuestPassesPage() {
 
       {/* Top bar */}
       <header className="h-14 shrink-0 bg-[#1c1c1c] border-b border-neutral-800 flex items-center px-6">
-        <h1 className="text-sm font-semibold text-white">guest passes</h1>
+        <div className="flex items-center gap-2">
+          <h1 className="text-sm font-semibold text-white">guest passes</h1>
+          {!loading && (
+            <span className="text-sm font-normal text-white opacity-40 tabular-nums">{visible.length}</span>
+          )}
+        </div>
       </header>
 
       <main className="md:flex-1 flex flex-col p-5 gap-4 md:overflow-hidden md:min-h-0">

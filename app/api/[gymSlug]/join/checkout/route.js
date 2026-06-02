@@ -20,7 +20,7 @@ export async function POST(request, { params }) {
     const {
       firstName, lastName, email, phone, dob, address,
       emergencyName, emergencyPhone, emergencyRelationship,
-      priceId, membershipType, addonPriceId,
+      priceId, membershipType, addonPriceId, studentIdUploaded,
     } = body
 
     if (!firstName || !lastName || !email || !priceId) {
@@ -66,6 +66,7 @@ export async function POST(request, { params }) {
         emergencyRelationship: emergencyRelationship ?? '',
         membershipType:        membershipType        ?? '',
         addonPriceId:          addonPriceId          ?? '',
+        studentIdUploaded:     studentIdUploaded ? 'true' : 'false',
       },
     })
 
