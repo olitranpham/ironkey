@@ -264,17 +264,25 @@ export default function GuestPassesPage() {
     return type && presentTypes.includes(type)
   })]
 
-  // Months present in the data, sorted most recent first
+  // Months present across all passes (unfiltered), sorted most recent first
   const availableMonths = [...new Set(allPasses.map(passMonth).filter(Boolean))]
     .sort((a, b) => b.localeCompare(a))
 
-  const visible = unified
+  // When a month is selected, trim each guest's passes to only those in that month.
+  // A guest with 14 passes across many months only appears in the month(s) where
+  // they have a pass with usedAt in that month — and only with those passes.
+  const guestsForView = monthFilter
+    ? unified
+        .map(g => ({ ...g, passes: g.passes.filter(p => passMonth(p) === monthFilter) }))
+        .filter(g => g.passes.length > 0)
+    : unified
+
+  const visible = guestsForView
     .filter(g => {
       const q           = search.trim().toLowerCase()
       const matchSearch = !q || `${g.name} ${g.email ?? ''}`.toLowerCase().includes(q)
       const matchTab    = !typeFilter || g.passes.some(p => p.passType === typeFilter)
-      const matchMonth  = !monthFilter || g.passes.some(p => passMonth(p) === monthFilter)
-      return matchSearch && matchTab && matchMonth
+      return matchSearch && matchTab
     })
     .sort((a, b) => {
       const da = lastSeenDate(a)
