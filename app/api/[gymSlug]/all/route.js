@@ -34,7 +34,7 @@ export async function GET(request, { params }) {
         : {}),
     }
 
-    const members = await prisma.member.findMany({
+    const rows = await prisma.member.findMany({
       where,
       orderBy: [{ createdAt: 'desc' }],
       select: {
@@ -55,7 +55,21 @@ export async function GET(request, { params }) {
         stripeSubscriptionId: true,
         priceId:              true,
         createdAt:            true,
+        flexCheckInCount:     true,
+        flexCheckInResetDate: true,
       },
+    })
+
+    // Compute current-month flex check-in count for each member
+    const now        = new Date()
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
+
+    const members = rows.map(m => {
+      const needsReset = !m.flexCheckInResetDate || new Date(m.flexCheckInResetDate) < monthStart
+      return {
+        ...m,
+        flexCheckInsThisMonth: needsReset ? 0 : (m.flexCheckInCount ?? 0),
+      }
     })
 
     console.log(`[all] returned ${members.length} member(s) for gym ${gymId}`)

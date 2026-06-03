@@ -2,8 +2,17 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams } from 'next/navigation'
-import { Search, RefreshCw, X, KeyRound, Phone } from 'lucide-react'
+import { Search, RefreshCw, X, KeyRound, Phone, TrendingUp } from 'lucide-react'
 import { getGymTheme } from '@/lib/gymThemes'
+import {
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+} from 'recharts'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -180,6 +189,7 @@ export default function GuestPassesPage() {
   const [countByType, setCountByType] = useState({})
   const [loading,     setLoading]     = useState(true)
   const [fetchErr,    setFetchErr]    = useState(null)
+  const [statsData,   setStatsData]   = useState([])
   const [search,      setSearch]      = useState('')
   const [activeTab,   setActiveTab]   = useState('all')
   const [monthFilter, setMonthFilter] = useState('')
@@ -198,16 +208,21 @@ export default function GuestPassesPage() {
     setLoading(true)
     try {
       const token = localStorage.getItem('ik_token')
-      const res   = await fetch(`/api/${gymSlug}/guest-passes`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      if (!res.ok) throw new Error(`${res.status}`)
-      const data = await res.json()
+      const [passRes, statsRes] = await Promise.all([
+        fetch(`/api/${gymSlug}/guest-passes`,       { headers: { Authorization: `Bearer ${token}` } }),
+        fetch(`/api/${gymSlug}/guest-passes/stats`, { headers: { Authorization: `Bearer ${token}` } }),
+      ])
+      if (!passRes.ok) throw new Error(`${passRes.status}`)
+      const data  = await passRes.json()
       setProfiles(data.profiles ?? [])
       setUnlinked(data.unlinked ?? [])
       setTotalCount(data.totalCount ?? null)
       setCountByType(data.countByType ?? {})
       setFetchErr(null)
+      if (statsRes.ok) {
+        const stats = await statsRes.json()
+        setStatsData(stats.data ?? [])
+      }
     } catch {
       setFetchErr('could not load guest passes')
     } finally {
@@ -316,6 +331,9 @@ export default function GuestPassesPage() {
       </header>
 
       <main className="md:flex-1 flex flex-col p-5 gap-4 md:overflow-hidden md:min-h-0">
+
+        {/* Trend chart */}
+        {statsData.length > 0 && <GuestPassTrendChart data={statsData} />}
 
         {/* Search + month filter */}
         <div className="shrink-0 flex items-center gap-2 flex-wrap">
@@ -597,6 +615,66 @@ function GField({ label, value }) {
     <div className="flex items-center justify-between px-3 py-2.5 bg-[#1c1c1c]">
       <span className="text-xs text-zinc-400 shrink-0">{label}</span>
       <span className="text-xs text-white text-right ml-4 truncate max-w-[240px]">{value || '—'}</span>
+    </div>
+  )
+}
+
+// ── Guest pass trend chart ─────────────────────────────────────────────────────
+
+const PASS_TOOLTIP = ({ active, payload, label }) => {
+  if (!active || !payload?.length) return null
+  return (
+    <div className="bg-[#1c1c1c] border border-neutral-800 rounded-lg px-3 py-2 text-xs shadow-xl">
+      <p className="text-neutral-400 mb-1.5 font-medium">{label}</p>
+      <p className="text-violet-400 leading-5">
+        passes: <span className="font-semibold text-white">{payload[0].value}</span>
+      </p>
+    </div>
+  )
+}
+
+function GuestPassTrendChart({ data }) {
+  return (
+    <div className="shrink-0 bg-white/[0.03] border border-white/5 rounded-xl px-5 pt-4 pb-4 flex flex-col" style={{ minHeight: 220 }}>
+      <div className="flex items-center gap-2 mb-3 shrink-0">
+        <TrendingUp size={13} className="text-neutral-400" />
+        <h2 className="text-sm font-semibold text-white">guest pass activity</h2>
+      </div>
+      <div className="min-w-0 w-full overflow-hidden" style={{ height: 160 }}>
+        <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+          <AreaChart data={data} margin={{ top: 4, right: 4, left: -24, bottom: 0 }}>
+            <defs>
+              <linearGradient id="gPasses" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%"  stopColor="#8b5cf6" stopOpacity={0.15} />
+                <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0} />
+              </linearGradient>
+            </defs>
+            <CartesianGrid strokeDasharray="3 3" stroke="#262626" vertical={false} />
+            <XAxis
+              dataKey="month"
+              tick={{ fill: '#737373', fontSize: 11 }}
+              axisLine={false}
+              tickLine={false}
+            />
+            <YAxis
+              tick={{ fill: '#737373', fontSize: 11 }}
+              axisLine={false}
+              tickLine={false}
+              allowDecimals={false}
+            />
+            <Tooltip content={<PASS_TOOLTIP />} cursor={{ stroke: '#404040', strokeWidth: 1 }} />
+            <Area
+              type="monotone"
+              dataKey="passes"
+              name="passes"
+              stroke="#8b5cf6"
+              strokeWidth={2}
+              fill="url(#gPasses)"
+              dot={false}
+            />
+          </AreaChart>
+        </ResponsiveContainer>
+      </div>
     </div>
   )
 }

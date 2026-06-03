@@ -56,7 +56,7 @@ export function DrawerField({ label, value, mono = false, children }) {
 
 // ── Drawer content ────────────────────────────────────────────────────────────
 
-function DrawerContent({ member, membershipBorder, onClose, onStatusChange, onSaveAccessCode, updating }) {
+function DrawerContent({ member, gymSlug, membershipBorder, onClose, onStatusChange, onSaveAccessCode, updating }) {
   const initials = (member.firstName?.[0] ?? '') + (member.lastName?.[0] ?? '')
   const [codeInput,  setCodeInput]  = useState(member.accessCode ?? '')
   const [savingCode, setSavingCode] = useState(false)
@@ -139,6 +139,21 @@ function DrawerContent({ member, membershipBorder, onClose, onStatusChange, onSa
           <DrawerField label="joined" value={fmtDate(member.createdAt)} />
           {member.status === 'FROZEN'    && <DrawerField label="frozen"   value={fmtDate(member.dateFrozen)} />}
           {member.status === 'CANCELLED' && <DrawerField label="canceled" value={fmtDate(member.dateCanceled)} />}
+
+          {/* Flex check-ins — oasis-boston only */}
+          {gymSlug === 'oasis-boston' && member.membershipType?.toLowerCase().includes('flex') && (
+            <DrawerField label="check-ins this month">
+              {(() => {
+                const used      = member.flexCheckInsThisMonth ?? 0
+                const atLimit   = used >= 5
+                return (
+                  <span className={`text-xs font-semibold ml-4 ${atLimit ? 'text-amber-400' : 'text-white'}`}>
+                    {used} / 5
+                  </span>
+                )
+              })()}
+            </DrawerField>
+          )}
         </DrawerSection>
 
       </div>
@@ -185,6 +200,7 @@ function DrawerContent({ member, membershipBorder, onClose, onStatusChange, onSa
 export default function MemberProfileDrawer({
   member,
   open,
+  gymSlug,
   membershipBorder,
   onClose,
   onStatusChange,
@@ -212,6 +228,7 @@ export default function MemberProfileDrawer({
         {member && (
           <DrawerContent
             member={member}
+            gymSlug={gymSlug}
             membershipBorder={membershipBorder}
             onClose={onClose}
             onStatusChange={onStatusChange}

@@ -116,7 +116,7 @@ function buildChartData(members) {
     }
 
     return {
-      month: d.toLocaleDateString('en-US', { month: 'short' }),
+      month: d.toLocaleDateString('en-US', { month: 'short' }).toLowerCase(),
       active,
       frozen,
       canceled,
@@ -315,6 +315,7 @@ export default function DashboardPage() {
       <MemberProfileDrawer
         member={selectedMember}
         open={panelOpen}
+        gymSlug={gymSlug}
         membershipBorder={membershipBorder}
         onClose={closePanel}
         onStatusChange={handleStatusChange}

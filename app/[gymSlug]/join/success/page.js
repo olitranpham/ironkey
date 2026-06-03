@@ -42,7 +42,7 @@ export default function JoinSuccessPage() {
         </div>
 
         <p className="text-[11px] text-neutral-600">
-          questions? contact triumphbarbell@gmail.com
+          questions? contact admin@ironkeyentry.com
         </p>
 
       </div>

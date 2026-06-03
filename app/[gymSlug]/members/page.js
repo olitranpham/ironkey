@@ -313,6 +313,7 @@ export default function MembersPage() {
       <MemberProfileDrawer
         member={selectedMember}
         open={panelOpen}
+        gymSlug={gymSlug}
         membershipBorder={membershipBorder}
         onClose={closePanel}
         onStatusChange={(memberId, newStatus) => {
