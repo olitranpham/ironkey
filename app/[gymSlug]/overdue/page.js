@@ -34,7 +34,7 @@ function fmtAmount(cents) {
 
 function fmtDate(unix) {
   if (!unix) return null
-  return new Date(unix * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+  return new Date(unix * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).toLowerCase()
 }
 
 function invoiceLabel(r) {

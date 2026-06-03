@@ -34,7 +34,21 @@ function fmtDate(iso) {
   if (!iso) return '—'
   const d = new Date(iso)
   if (isNaN(d.getTime())) return '—'
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).toLowerCase()
+}
+
+// Returns 'YYYY-MM' for a pass record using createdAt as the purchase month
+function passMonth(pass) {
+  const raw = pass.usedAt ?? pass.createdAt
+  if (!raw) return null
+  const d = new Date(raw)
+  if (isNaN(d.getTime())) return null
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`
+}
+
+function fmtMonth(yyyymm) {
+  const [y, m] = yyyymm.split('-').map(Number)
+  return new Date(y, m - 1, 1).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }).toLowerCase()
 }
 
 
@@ -166,8 +180,9 @@ export default function GuestPassesPage() {
   const [countByType, setCountByType] = useState({})
   const [loading,     setLoading]     = useState(true)
   const [fetchErr,    setFetchErr]    = useState(null)
-  const [search,    setSearch]    = useState('')
-  const [activeTab, setActiveTab] = useState('all')
+  const [search,      setSearch]      = useState('')
+  const [activeTab,   setActiveTab]   = useState('all')
+  const [monthFilter, setMonthFilter] = useState('')
 
   const [selectedProfile, setSelectedProfile] = useState(null)
   const [panelOpen,       setPanelOpen]       = useState(false)
@@ -249,12 +264,17 @@ export default function GuestPassesPage() {
     return type && presentTypes.includes(type)
   })]
 
+  // Months present in the data, sorted most recent first
+  const availableMonths = [...new Set(allPasses.map(passMonth).filter(Boolean))]
+    .sort((a, b) => b.localeCompare(a))
+
   const visible = unified
     .filter(g => {
       const q           = search.trim().toLowerCase()
       const matchSearch = !q || `${g.name} ${g.email ?? ''}`.toLowerCase().includes(q)
       const matchTab    = !typeFilter || g.passes.some(p => p.passType === typeFilter)
-      return matchSearch && matchTab
+      const matchMonth  = !monthFilter || g.passes.some(p => passMonth(p) === monthFilter)
+      return matchSearch && matchTab && matchMonth
     })
     .sort((a, b) => {
       const da = lastSeenDate(a)
@@ -279,7 +299,7 @@ export default function GuestPassesPage() {
           <h1 className="text-sm font-semibold text-white">guest passes</h1>
           {!loading && (
             <span className="text-sm font-normal text-white opacity-40 tabular-nums">
-            {!search.trim() && totalCount != null
+            {!search.trim() && !monthFilter && totalCount != null
               ? (activeTab === 'all' ? totalCount : (countByType[PASS_TAB_TYPE[activeTab]] ?? 0))
               : visiblePassCount}
           </span>
@@ -289,16 +309,31 @@ export default function GuestPassesPage() {
 
       <main className="md:flex-1 flex flex-col p-5 gap-4 md:overflow-hidden md:min-h-0">
 
-        {/* Search */}
-        <div className="shrink-0 relative w-80">
-          <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500 pointer-events-none" />
-          <input
-            type="text"
-            placeholder="search name or email…"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            className="w-full bg-neutral-700/50 border border-neutral-600/50 rounded-lg pl-9 pr-3 py-2 text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-neutral-500 focus:ring-1 focus:ring-neutral-500 transition-colors"
-          />
+        {/* Search + month filter */}
+        <div className="shrink-0 flex items-center gap-2 flex-wrap">
+          <div className="relative w-80">
+            <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500 pointer-events-none" />
+            <input
+              type="text"
+              placeholder="search name or email…"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              className="w-full bg-neutral-700/50 border border-neutral-600/50 rounded-lg pl-9 pr-3 py-2 text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-neutral-500 focus:ring-1 focus:ring-neutral-500 transition-colors"
+            />
+          </div>
+          {availableMonths.length > 0 && (
+            <select
+              value={monthFilter}
+              onChange={e => setMonthFilter(e.target.value)}
+              className="bg-neutral-700/50 border border-neutral-600/50 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-neutral-500 focus:ring-1 focus:ring-neutral-500 transition-colors appearance-none pr-7 cursor-pointer"
+              style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23737373' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 8px center' }}
+            >
+              <option value="">all time</option>
+              {availableMonths.map(m => (
+                <option key={m} value={m}>{fmtMonth(m)}</option>
+              ))}
+            </select>
+          )}
         </div>
 
         {/* Table card */}

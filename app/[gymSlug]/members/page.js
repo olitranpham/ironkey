@@ -8,7 +8,8 @@ import MemberProfileDrawer from '@/components/MemberProfileDrawer'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const TABS = ['active', 'flex', 'frozen', 'canceled']
+const ALL_TABS  = ['active', 'flex', 'frozen', 'canceled']
+const FLEX_GYMS = new Set(['oasis-boston'])
 
 const STATUS_TEXT = {
   ACTIVE:    'text-emerald-600',
@@ -71,7 +72,7 @@ function fmtDate(iso) {
   if (!iso) return '—'
   const d = new Date(iso)
   if (isNaN(d.getTime())) return '—'
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' }).toLowerCase()
 }
 
 // ── Page ──────────────────────────────────────────────────────────────────────
@@ -79,6 +80,7 @@ function fmtDate(iso) {
 export default function MembersPage() {
   const { gymSlug } = useParams()
   const { membershipBorder } = getGymTheme(gymSlug)
+  const tabs = FLEX_GYMS.has(gymSlug) ? ALL_TABS : ALL_TABS.filter(t => t !== 'flex')
 
   const [members,   setMembers]   = useState([])
   const [loading,   setLoading]   = useState(true)
@@ -238,7 +240,7 @@ export default function MembersPage() {
 
           {/* Tabs */}
           <div className="flex border-b border-neutral-800 px-4 shrink-0">
-            {TABS.map(tab => (
+            {tabs.map(tab => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}

@@ -479,18 +479,20 @@ export default function GuestPage() {
               </div>
             </button>
 
-            <button
-              onClick={() => { clearError(); setMode('flex'); setStep('email-input') }}
-              className="w-full bg-[#1c1c1c] border border-neutral-800 rounded-2xl p-6 flex items-center gap-4 text-left hover:border-neutral-600 transition-colors group"
-            >
-              <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center shrink-0 group-hover:bg-white/15 transition-colors">
-                <Dumbbell size={18} className="text-white" />
-              </div>
-              <div>
-                <p className="text-sm font-semibold text-white">check in with flex membership</p>
-                <p className="text-xs text-neutral-500 mt-0.5">up to 5 check-ins per month</p>
-              </div>
-            </button>
+            {gymSlug === 'oasis-boston' && (
+              <button
+                onClick={() => { clearError(); setMode('flex'); setStep('email-input') }}
+                className="w-full bg-[#1c1c1c] border border-neutral-800 rounded-2xl p-6 flex items-center gap-4 text-left hover:border-neutral-600 transition-colors group"
+              >
+                <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center shrink-0 group-hover:bg-white/15 transition-colors">
+                  <Dumbbell size={18} className="text-white" />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-white">check in with flex membership</p>
+                  <p className="text-xs text-neutral-500 mt-0.5">up to 5 check-ins per month</p>
+                </div>
+              </button>
+            )}
           </div>
         )}
 

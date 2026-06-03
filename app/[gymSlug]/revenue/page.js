@@ -30,7 +30,7 @@ function shortMonth(key) {
 }
 
 function fmtDate(val) {
-  return new Date(val).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+  return new Date(val).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).toLowerCase()
 }
 
 function todayISO() {

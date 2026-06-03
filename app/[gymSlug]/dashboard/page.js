@@ -48,7 +48,7 @@ function fmtDate(iso) {
   if (!iso) return '—'
   const d = new Date(iso)
   if (isNaN(d.getTime())) return '—'
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' }).toLowerCase()
 }
 
 // Returns the most relevant date for a member row based on status
@@ -65,15 +65,30 @@ function dateLabelFor(tab) {
   return 'joined'
 }
 
-// Builds last-7-months chart data from the loaded members array.
+// Builds chart data from the loaded members array spanning from the earliest
+// membership createdAt to the current month.
 // Each member enters the cohort from their createdAt date. For each month we
 // then check whether they had been cancelled or frozen BY that month's end,
 // so a member who joined in Jan and cancelled in Apr shows as active in Jan–Mar
 // and cancelled from Apr onwards — rather than only appearing after cancellation.
 function buildChartData(members) {
   const now = new Date()
-  return Array.from({ length: 7 }, (_, i) => {
-    const d          = new Date(now.getFullYear(), now.getMonth() - (6 - i), 1)
+  if (!members.length) return []
+
+  const earliest = members.reduce((min, m) => {
+    const d = new Date(m.createdAt)
+    return d < min ? d : min
+  }, new Date(members[0].createdAt))
+
+  // Start at the 1st of the earliest member's month
+  const startYear  = earliest.getFullYear()
+  const startMonth = earliest.getMonth()
+  const nowYear    = now.getFullYear()
+  const nowMonth   = now.getMonth()
+  const totalMonths = (nowYear - startYear) * 12 + (nowMonth - startMonth) + 1
+
+  return Array.from({ length: totalMonths }, (_, i) => {
+    const d          = new Date(startYear, startMonth + i, 1)
     const endOfMonth = new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59, 999)
 
     let active = 0, frozen = 0, canceled = 0
