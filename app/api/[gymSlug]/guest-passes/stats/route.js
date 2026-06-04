@@ -20,18 +20,20 @@ export async function GET(request, { params }) {
     }
 
     const passes = await prisma.guestVisit.findMany({
-      where:  { gymId: gym.id, usedAt: { not: null } },
-      select: { usedAt: true },
+      where:  { gymId: gym.id },
+      select: { usedAt: true, createdAt: true },
     })
 
     if (!passes.length) {
       return NextResponse.json({ data: [] })
     }
 
-    // Group by YYYY-MM using usedAt
+    // Group by YYYY-MM using usedAt, falling back to createdAt for imported passes
     const counts = {}
     for (const p of passes) {
-      const d   = new Date(p.usedAt)
+      const raw = p.usedAt ?? p.createdAt
+      if (!raw) continue
+      const d   = new Date(raw)
       const key = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`
       counts[key] = (counts[key] ?? 0) + 1
     }
@@ -53,6 +55,7 @@ export async function GET(request, { params }) {
       if (m > 12) { m = 1; y++ }
     }
 
+    console.log(`[guest-passes/stats] ${gymSlug}: ${passes.length} passes → ${data.length} months`, JSON.stringify(data))
     return NextResponse.json({ data })
   } catch (error) {
     console.error('[guest-passes/stats GET]', error)
