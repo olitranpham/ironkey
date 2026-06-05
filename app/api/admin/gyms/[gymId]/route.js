@@ -18,10 +18,9 @@ export async function PATCH(request, { params }) {
     if (body.seamDeviceId?.trim())    data.seamDeviceId    = body.seamDeviceId.trim()
     if (body.stripeAccountId?.trim()) data.stripeAccountId = body.stripeAccountId.trim()
     // Allow empty string to clear Zapier URLs
-    if (body.zapierMemberWebhookUrl   !== undefined) data.zapierMemberWebhookUrl   = body.zapierMemberWebhookUrl.trim()   || null
-    if (body.zapierGuestWebhookUrl    !== undefined) data.zapierGuestWebhookUrl    = body.zapierGuestWebhookUrl.trim()    || null
-    if (body.zapierOverdueWebhookUrl  !== undefined) data.zapierOverdueWebhookUrl  = body.zapierOverdueWebhookUrl.trim()  || null
-    if (body.zapierCheckinWebhookUrl  !== undefined) data.zapierCheckinWebhookUrl  = body.zapierCheckinWebhookUrl.trim()  || null
+    if (body.zapierMemberWebhookUrl  !== undefined) data.zapierMemberWebhookUrl  = body.zapierMemberWebhookUrl.trim()  || null
+    if (body.zapierGuestWebhookUrl   !== undefined) data.zapierGuestWebhookUrl   = body.zapierGuestWebhookUrl.trim()   || null
+    if (body.zapierOverdueWebhookUrl !== undefined) data.zapierOverdueWebhookUrl = body.zapierOverdueWebhookUrl.trim() || null
 
     if (Object.keys(data).length === 0) {
       return NextResponse.json({ error: 'Nothing to update' }, { status: 400 })
@@ -30,7 +29,7 @@ export async function PATCH(request, { params }) {
     const gym = await prisma.gym.update({
       where:  { id: gymId },
       data,
-      select: { id: true, name: true, slug: true, stripeAccountId: true, seamApiKey: true, zapierMemberWebhookUrl: true, zapierGuestWebhookUrl: true, zapierOverdueWebhookUrl: true, zapierCheckinWebhookUrl: true },
+      select: { id: true, name: true, slug: true, stripeAccountId: true, seamApiKey: true, zapierMemberWebhookUrl: true, zapierGuestWebhookUrl: true, zapierOverdueWebhookUrl: true },
     })
 
     return NextResponse.json({
@@ -43,7 +42,6 @@ export async function PATCH(request, { params }) {
         zapierMemberWebhookUrl:  gym.zapierMemberWebhookUrl  ?? '',
         zapierGuestWebhookUrl:   gym.zapierGuestWebhookUrl   ?? '',
         zapierOverdueWebhookUrl: gym.zapierOverdueWebhookUrl ?? '',
-        zapierCheckinWebhookUrl: gym.zapierCheckinWebhookUrl ?? '',
       },
     })
   } catch (error) {

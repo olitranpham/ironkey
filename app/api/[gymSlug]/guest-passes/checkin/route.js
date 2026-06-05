@@ -41,7 +41,7 @@ export async function POST(request, { params }) {
 
     const gym = await prisma.gym.findUnique({
       where:  { slug: gymSlug },
-      select: { id: true, seamApiKey: true, seamDeviceId: true, zapierCheckinWebhookUrl: true },
+      select: { id: true, seamApiKey: true, seamDeviceId: true, zapierGuestWebhookUrl: true },
     })
     if (!gym) {
       return NextResponse.json({ error: 'Gym not found' }, { status: 404 })
@@ -85,9 +85,9 @@ export async function POST(request, { params }) {
         await deleteSeamCodeByPin(gym.seamApiKey, profile.accessCode, gym.seamDeviceId, '[checkin]')
       }
 
-      // ── Fire Zapier checkin webhook ───────────────────────────────────────
-      if (gym.zapierCheckinWebhookUrl) {
-        fetch(gym.zapierCheckinWebhookUrl, {
+      // ── Fire Zapier guest webhook (check-in) ─────────────────────────────
+      if (gym.zapierGuestWebhookUrl) {
+        fetch(gym.zapierGuestWebhookUrl, {
           method:  'POST',
           headers: { 'Content-Type': 'application/json' },
           body:    JSON.stringify({
@@ -96,11 +96,11 @@ export async function POST(request, { params }) {
             accessCode: profile?.accessCode ?? null,
             passType:   updated.passType,
             passesLeft: updated.passesLeft,
-            firstTime:  false,
+            type:       'checkin',
           }),
         })
-          .then(r => console.log('[checkin] Zapier checkin webhook status:', r.status))
-          .catch(e => console.error('[checkin] Zapier checkin webhook error:', e.message))
+          .then(r => console.log('[checkin] Zapier guest webhook status:', r.status))
+          .catch(e => console.error('[checkin] Zapier guest webhook error:', e.message))
       }
 
       return NextResponse.json({ ok: true, passesLeft: updated.passesLeft, passType: updated.passType, passTypeLabel: PASS_TYPE_LABEL[updated.passType] ?? updated.passType, accessCode: profile?.accessCode ?? null })
@@ -130,9 +130,9 @@ export async function POST(request, { params }) {
       notifyZapier(request, gymSlug, { name: profile.name, email, phone: body.phone, accessCode: profile.accessCode })
     }
 
-    // ── Fire Zapier checkin webhook ───────────────────────────────────────
-    if (gym.zapierCheckinWebhookUrl) {
-      fetch(gym.zapierCheckinWebhookUrl, {
+    // ── Fire Zapier guest webhook (check-in) ─────────────────────────────
+    if (gym.zapierGuestWebhookUrl) {
+      fetch(gym.zapierGuestWebhookUrl, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({
@@ -141,11 +141,11 @@ export async function POST(request, { params }) {
           accessCode: profile?.accessCode ?? null,
           passType:   'SINGLE',
           passesLeft: null,
-          firstTime:  false,
+          type:       'checkin',
         }),
       })
-        .then(r => console.log('[checkin] Zapier checkin webhook status:', r.status))
-        .catch(e => console.error('[checkin] Zapier checkin webhook error:', e.message))
+        .then(r => console.log('[checkin] Zapier guest webhook status:', r.status))
+        .catch(e => console.error('[checkin] Zapier guest webhook error:', e.message))
     }
 
     return NextResponse.json({ ok: true, passesLeft: null, passType: 'SINGLE', passTypeLabel: 'Day Pass', accessCode: profile?.accessCode ?? null })
