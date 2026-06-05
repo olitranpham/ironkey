@@ -44,6 +44,8 @@ export async function POST(request, { params }) {
     // Accept pre-built name (returning guest) or construct from first/last
     const guestName = body.name?.trim() || [firstName, lastName].filter(Boolean).join(' ').trim() || email.trim()
 
+    console.log('[guest/checkout] creating session — priceId:', priceId, '| passType from body:', passType, '| passesLeft:', passesLeft, '| metadata.passType will be:', passType ?? 'SINGLE')
+
     const session = await stripe.checkout.sessions.create({
       mode:                  'payment',
       customer_email:        email.trim().toLowerCase(),
