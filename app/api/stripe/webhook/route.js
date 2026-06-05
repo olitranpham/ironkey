@@ -86,8 +86,39 @@ export async function POST(request) {
       const guestName  = meta.guestName ?? ''
       const email      = (session.customer_email ?? meta.email ?? '').toLowerCase()
       const phone      = formatPhone(meta.phone || null)
-      const passType   = meta.passType ?? 'SINGLE'
       const passesLeft = parseInt(meta.passesLeft, 10) || 1
+
+      // Expand line items to log the price/product IDs for debugging
+      let lineItemPriceId   = null
+      let lineItemProductId = null
+      try {
+        const expandOptions = gym.stripeSecretKey
+          ? {}
+          : { stripeAccount: connectedAccountId }
+        const expanded = await accountStripe.checkout.sessions.retrieve(session.id, {
+          expand: ['line_items'],
+          ...expandOptions,
+        })
+        const lineItem = expanded.line_items?.data?.[0]
+        lineItemPriceId   = lineItem?.price?.id      ?? null
+        lineItemProductId = lineItem?.price?.product ?? null
+        console.log('[platform/webhook] guest pass line item — priceId:', lineItemPriceId, '| productId:', lineItemProductId)
+      } catch (err) {
+        console.error('[platform/webhook] failed to expand guest pass line items:', err.message)
+      }
+
+      // Fallback product → passType map (used when metadata passType is missing)
+      const PRODUCT_TO_PASS_TYPE = {
+        'prod_UdG5qNSMCuYDhN': 'SINGLE',  // Oasis single pass
+        'prod_UdG5tLURJQAEog': 'VALUE',   // Oasis value pack
+        'prod_UdG5qpIhMMjmyA': 'DELUXE',  // Oasis deluxe pack
+      }
+
+      const passType = meta.passType
+        || (lineItemProductId && PRODUCT_TO_PASS_TYPE[lineItemProductId])
+        || 'SINGLE'
+
+      console.log('[platform/webhook] guest pass — passType:', passType, '| source:', meta.passType ? 'metadata' : lineItemProductId ? 'product map' : 'default')
 
       let guestProfile = null
       if (email) {

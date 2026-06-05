@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams } from 'next/navigation'
-import { Search, RefreshCw, AlertTriangle } from 'lucide-react'
+import { Search, RefreshCw, AlertTriangle, Download } from 'lucide-react'
 import { getGymTheme } from '@/lib/gymThemes'
 import MemberProfileDrawer from '@/components/MemberProfileDrawer'
 
@@ -176,6 +176,39 @@ export default function MembersPage() {
     }
   }
 
+  // ── CSV export ───────────────────────────────────────────────────────────
+
+  function exportCSV() {
+    const escape = v => {
+      if (v == null) return ''
+      const s = String(v)
+      return s.includes(',') || s.includes('"') || s.includes('\n')
+        ? `"${s.replace(/"/g, '""')}"`
+        : s
+    }
+
+    const header = ['first name', 'last name', 'email', 'phone', 'membership type', 'status', 'access code', 'date joined']
+    const rows = visible.map(m => [
+      m.firstName,
+      m.lastName,
+      m.email,
+      m.phone,
+      m.membershipType,
+      m.status,
+      m.accessCode,
+      m.createdAt ? new Date(m.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' }) : '',
+    ].map(escape))
+
+    const csv  = [header, ...rows].map(r => r.join(',')).join('\n')
+    const blob = new Blob([csv], { type: 'text/csv' })
+    const url  = URL.createObjectURL(blob)
+    const a    = document.createElement('a')
+    a.href     = url
+    a.download = `${gymSlug}-members-${activeTab}-${new Date().toISOString().slice(0, 10)}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   // ── Derived ──────────────────────────────────────────────────────────────
 
   function isFlex(m) {
@@ -211,13 +244,22 @@ export default function MembersPage() {
     <div className="md:flex-1 flex flex-col md:overflow-hidden">
 
       {/* Top bar */}
-      <header className="h-14 shrink-0 bg-[#1c1c1c] border-b border-neutral-800 flex items-center px-6">
+      <header className="h-14 shrink-0 bg-[#1c1c1c] border-b border-neutral-800 flex items-center justify-between px-6">
         <div className="flex items-center gap-2">
           <h1 className="text-sm font-semibold text-white">members</h1>
           {!loading && (
             <span className="text-sm font-normal text-white opacity-40 tabular-nums">{tabCount}</span>
           )}
         </div>
+        {!loading && members.length > 0 && (
+          <button
+            onClick={exportCSV}
+            title="export csv"
+            className="p-1.5 rounded-lg text-neutral-500 hover:text-white hover:bg-white/5 transition-colors"
+          >
+            <Download size={15} />
+          </button>
+        )}
       </header>
 
       {/* Main */}
