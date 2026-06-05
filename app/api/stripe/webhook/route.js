@@ -203,6 +203,9 @@ export async function POST(request) {
       const host    = request.headers.get('host') ?? ''
       const scheme  = host.startsWith('localhost') ? 'http' : 'https'
       const baseUrl = `${scheme}://${host}`
+
+      // passesLeft from the saved DB record (guest-passes route subtracts 1 for the current use)
+      let savedPassesLeft = passType === 'SINGLE' ? null : passesLeft
       try {
         const zapRes = await fetch(`${baseUrl}/api/${gymSlug}/guest-passes`, {
           method:  'POST',
@@ -219,7 +222,9 @@ export async function POST(request) {
         if (!zapRes.ok) {
           console.error('[platform/webhook] guest-passes notify failed:', zapRes.status, await zapRes.text())
         } else {
-          console.log('[platform/webhook] guest-passes notified for', email, '| passType:', passType)
+          const zapJson = await zapRes.json()
+          savedPassesLeft = zapJson.pass?.passesLeft ?? savedPassesLeft
+          console.log('[platform/webhook] guest-passes notified for', email, '| passType:', passType, '| savedPassesLeft:', savedPassesLeft)
         }
       } catch (e) {
         console.error('[platform/webhook] guest-passes notify error:', e.message)
@@ -231,7 +236,7 @@ export async function POST(request) {
         fetch(zapierGuestUrl, {
           method:  'POST',
           headers: { 'Content-Type': 'application/json' },
-          body:    JSON.stringify({ name: guestName, email, accessCode, passType, passesLeft, firstTime }),
+          body:    JSON.stringify({ name: guestName, email, accessCode, passType, passesLeft: savedPassesLeft, firstTime }),
         })
           .then(r => console.log('[platform/webhook] Zapier guest webhook status:', r.status))
           .catch(e => console.error('[platform/webhook] Zapier guest webhook error:', e.message))
