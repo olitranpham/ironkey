@@ -799,7 +799,7 @@ export default function GuestPage() {
               <>
                 <div className="flex flex-col gap-2">
                   {(lookupResult.packs ?? []).map((pack, i) => {
-                    const LABEL = { SINGLE: 'day pass', THREE_PACK: '3-pack', FIVE_PACK: '5-pack', TEN_PACK: '10-pack' }
+                    const LABEL = { SINGLE: 'day pass', THREE_PACK: '3-pack', FIVE_PACK: '5-pack', TEN_PACK: '10-pack', VALUE: 'value pack', DELUXE: 'deluxe pack' }
                     const label = LABEL[pack.passType] ?? pack.passType.toLowerCase()
                     const isSingle = pack.passType === 'SINGLE'
                     return (

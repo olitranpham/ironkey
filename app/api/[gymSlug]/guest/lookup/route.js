@@ -51,7 +51,7 @@ export async function POST(request, { params }) {
       orderBy: { createdAt: 'asc' },
     })
 
-    const PACK_TOTAL = { SINGLE: 1, THREE_PACK: 3, FIVE_PACK: 5, TEN_PACK: 10 }
+    const PACK_TOTAL = { SINGLE: 1, THREE_PACK: 3, FIVE_PACK: 5, TEN_PACK: 10, VALUE: 5, DELUXE: 10 }
     const passesLeft = activePasses.reduce((sum, p) => sum + (p.passesLeft ?? 0), 0)
     const packs = activePasses.map(p => ({
       passType:   p.passType,
