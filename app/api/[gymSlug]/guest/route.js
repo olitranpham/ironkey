@@ -38,22 +38,24 @@ export async function GET(request, { params }) {
       const stripe = new Stripe(gym.stripeSecretKey, { apiVersion: '2024-06-20' })
       const prices = await stripe.prices.list({ active: true, limit: 100, expand: ['data.product'] })
 
-      const OASIS_GUEST_PRODUCT_IDS = new Set([
-        'prod_UdG5qNSMCuYDhN', // Single — $22.50
-        'prod_UdG5tLURJQAEog', // Value  — $85
-        'prod_UdG5qpIhMMjmyA', // Deluxe — $135
-      ])
+      const OASIS_PRODUCT_MAP = {
+        'prod_UdG5qNSMCuYDhN': { passType: 'SINGLE', passesLeft: 1  }, // Single — $22.50
+        'prod_UdG5tLURJQAEog': { passType: 'VALUE',  passesLeft: 5  }, // Value  — $85
+        'prod_UdG5qpIhMMjmyA': { passType: 'DELUXE', passesLeft: 10 }, // Deluxe — $135
+      }
 
       plans = prices.data
         .filter(p => !p.recurring && p.unit_amount != null)   // one-time only, not subscriptions
         .filter(p => {
-          if (gymSlug === 'oasis-boston') return OASIS_GUEST_PRODUCT_IDS.has(p.product?.id)
+          if (gymSlug === 'oasis-boston') return p.product?.id in OASIS_PRODUCT_MAP
           const name = p.nickname ?? p.product?.name ?? ''
           return isGuestPassPrice(name)
         })
         .map(p => {
           const name = p.nickname ?? p.product?.name ?? 'Guest Pass'
-          const { passType, passesLeft } = inferPassType(name)
+          const { passType, passesLeft } = gymSlug === 'oasis-boston' && OASIS_PRODUCT_MAP[p.product?.id]
+            ? OASIS_PRODUCT_MAP[p.product.id]
+            : inferPassType(name)
           return {
             priceId:    p.id,
             name,
