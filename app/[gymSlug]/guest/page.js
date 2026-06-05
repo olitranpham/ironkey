@@ -204,6 +204,7 @@ export default function GuestPage() {
       .then(({ gym, plans }) => {
         setGymName(gym?.name ?? gymSlug)
         const p = plans ?? []
+        console.log('[guest/page] plans from API:', JSON.stringify(p))
         setPlans(p)
         if (p.length) setSelectedPriceId(p[0].priceId)
       })
@@ -290,6 +291,7 @@ export default function GuestPage() {
     if (!selectedPriceId)      { setError('please select a pass type.'); return }
 
     const plan = plans.find(p => p.priceId === selectedPriceId)
+    console.log('[guest/page] new guest checkout — selectedPriceId:', selectedPriceId, '| matched plan:', JSON.stringify(plan), '| sending passType:', plan?.passType ?? 'SINGLE')
     setSubmitting(true)
     try {
       const res = await fetch(`/api/${gymSlug}/guest/checkout`, {
@@ -332,6 +334,7 @@ export default function GuestPage() {
     if (!returningName.trim()) { setError('please enter your name.'); return }
     if (!selectedPriceId)      { setError('please select a pass type.'); return }
     const plan = plans.find(p => p.priceId === selectedPriceId)
+    console.log('[guest/page] returning guest checkout — selectedPriceId:', selectedPriceId, '| matched plan:', JSON.stringify(plan), '| sending passType:', plan?.passType ?? 'SINGLE')
     setSubmitting(true)
     try {
       const res = await fetch(`/api/${gymSlug}/guest/checkout`, {
