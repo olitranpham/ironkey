@@ -143,9 +143,11 @@ function WaiverModal({ sections, onClose }) {
   )
 }
 
-function fmt(n, interval, intervalCount = 1) {
+function fmt(n, interval, intervalCount = 1, raw = false) {
   const amt   = Number(n).toLocaleString('en-US', { style: 'currency', currency: 'USD' })
-  const label = intervalCount > 1 ? ` every ${intervalCount} ${interval}s` : `/${interval}`
+  // Treat 4-week billing cycles as monthly for display purposes (unless raw=true)
+  const isMonthly = !raw && (interval === 'month' || (interval === 'week' && intervalCount === 4))
+  const label = isMonthly ? '/month' : intervalCount > 1 ? ` every ${intervalCount} ${interval}s` : `/${interval}`
   return `${amt}${label}`
 }
 
@@ -420,23 +422,70 @@ export default function JoinPage() {
           {membershipPlans.length === 0 ? (
             <p className="text-xs text-neutral-600 px-1">No plans available — contact the gym directly.</p>
           ) : (
-            <div className="relative">
-              <select
-                value={form.priceId}
-                onChange={e => selectPlan(e.target.value)}
-                className={SELECT}
-              >
-                {membershipPlans.map(p => (
-                  <option key={p.priceId} value={p.priceId}>
-                    {p.name} — {fmt(p.amount, p.interval, p.intervalCount)}
-                  </option>
-                ))}
-              </select>
-              <div className="pointer-events-none absolute inset-y-0 right-3 flex items-center">
-                <svg className="w-4 h-4 text-neutral-500" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.17l3.71-3.94a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
-                </svg>
+            <div className="flex flex-col gap-1.5">
+              <div className="relative">
+                <select
+                  value={form.priceId}
+                  onChange={e => selectPlan(e.target.value)}
+                  className={SELECT}
+                >
+                  {(gymSlug === 'oasis-boston'
+                    ? (() => {
+                        const OASIS_ORDER = [
+                          'general membership',
+                          'student membership',
+                          'flex membership',
+                          'semiannual student membership',
+                          'semiannual general membership',
+                        ]
+                        return [...membershipPlans].sort((a, b) => {
+                          const ai = OASIS_ORDER.indexOf(a.name.toLowerCase())
+                          const bi = OASIS_ORDER.indexOf(b.name.toLowerCase())
+                          const ar = ai === -1 ? Infinity : ai
+                          const br = bi === -1 ? Infinity : bi
+                          return ar - br
+                        })
+                      })()
+                    : membershipPlans
+                  ).map(p => {
+                    let displayFmt
+                    if (gymSlug === 'oasis-boston') {
+                      const n = p.name.toLowerCase()
+                      if (n.includes('flex')) {
+                        displayFmt = fmt(p.amount, p.interval, p.intervalCount)
+                      } else if (n.includes('semiannual')) {
+                        displayFmt = `${Number(p.amount).toLocaleString('en-US', { style: 'currency', currency: 'USD' })} every 6 months`
+                      } else {
+                        displayFmt = `${Number(p.amount * 2).toLocaleString('en-US', { style: 'currency', currency: 'USD' })} every 4 weeks`
+                      }
+                    } else {
+                      displayFmt = fmt(p.amount, p.interval, p.intervalCount)
+                    }
+                    return (
+                      <option key={p.priceId} value={p.priceId}>
+                        {p.name} — {displayFmt}
+                      </option>
+                    )
+                  })}
+                </select>
+                <div className="pointer-events-none absolute inset-y-0 right-3 flex items-center">
+                  <svg className="w-4 h-4 text-neutral-500" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.17l3.71-3.94a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
+                  </svg>
+                </div>
               </div>
+              {gymSlug === 'oasis-boston' && form.priceId && (() => {
+                const selected = membershipPlans.find(p => p.priceId === form.priceId)
+                if (!selected) return null
+                const n = selected.name.toLowerCase()
+                if (n.includes('flex') || n.includes('semiannual')) return null
+                const biweekly = Number(selected.amount).toLocaleString('en-US', { style: 'currency', currency: 'USD' })
+                return (
+                  <p className="text-[11px] text-neutral-500 px-0.5">
+                    you'll be billed every 2 weeks at {biweekly}.
+                  </p>
+                )
+              })()}
             </div>
           )}
         </Field>
