@@ -41,7 +41,7 @@ export async function POST(request, { params }) {
 
     const gym = await prisma.gym.findUnique({
       where:  { slug: gymSlug },
-      select: { id: true, seamApiKey: true, seamDeviceId: true },
+      select: { id: true, seamApiKey: true, seamDeviceId: true, zapierCheckinWebhookUrl: true },
     })
     if (!gym) {
       return NextResponse.json({ error: 'Gym not found' }, { status: 404 })
@@ -85,6 +85,24 @@ export async function POST(request, { params }) {
         await deleteSeamCodeByPin(gym.seamApiKey, profile.accessCode, gym.seamDeviceId, '[checkin]')
       }
 
+      // ── Fire Zapier checkin webhook ───────────────────────────────────────
+      if (gym.zapierCheckinWebhookUrl) {
+        fetch(gym.zapierCheckinWebhookUrl, {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify({
+            name:       profile?.name ?? name,
+            email,
+            accessCode: profile?.accessCode ?? null,
+            passType:   updated.passType,
+            passesLeft: updated.passesLeft,
+            firstTime:  false,
+          }),
+        })
+          .then(r => console.log('[checkin] Zapier checkin webhook status:', r.status))
+          .catch(e => console.error('[checkin] Zapier checkin webhook error:', e.message))
+      }
+
       return NextResponse.json({ ok: true, passesLeft: updated.passesLeft, passType: updated.passType, passTypeLabel: PASS_TYPE_LABEL[updated.passType] ?? updated.passType, accessCode: profile?.accessCode ?? null })
     }
 
@@ -110,6 +128,24 @@ export async function POST(request, { params }) {
     // ── Notify Zapier (fire-and-forget) ─────────────────────────────────
     if (profile?.accessCode) {
       notifyZapier(request, gymSlug, { name: profile.name, email, phone: body.phone, accessCode: profile.accessCode })
+    }
+
+    // ── Fire Zapier checkin webhook ───────────────────────────────────────
+    if (gym.zapierCheckinWebhookUrl) {
+      fetch(gym.zapierCheckinWebhookUrl, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({
+          name:       profile?.name ?? name,
+          email,
+          accessCode: profile?.accessCode ?? null,
+          passType:   'SINGLE',
+          passesLeft: null,
+          firstTime:  false,
+        }),
+      })
+        .then(r => console.log('[checkin] Zapier checkin webhook status:', r.status))
+        .catch(e => console.error('[checkin] Zapier checkin webhook error:', e.message))
     }
 
     return NextResponse.json({ ok: true, passesLeft: null, passType: 'SINGLE', passTypeLabel: 'Day Pass', accessCode: profile?.accessCode ?? null })
