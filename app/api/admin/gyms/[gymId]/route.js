@@ -15,6 +15,7 @@ export async function PATCH(request, { params }) {
     if (body.name?.trim())            data.name            = body.name.trim()
     if (body.slug?.trim())            data.slug            = body.slug.trim()
     if (body.seamApiKey?.trim())      data.seamApiKey      = body.seamApiKey.trim()
+    console.log('[admin/gyms PATCH] incoming seamDeviceId: %j (will save: %s)', body.seamDeviceId, Boolean(body.seamDeviceId?.trim()))
     if (body.seamDeviceId?.trim())    data.seamDeviceId    = body.seamDeviceId.trim()
     if (body.stripeAccountId?.trim()) data.stripeAccountId = body.stripeAccountId.trim()
     // Allow empty string to clear Zapier URLs
@@ -26,11 +27,13 @@ export async function PATCH(request, { params }) {
       return NextResponse.json({ error: 'Nothing to update' }, { status: 400 })
     }
 
+    console.log('[admin/gyms PATCH] writing to DB for gymId %s: %j', gymId, data)
     const gym = await prisma.gym.update({
       where:  { id: gymId },
       data,
-      select: { id: true, name: true, slug: true, stripeAccountId: true, seamApiKey: true, zapierMemberWebhookUrl: true, zapierGuestWebhookUrl: true, zapierOverdueWebhookUrl: true },
+      select: { id: true, name: true, slug: true, stripeAccountId: true, seamApiKey: true, seamDeviceId: true, zapierMemberWebhookUrl: true, zapierGuestWebhookUrl: true, zapierOverdueWebhookUrl: true },
     })
+    console.log('[admin/gyms PATCH] DB result seamDeviceId: %j', gym.seamDeviceId)
 
     return NextResponse.json({
       gym: {

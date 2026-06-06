@@ -172,6 +172,7 @@ function EditGymModal({ gym, onClose, onUpdated, onDeleted, adminToken }) {
   const [zapierGuestWebhookUrl,   setZapierGuestWebhookUrl]   = useState(gym.zapierGuestWebhookUrl   ?? '')
   const [zapierOverdueWebhookUrl, setZapierOverdueWebhookUrl] = useState(gym.zapierOverdueWebhookUrl ?? '')
   const [loading,         setLoading]         = useState(false)
+  const [saved,           setSaved]           = useState(false)
   const [error,           setError]           = useState(null)
   const [confirmDelete,   setConfirmDelete]   = useState(false)
   const [deleting,        setDeleting]        = useState(false)
@@ -188,7 +189,8 @@ function EditGymModal({ gym, onClose, onUpdated, onDeleted, adminToken }) {
       const data = await res.json()
       if (!res.ok) { setError(data.error); return }
       onUpdated({ ...gym, ...data.gym })
-      onClose()
+      setSaved(true)
+      setTimeout(onClose, 1200)
     } catch {
       setError('something went wrong')
     } finally {
@@ -232,8 +234,8 @@ function EditGymModal({ gym, onClose, onUpdated, onDeleted, adminToken }) {
             <button type="button" onClick={onClose} disabled={loading} className="flex-1 py-2 rounded-lg text-xs font-medium border border-neutral-700 text-neutral-400 hover:text-white disabled:opacity-40 transition-colors">
               cancel
             </button>
-            <button type="submit" disabled={loading} className="flex-1 py-2 rounded-lg text-xs font-medium bg-white text-[#1c1c1c] hover:bg-neutral-200 disabled:opacity-40 transition-colors">
-              {loading ? 'saving…' : 'save'}
+            <button type="submit" disabled={loading || saved} className={`flex-1 py-2 rounded-lg text-xs font-medium transition-colors disabled:opacity-40 ${saved ? 'bg-emerald-500 text-white' : 'bg-white text-[#1c1c1c] hover:bg-neutral-200'}`}>
+              {loading ? 'saving…' : saved ? '✓ saved' : 'save'}
             </button>
           </div>
 
