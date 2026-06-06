@@ -39,9 +39,13 @@ export async function GET(request, { params }) {
     }
 
     const apiKey   = gym.seamApiKey   ?? process.env.SEAM_API_KEY
-    const deviceId = gym.seamDeviceId ?? process.env.SEAM_DEVICE_ID
+    const deviceId = gym.seamDeviceId ?? null   // no env fallback — must be gym-specific
     if (!apiKey) {
       return NextResponse.json({ error: 'Seam API key not configured' }, { status: 422 })
+    }
+    if (!deviceId && !gym.seamConnectedAccountId) {
+      // No device or connected account scoped — return empty rather than fetching all-account events
+      return NextResponse.json({ events: [] })
     }
 
     const headers = {
