@@ -41,6 +41,24 @@ function invoiceLabel(r) {
   return r.invoiceStatus === 'unpaid' ? 'unpaid' : r.invoiceStatus === 'open' ? 'open invoice' : 'past due'
 }
 
+const OVERDUE_LIMIT = 14
+
+function daysOverdue(failedAt) {
+  if (!failedAt) return null
+  return Math.min(Math.floor((Date.now() / 1000 - failedAt) / 86400), OVERDUE_LIMIT)
+}
+
+function OverdueBadge({ failedAt }) {
+  const days = daysOverdue(failedAt)
+  if (days == null) return null
+  const atLimit = days >= 10
+  return (
+    <span className={`text-xs font-semibold tabular-nums ${atLimit ? 'text-red-400' : 'text-amber-400/80'}`}>
+      {days}/{OVERDUE_LIMIT}d
+    </span>
+  )
+}
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function OverduePage() {
@@ -187,7 +205,7 @@ export default function OverduePage() {
                       onClick={() => openPanel(r)}
                       className={`group hover:bg-white/5 transition-colors cursor-pointer ${i % 2 === 0 ? 'bg-white/[0.02]' : ''}`}
                     >
-                      {/* Name + email + avatar */}
+                      {/* Name + avatar */}
                       <td className="px-5 py-3">
                         <div className="flex items-center gap-3">
                           <div className="w-7 h-7 rounded-full bg-white flex items-center justify-center shrink-0">
@@ -199,6 +217,11 @@ export default function OverduePage() {
                             <p className="text-white text-sm leading-tight">{r.firstName} {r.lastName}</p>
                           </div>
                         </div>
+                      </td>
+
+                      {/* Days overdue badge */}
+                      <td className="px-5 py-3 text-right">
+                        <OverdueBadge failedAt={r.failedAt} />
                       </td>
 
 
@@ -314,6 +337,12 @@ function OverduePanel({ row, membershipBorder, onClose, onAction }) {
 
         {/* Details */}
         <div className="rounded-lg border border-neutral-800 divide-y divide-neutral-800 overflow-hidden">
+          {row.failedAt && (
+            <div className="flex items-center justify-between px-3 py-2.5 bg-[#1c1c1c]">
+              <span className="text-xs text-neutral-500">days overdue</span>
+              <OverdueBadge failedAt={row.failedAt} />
+            </div>
+          )}
           <div className="flex items-center justify-between px-3 py-2.5 bg-[#1c1c1c]">
             <span className="text-xs text-neutral-500">amount due</span>
             <span className="text-xs text-red-400/80 tabular-nums font-medium">
