@@ -135,6 +135,7 @@ export default function MembersPage() {
   // ── Action helpers ───────────────────────────────────────────────────────
 
   async function handleSaveAccessCode(memberId, code) {
+    console.log('[handleSaveAccessCode] memberId=%s code=%s', memberId, code)
     try {
       const token = localStorage.getItem('ik_token')
       const res = await fetch(`/api/${gymSlug}/members/${memberId}`, {
@@ -142,12 +143,18 @@ export default function MembersPage() {
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body:    JSON.stringify({ accessCode: code }),
       })
-      if (!res.ok) throw new Error('Failed')
+      console.log('[handleSaveAccessCode] response status:', res.status)
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        console.error('[handleSaveAccessCode] error:', err)
+        throw new Error(err.error ?? 'Failed')
+      }
       const { member: updated } = await res.json()
+      console.log('[handleSaveAccessCode] updated member:', updated)
       setMembers(prev => prev.map(m => m.id === memberId ? { ...m, ...updated } : m))
       setSelectedMember(prev => prev?.id === memberId ? { ...prev, ...updated } : prev)
-    } catch {
-      // non-fatal
+    } catch (err) {
+      console.error('[handleSaveAccessCode] caught:', err.message)
     }
   }
 
