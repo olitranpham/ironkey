@@ -61,6 +61,12 @@ function DrawerContent({ member, gymSlug, membershipBorder, onClose, onStatusCha
   const [codeInput,  setCodeInput]  = useState(member.accessCode ?? '')
   const [savingCode, setSavingCode] = useState(false)
 
+  // Keep codeInput in sync when the member prop changes (different member opened,
+  // or same member's accessCode updated by parent after a successful save).
+  useEffect(() => {
+    setCodeInput(member.accessCode ?? '')
+  }, [member.id, member.accessCode])
+
   async function handleCodeSave() {
     if (!onSaveAccessCode) return
     setSavingCode(true)
