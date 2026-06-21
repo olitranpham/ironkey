@@ -263,6 +263,32 @@ export default function GuestPassesPage() {
     }
   }
 
+  async function savePassesLeft(passId, passesLeft, profileId) {
+    try {
+      const token = localStorage.getItem('ik_token')
+      const res   = await fetch(`/api/${gymSlug}/guest-passes/${passId}`, {
+        method:  'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body:    JSON.stringify({ passesLeft }),
+      })
+      if (!res.ok) throw new Error('Failed')
+      const { pass: updated } = await res.json()
+      // Update the specific pass inside the matching profile
+      const patchPasses = passes =>
+        passes.map(p => p.id === passId ? { ...p, passesLeft: updated.passesLeft } : p)
+      setProfiles(prev =>
+        prev.map(p => p.id === profileId ? { ...p, passes: patchPasses(p.passes) } : p)
+      )
+      setSelectedProfile(prev =>
+        prev?.id === profileId ? { ...prev, passes: patchPasses(prev.passes) } : prev
+      )
+      return updated
+    } catch (err) {
+      console.error('[savePassesLeft]', err.message)
+      throw err
+    }
+  }
+
   // ── Derived ─────────────────────────────────────────────────────────────
 
   const unified     = buildUnifiedGuests(profiles, unlinked)
@@ -457,6 +483,7 @@ export default function GuestPassesPage() {
             onClose={closePanel}
             onSaveCode={saveAccessCode}
             saving={savingCode}
+            onSavePassesLeft={(passId, passesLeft) => savePassesLeft(passId, passesLeft, selectedProfile.id)}
           />
         )}
       </div>
@@ -467,15 +494,36 @@ export default function GuestPassesPage() {
 
 // ── Guest Profile Panel ───────────────────────────────────────────────────────
 
-function GuestProfilePanel({ profile, passTypeBorder, onClose, onSaveCode, saving }) {
-  const [codeInput, setCodeInput] = useState(profile.accessCode ?? '')
+function GuestProfilePanel({ profile, passTypeBorder, onClose, onSaveCode, saving, onSavePassesLeft }) {
+  const [codeInput,    setCodeInput]    = useState(profile.accessCode ?? '')
+  const [passEdits,    setPassEdits]    = useState({})  // { [passId]: editedValue }
+  const [savingPassId, setSavingPassId] = useState(null)
   const visits     = totalVisits(profile)
   const isUnlinked = profile._unlinked === true
   const nameParts  = profile.name.trim().split(/\s+/)
   const initials   = (nameParts[0]?.[0] ?? '') + (nameParts[1]?.[0] ?? '')
 
+  // Reset edits when a different guest is opened
+  useEffect(() => {
+    setCodeInput(profile.accessCode ?? '')
+    setPassEdits({})
+  }, [profile.id, profile.accessCode])
+
   function handleSave() {
     onSaveCode(profile.id, codeInput.trim())
+  }
+
+  async function handleSavePassesLeft(passId, value) {
+    setSavingPassId(passId)
+    try {
+      await onSavePassesLeft(passId, value)
+      // Clear the pending edit — the parent has already updated pass.passesLeft
+      setPassEdits(prev => { const n = { ...prev }; delete n[passId]; return n })
+    } catch {
+      // non-fatal — leave edit value in place so user can retry
+    } finally {
+      setSavingPassId(null)
+    }
   }
 
   return (
@@ -576,11 +624,31 @@ function GuestProfilePanel({ profile, passTypeBorder, onClose, onSaveCode, savin
                         </span>
                       </td>
                       <td className="px-3 py-2.5 text-neutral-400 tabular-nums">
-                        {p.passesLeft === null || p.passesLeft === undefined
-                          ? '—'
-                          : p.passesLeft === 0
-                            ? <span className="text-red-400">used</span>
-                            : p.passesLeft}
+                        {p.passesLeft === null || p.passesLeft === undefined ? '—' : (
+                          <div className="flex items-center gap-1.5">
+                            <input
+                              type="number"
+                              min="0"
+                              value={passEdits[p.id] ?? p.passesLeft}
+                              onChange={e => {
+                                const v = parseInt(e.target.value, 10)
+                                if (!isNaN(v) && v >= 0) {
+                                  setPassEdits(prev => ({ ...prev, [p.id]: v }))
+                                }
+                              }}
+                              className="w-10 bg-[#252525] border border-neutral-700 rounded px-1.5 py-0.5 text-xs text-white text-center font-mono focus:outline-none focus:border-neutral-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                            />
+                            {passEdits[p.id] !== undefined && passEdits[p.id] !== p.passesLeft && (
+                              <button
+                                onClick={() => handleSavePassesLeft(p.id, passEdits[p.id])}
+                                disabled={savingPassId === p.id}
+                                className="text-[9px] px-1.5 py-0.5 rounded bg-white/10 text-white hover:bg-white/20 disabled:opacity-40 transition-colors shrink-0"
+                              >
+                                {savingPassId === p.id ? '…' : 'save'}
+                              </button>
+                            )}
+                          </div>
+                        )}
                       </td>
                       <td className="px-3 py-2.5 text-neutral-500 whitespace-nowrap">{fmtDate(p.usedAt)}</td>
                     </tr>
