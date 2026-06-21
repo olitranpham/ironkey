@@ -89,7 +89,8 @@ export async function POST(request, { params }) {
       // first attempted to collect and failed, which is the true "overdue since" date.
       // Fall back to current_period_end only if it's already in the past.
       const inv = sub.latest_invoice
-      const invoiceCreated = typeof inv === 'object' && inv !== null ? inv.created : null
+      const invoiceCreated = typeof inv === 'object' && inv !== null ? inv.created           : null
+      const invoiceUrl     = typeof inv === 'object' && inv !== null ? inv.hosted_invoice_url : null
       const periodEnd      = sub.current_period_end
 
       let overdueSince = null
@@ -146,7 +147,7 @@ export async function POST(request, { params }) {
           fetch(zapierUrl, {
             method:  'POST',
             headers: { 'Content-Type': 'application/json' },
-            body:    JSON.stringify({ name, email, status: 'overdue_cancelled', daysOverdue }),
+            body:    JSON.stringify({ name, email, status: 'overdue_cancelled', daysOverdue, invoiceUrl }),
           }).catch(e => console.error('[overdue-cancel] zapier cancel webhook error:', e.message))
         }
 
@@ -158,7 +159,7 @@ export async function POST(request, { params }) {
           fetch(zapierUrl, {
             method:  'POST',
             headers: { 'Content-Type': 'application/json' },
-            body:    JSON.stringify({ name, email, accessCode, status: 'overdue_warning', daysOverdue }),
+            body:    JSON.stringify({ name, email, accessCode, status: 'overdue_warning', daysOverdue, invoiceUrl }),
           }).catch(e => console.error('[overdue-cancel] zapier warning webhook error:', e.message))
           warnings++
         }
