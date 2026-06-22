@@ -211,6 +211,17 @@ export async function GET(request, { params }) {
       // 5. Manual override — force to member type even without a DB match
       const isOverride = c.name && MEMBER_NAME_OVERRIDES.has(c.name.toLowerCase().trim())
 
+      // Log unresolved codes so we can diagnose new-member mismatches
+      if (!member && !isOverride) {
+        console.log(
+          '[seam/codes] UNRESOLVED code — seamName=%j seamPin=%j pinInDB=%s nameInDB=%s',
+          c.name ?? null,
+          c.code ?? null,
+          c.code ? (memberByCode[String(c.code).trim()] ? 'matched' : 'no match') : 'no pin',
+          c.name ? (memberByFullName[normalizeName(c.name)] ? 'full-name matched' : 'no full-name match') : 'no name',
+        )
+      }
+
       const dbName = member ? `${member.firstName} ${member.lastName}`.trim() : null
       return {
         id:           c.access_code_id,
