@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { X, Phone, KeyRound } from 'lucide-react'
+import { X, Phone, KeyRound, History } from 'lucide-react'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -13,6 +13,14 @@ const STATUS_TEXT = {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+
+const EVENT_LABEL = {
+  joined:      'joined',
+  reactivated: 'reactivated',
+  frozen:      'frozen',
+  unfrozen:    'unfrozen',
+  cancelled:   'cancelled',
+}
 
 function fmtStatus(status) {
   return status === 'CANCELLED' ? 'canceled' : (status?.toLowerCase() ?? '—')
@@ -56,10 +64,12 @@ export function DrawerField({ label, value, mono = false, children }) {
 
 // ── Drawer content ────────────────────────────────────────────────────────────
 
-function DrawerContent({ member, gymSlug, membershipBorder, onClose, onStatusChange, onSaveAccessCode, updating }) {
+function DrawerContent({ member, gymSlug, membershipBorder, onClose, onStatusChange, onSaveAccessCode, onDeleteCode, updating }) {
   const initials = (member.firstName?.[0] ?? '') + (member.lastName?.[0] ?? '')
-  const [codeInput,  setCodeInput]  = useState(member.accessCode ?? '')
-  const [savingCode, setSavingCode] = useState(false)
+  const [codeInput,    setCodeInput]    = useState(member.accessCode ?? '')
+  const [savingCode,   setSavingCode]   = useState(false)
+  const [deletingCode, setDeletingCode] = useState(false)
+  const [events,       setEvents]       = useState(null)  // null = loading, [] = loaded empty
 
   // Keep codeInput in sync when the member prop changes (different member opened,
   // or same member's accessCode updated by parent after a successful save).
@@ -67,11 +77,31 @@ function DrawerContent({ member, gymSlug, membershipBorder, onClose, onStatusCha
     setCodeInput(member.accessCode ?? '')
   }, [member.id, member.accessCode])
 
+  // Fetch membership history whenever the member changes
+  useEffect(() => {
+    if (!gymSlug || !member.id) return
+    setEvents(null)
+    const token = localStorage.getItem('ik_token')
+    fetch(`/api/${gymSlug}/members/${member.id}/events`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(r => r.ok ? r.json() : { events: [] })
+      .then(({ events }) => setEvents(events ?? []))
+      .catch(() => setEvents([]))
+  }, [member.id, gymSlug])
+
   async function handleCodeSave() {
     if (!onSaveAccessCode) return
     setSavingCode(true)
     await onSaveAccessCode(member.id, codeInput.trim())
     setSavingCode(false)
+  }
+
+  async function handleDeleteCode() {
+    if (!onDeleteCode) return
+    setDeletingCode(true)
+    await onDeleteCode()
+    setDeletingCode(false)
   }
 
   return (
@@ -162,10 +192,38 @@ function DrawerContent({ member, gymSlug, membershipBorder, onClose, onStatusCha
           )}
         </DrawerSection>
 
+        {/* Membership history */}
+        <DrawerSection icon={History} title="history">
+          {events === null ? (
+            <div className="px-3 py-2.5 bg-[#1c1c1c]">
+              <span className="text-xs text-neutral-600">loading…</span>
+            </div>
+          ) : events.length === 0 ? (
+            <div className="px-3 py-2.5 bg-[#1c1c1c]">
+              <span className="text-xs text-neutral-600">no history recorded</span>
+            </div>
+          ) : events.map(ev => (
+            <div key={ev.id} className="flex items-center justify-between px-3 py-2.5 bg-[#1c1c1c]">
+              <span className="text-xs text-white">{EVENT_LABEL[ev.type] ?? ev.type}</span>
+              <span className="text-xs text-neutral-500 ml-4 shrink-0">{fmtDate(ev.date)}</span>
+            </div>
+          ))}
+        </DrawerSection>
+
       </div>
 
       {/* Action buttons */}
-      {member.status !== 'CANCELLED' && onStatusChange && (
+      {onDeleteCode ? (
+        <div className="shrink-0 px-5 py-4 border-t border-neutral-800">
+          <button
+            onClick={handleDeleteCode}
+            disabled={deletingCode}
+            className="w-full py-2 rounded-lg text-sm font-medium bg-red-500/10 text-red-400 hover:bg-red-500/20 disabled:opacity-40 transition-colors"
+          >
+            {deletingCode ? 'removing…' : 'delete code'}
+          </button>
+        </div>
+      ) : member.status !== 'CANCELLED' && onStatusChange && (
         <div className="shrink-0 px-5 py-4 border-t border-neutral-800 space-y-2">
           {(member.status === 'ACTIVE' || member.status === 'OVERDUE') && (
             <>
@@ -211,6 +269,7 @@ export default function MemberProfileDrawer({
   onClose,
   onStatusChange,
   onSaveAccessCode,
+  onDeleteCode,
   updating = false,
 }) {
   useEffect(() => {
@@ -239,6 +298,7 @@ export default function MemberProfileDrawer({
             onClose={onClose}
             onStatusChange={onStatusChange}
             onSaveAccessCode={onSaveAccessCode}
+            onDeleteCode={onDeleteCode}
             updating={updating}
           />
         )}

@@ -83,7 +83,8 @@ model Member {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  guestVisits GuestVisit[]
+  guestVisits      GuestVisit[]
+  membershipEvents MembershipEvent[]
 
   @@unique([gymId, email])
 }
@@ -190,6 +191,20 @@ enum GymUserRole {
   OWNER
   ADMIN
   STAFF
+}
+
+// ─── MembershipEvent ─────────────────────────────────────────────────────────
+
+model MembershipEvent {
+  id       String   @id @default(cuid())
+  memberId String
+  gymId    String
+  type     String   // 'joined' | 'reactivated' | 'frozen' | 'unfrozen' | 'cancelled'
+  date     DateTime @default(now())
+
+  member   Member   @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@index([memberId])
 }
 
 // ─── FinancialEntry ───────────────────────────────────────────────────────────

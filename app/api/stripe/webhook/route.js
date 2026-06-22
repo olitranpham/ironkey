@@ -277,6 +277,8 @@ export async function POST(request) {
       where: { gymId: gym.id, email: email.toLowerCase() },
     })
 
+    const isNew = !member
+
     if (!member) {
       member = await prisma.member.create({
         data: {
@@ -305,6 +307,10 @@ export async function POST(request) {
       })
       console.log('[platform/webhook] updated existing member from checkout:', member.id, email)
     }
+
+    await prisma.membershipEvent.create({
+      data: { memberId: member.id, gymId: gym.id, type: isNew ? 'joined' : 'reactivated' },
+    })
 
     const accessCode = String(Math.floor(1000 + Math.random() * 9000))
     member = await prisma.member.update({
@@ -453,6 +459,9 @@ export async function POST(request) {
       await prisma.member.update({
         where: { id: member.id },
         data:  { status: 'CANCELLED', dateCanceled: new Date(), updatedAt: new Date() },
+      })
+      await prisma.membershipEvent.create({
+        data: { memberId: member.id, gymId: gym.id, type: 'cancelled' },
       })
       console.log('[platform/webhook] member status updated to CANCELLED:', member.id)
     }

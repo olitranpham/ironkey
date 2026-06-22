@@ -128,6 +128,9 @@ export async function POST(request, { params }) {
             where: { id: member.id },
             data:  { status: 'CANCELLED', dateCanceled: new Date() },
           })
+          await prisma.membershipEvent.create({
+            data: { memberId: member.id, gymId: gym.id, type: 'cancelled' },
+          })
           console.log('[overdue-cancel] set member %s CANCELLED', member.id)
         }
 

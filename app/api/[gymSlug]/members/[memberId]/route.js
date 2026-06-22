@@ -20,12 +20,19 @@ export async function GET(request, { params }) {
     const gymId        = request.headers.get('x-gym-id')
     const { memberId } = params
 
+    console.log('[members/get] memberId=%s gymId=%s', memberId, gymId)
+
     const member = await prisma.member.findFirst({
       where:  { id: memberId, gymId },
       select: MEMBER_SELECT,
     })
 
+    console.log('[members/get] found=%s', Boolean(member))
+
     if (!member) {
+      // Try without gymId to see if ID exists at all (for debugging)
+      const memberAnyGym = await prisma.member.findUnique({ where: { id: memberId }, select: { id: true, gymId: true } })
+      console.log('[members/get] member_any_gym=%j', memberAnyGym)
       return NextResponse.json({ error: 'Member not found' }, { status: 404 })
     }
 
@@ -82,6 +89,17 @@ export async function PATCH(request, { params }) {
     })
 
     console.log('[members/patch] DB updated — accessCode=%s', member.accessCode)
+
+    // ── Log membership event if status changed ───────────────────────────────
+    if (status !== undefined && status !== existing.status) {
+      let eventType
+      if (status === 'FROZEN')    eventType = 'frozen'
+      if (status === 'CANCELLED') eventType = 'cancelled'
+      if (status === 'ACTIVE')    eventType = existing.status === 'FROZEN' ? 'unfrozen' : 'reactivated'
+      if (eventType) {
+        await prisma.membershipEvent.create({ data: { memberId, gymId, type: eventType } })
+      }
+    }
 
     // ── Program Seam lock if access code changed ─────────────────────────────
     if (accessCode !== undefined && data.accessCode !== existing.accessCode) {

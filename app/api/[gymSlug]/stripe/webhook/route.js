@@ -85,6 +85,9 @@ export async function POST(request, { params }) {
         where: { id: member.id },
         data:  { status: 'CANCELLED', dateCanceled: new Date(), updatedAt: new Date() },
       })
+      await prisma.membershipEvent.create({
+        data: { memberId: member.id, gymId: gym.id, type: 'cancelled' },
+      })
       console.log('[webhook] member status updated to CANCELLED:', member.id)
     }
   }
