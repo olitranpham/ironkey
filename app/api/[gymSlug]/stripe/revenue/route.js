@@ -33,14 +33,17 @@ export async function GET(request, { params }) {
   const cached = revenueCache.get(gymSlug)
 
   try {
-    // Fresh cache — return immediately without touching Stripe
-    if (cached && Date.now() - cached.ts < CACHE_TTL) {
+    // Fresh cache — return immediately without touching Stripe.
+    // Only serve cache entries that have a non-empty monthly array; if the
+    // cached entry was written when monthly was [] (e.g. no entries at the time),
+    // fall through and recompute.
+    if (cached && Date.now() - cached.ts < CACHE_TTL && cached.data.monthly?.length > 0) {
       return NextResponse.json(cached.data)
     }
 
     const gym = await prisma.gym.findUnique({
       where:  { slug: gymSlug },
-      select: { stripeSecretKey: true },
+      select: { id: true, stripeSecretKey: true },
     })
     if (!gym?.stripeSecretKey) {
       return NextResponse.json({ error: 'Stripe not configured for this gym' }, { status: 400 })
@@ -52,29 +55,15 @@ export async function GET(request, { params }) {
     const thisYear  = now.getFullYear()
     const thisMonth = now.getMonth()  // 0-indexed
 
-    // Build 12 month ranges (oldest → newest).
-    // 12 parallel calls vs the previous 36 keeps us well under Stripe's rate limit.
-    // Leading zero-revenue months are trimmed before returning.
-    const monthRanges = []
-    for (let i = 11; i >= 0; i--) {
-      const d     = new Date(thisYear, thisMonth - i, 1)
-      const year  = d.getFullYear()
-      const month = d.getMonth()
-      monthRanges.push({
-        key:   `${year}-${String(month + 1).padStart(2, '0')}`,
-        start: monthStart(year, month),
-        end:   monthStart(year, month + 1),
-      })
-    }
-
-    // ── All Stripe fetches in parallel — 14 calls total ───────────────────────
-    // subscriptions (MRR) + recent transactions + 12 per-month charge buckets
-    const [subsResult, recentResult, ...monthResults] = await Promise.all([
+    // ── Parallel: earliest FinancialEntry + always-needed Stripe calls ────────
+    const [firstEntry, subsResult, recentResult] = await Promise.all([
+      prisma.financialEntry.findFirst({
+        where:   { gymId: gym.id },
+        orderBy: { date: 'asc' },
+        select:  { date: true },
+      }),
       stripeWithRetry(() => stripe.subscriptions.list({ status: 'active', limit: 100 })),
       stripeWithRetry(() => stripe.charges.list({ limit: 50, expand: ['data.customer'] })),
-      ...monthRanges.map(({ start, end }) =>
-        stripeWithRetry(() => stripe.charges.list({ limit: 100, created: { gte: start, lt: end } }))
-      ),
     ])
 
     // ── MRR ───────────────────────────────────────────────────────────────────
@@ -88,26 +77,6 @@ export async function GET(request, { params }) {
       }
     }
 
-    // ── Monthly chart data ────────────────────────────────────────────────────
-    const monthly = monthRanges.map(({ key }, i) => {
-      const charges = monthResults[i]?.data ?? []
-      const cents   = charges
-        .filter(c => c.status === 'succeeded' && !c.refunded)
-        .reduce((sum, c) => sum + c.amount, 0)
-      return { month: key, amount: cents / 100 }
-    })
-
-    // Trim leading months with no revenue so chart starts at first payment
-    const firstNonZero = monthly.findIndex(m => m.amount > 0)
-    const trimmed      = firstNonZero === -1 ? monthly : monthly.slice(firstNonZero)
-
-    // ── Summary figures ───────────────────────────────────────────────────────
-    const thisMonthAmt = monthly.at(-1)?.amount ?? 0
-    const lastMonthAmt = monthly.at(-2)?.amount ?? 0
-    const ytd = monthly
-      .filter(m => m.month.startsWith(String(thisYear)))
-      .reduce((sum, m) => sum + m.amount, 0)
-
     // ── Recent transactions ───────────────────────────────────────────────────
     const transactions = recentResult.data
       .filter(c => c.status === 'succeeded')
@@ -119,6 +88,79 @@ export async function GET(request, { params }) {
         amount: c.amount / 100,
         status: c.status,
       }))
+
+    // ── Determine chart start ─────────────────────────────────────────────────
+    // If the gym has FinancialEntries, anchor to the earliest one (those early
+    // months must appear even if Stripe charges are $0 for them).
+    // Otherwise fall back to 24 months so we capture the full Stripe charge
+    // history without a fixed cutoff; leading zero-revenue months are trimmed
+    // below so the chart starts at the first actual transaction.
+    const gymId = gym.id
+    const anchoredToEntry = Boolean(firstEntry)
+    const startD = firstEntry
+      ? new Date(firstEntry.date)
+      : new Date(thisYear, thisMonth - 23, 1)  // 24 months back; Date handles year rollover
+
+    let rangeYear  = startD.getFullYear()
+    let rangeMonth = startD.getMonth()  // 0-indexed
+
+    console.log(
+      '[stripe/revenue] %s (gymId=%s) — firstEntry=%s anchor=%s startD=%s-%s',
+      gymSlug, gymId,
+      firstEntry ? firstEntry.date.toISOString().slice(0, 10) : 'none',
+      anchoredToEntry ? 'entry' : 'fallback-24mo',
+      rangeYear, String(rangeMonth + 1).padStart(2, '0'),
+    )
+
+    const monthRanges = []
+    while (
+      rangeYear < thisYear ||
+      (rangeYear === thisYear && rangeMonth <= thisMonth)
+    ) {
+      monthRanges.push({
+        key:   `${rangeYear}-${String(rangeMonth + 1).padStart(2, '0')}`,
+        start: monthStart(rangeYear, rangeMonth),
+        end:   monthStart(rangeYear, rangeMonth + 1),
+      })
+      rangeMonth++
+      if (rangeMonth > 11) { rangeMonth = 0; rangeYear++ }
+      if (monthRanges.length >= 60) break
+    }
+
+    // ── Per-month Stripe charge totals ────────────────────────────────────────
+    const monthResults = await Promise.all(
+      monthRanges.map(({ start, end }) =>
+        stripeWithRetry(() => stripe.charges.list({ limit: 100, created: { gte: start, lt: end } }))
+      )
+    )
+
+    const monthly = monthRanges.map(({ key }, i) => {
+      const charges = monthResults[i]?.data ?? []
+      const cents   = charges
+        .filter(c => c.status === 'succeeded' && !c.refunded)
+        .reduce((sum, c) => sum + c.amount, 0)
+      return { month: key, amount: cents / 100 }
+    })
+
+    // When the start is a fallback (no FinancialEntries), trim leading months
+    // with $0 Stripe revenue so the chart begins at the first real charge.
+    // When anchored to an entry date, keep all months — those early months may
+    // have manual income/expense records that should appear in the chart.
+    const trimmed = anchoredToEntry
+      ? monthly
+      : monthly.slice(monthly.findIndex(m => m.amount > 0) + (monthly.some(m => m.amount > 0) ? 0 : monthly.length))
+
+    console.log(
+      '[stripe/revenue] %s — %d month(s) raw, %d after trim: %s … %s',
+      gymSlug, monthly.length, trimmed.length, trimmed.at(0)?.month, trimmed.at(-1)?.month,
+    )
+
+    // ── Summary figures ───────────────────────────────────────────────────────
+    const thisMonthAmt = monthly.at(-1)?.amount ?? 0
+    const lastMonthAmt = monthly.at(-2)?.amount ?? 0
+    const ytd = monthly
+      .filter(m => m.month.startsWith(String(thisYear)))
+      .reduce((sum, m) => sum + m.amount, 0)
 
     const data = {
       mrr:       mrrCents / 100,

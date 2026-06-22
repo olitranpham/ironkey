@@ -24,9 +24,10 @@ function fmtExact(n) {
   return n.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 })
 }
 
-function shortMonth(key) {
+function shortMonth(key, showYear = false) {
   const [y, m] = key.split('-')
-  return new Date(Number(y), Number(m) - 1, 1).toLocaleString('en-US', { month: 'short' }).toLowerCase()
+  const label = new Date(Number(y), Number(m) - 1, 1).toLocaleString('en-US', { month: 'short' }).toLowerCase()
+  return showYear ? `${label} ${String(y).slice(-2)}` : label
 }
 
 function fmtDate(val) {
@@ -247,6 +248,10 @@ export default function RevenuePage() {
 
   // ── Chart data: merge Stripe monthly + manual entries ─────────────────────
   const chartData = (() => {
+    const monthly = data?.monthly ?? []
+    const years   = new Set(monthly.map(m => m.month.slice(0, 4)))
+    const showYear = years.size > 1
+
     const entryMap = {}
     for (const e of entries) {
       const d   = new Date(e.date)
@@ -255,8 +260,8 @@ export default function RevenuePage() {
       if (e.type === 'income') entryMap[key].income   += e.amount
       else                     entryMap[key].expenses += e.amount
     }
-    return (data?.monthly ?? []).map(m => ({
-      name:     shortMonth(m.month),
+    return monthly.map(m => ({
+      name:     shortMonth(m.month, showYear),
       stripe:   m.amount,
       income:   entryMap[m.month]?.income   ?? 0,
       expenses: -(entryMap[m.month]?.expenses ?? 0),  // negative → below axis

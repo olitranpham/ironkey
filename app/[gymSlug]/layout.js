@@ -191,7 +191,7 @@ function PortalLayout({ gymSlug, children }) {
         <nav className="flex-1 py-3 px-2 overflow-y-auto overflow-x-hidden">
           {NAV_GROUPS.map((group, gi) => {
             const items = [
-              ...(group.seam && hasSeam ? [group.seam] : []),
+              ...(group.seam ? [group.seam] : []),
               ...group.items,
             ]
             return (

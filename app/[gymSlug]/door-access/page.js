@@ -37,6 +37,7 @@ export default function DoorAccessPage() {
   const [codes,         setCodes]         = useState([])
   const [loading,       setLoading]       = useState(true)
   const [fetchErr,      setFetchErr]      = useState(null)
+  const [noDevice,      setNoDevice]      = useState(false)
   const [search,        setSearch]        = useState('')
   const [changeModal,   setChangeModal]   = useState(null)
   const [removeModal,   setRemoveModal]   = useState(null)
@@ -110,11 +111,18 @@ export default function DoorAccessPage() {
 
   const fetchCodes = useCallback(async () => {
     setLoading(true)
+    setNoDevice(false)
     try {
       const token = localStorage.getItem('ik_token')
       const res   = await fetch(`/api/${gymSlug}/seam/codes`, {
         headers: { Authorization: `Bearer ${token}` },
       })
+      if (res.status === 422) {
+        setNoDevice(true)
+        setCodes([])
+        setFetchErr(null)
+        return
+      }
       if (!res.ok) throw new Error(`${res.status}`)
       const { codes } = await res.json()
       setCodes(codes)
@@ -214,6 +222,12 @@ export default function DoorAccessPage() {
                 <RefreshCw size={16} className="text-neutral-600 animate-spin" />
                 <span className="text-sm text-neutral-600">loading…</span>
               </div>
+            ) : noDevice ? (
+              <div className="flex flex-col items-center justify-center h-48 gap-2">
+                <KeyRound size={20} className="text-neutral-700" />
+                <p className="text-sm text-neutral-500">no device configured</p>
+                <p className="text-xs text-neutral-600">add a Seam device ID in the admin portal to enable door access</p>
+              </div>
             ) : fetchErr ? (
               <div className="flex flex-col items-center justify-center h-48 gap-3">
                 <p className="text-sm text-red-400">{fetchErr}</p>
@@ -247,7 +261,7 @@ export default function DoorAccessPage() {
                             </div>
                             <div>
                               <p className="text-white text-sm leading-tight">{c.name}</p>
-                              {c.type !== 'member' && (
+                              {c.endsAt !== null && (
                                 <span className={`text-[11px] mt-0.5 ${CODE_TYPE_BORDER[c.type] ?? 'text-zinc-400'} ${tl === 'expired' ? '!text-red-400' : ''}`}>
                                   {typeLabel}
                                 </span>

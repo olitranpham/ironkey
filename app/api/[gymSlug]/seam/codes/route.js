@@ -18,6 +18,16 @@ export async function GET(request, { params }) {
 
     const apiKey   = gym.seamApiKey ?? process.env.SEAM_API_KEY
     const deviceId = gym.seamDeviceId ?? process.env.SEAM_DEVICE_ID
+
+    console.log(
+      '[seam/codes GET] slug=%s gymId=%s seamDeviceId(db)=%j seamApiKey(db)=%s deviceId(resolved)=%j apiKey(resolved)=%s',
+      gymSlug, gym.id,
+      gym.seamDeviceId,
+      gym.seamApiKey ? '(set)' : 'null',
+      deviceId,
+      apiKey ? '(set)' : 'null',
+    )
+
     if (!apiKey) return NextResponse.json({ error: 'Seam not configured' }, { status: 422 })
 
     const seamHeaders = {
@@ -59,16 +69,23 @@ export async function GET(request, { params }) {
 
     // ── 2. Fetch access codes per device ──────────────────────────────────────
     const codeResults = await Promise.all(
-      devices.map(device =>
-        fetch(`${SEAM_API}/access_codes/list`, {
+      devices.map(async device => {
+        const r = await fetch(`${SEAM_API}/access_codes/list`, {
           method: 'POST',
           headers: seamHeaders,
           body: JSON.stringify({ device_id: device.device_id }),
-        })
-          .then(r => r.ok ? r.json() : { access_codes: [] })
-          .then(body => body.access_codes ?? [])
-          .catch(() => [])
-      )
+        }).catch(e => { console.error('[seam/codes GET] fetch error for device', device.device_id, e.message); return null })
+
+        if (!r) return []
+        if (!r.ok) {
+          const text = await r.text().catch(() => '')
+          console.error('[seam/codes GET] access_codes/list failed for device', device.device_id, r.status, text)
+          return []
+        }
+        const body = await r.json().catch(() => ({}))
+        console.log('[seam/codes GET] device %s returned %d code(s)', device.device_id, (body.access_codes ?? []).length)
+        return body.access_codes ?? []
+      })
     )
 
     // Deduplicate by access_code_id (same code can appear on multiple devices)
