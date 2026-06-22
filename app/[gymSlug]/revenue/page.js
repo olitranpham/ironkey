@@ -26,7 +26,7 @@ function fmtExact(n) {
 
 function shortMonth(key) {
   const [y, m] = key.split('-')
-  return new Date(Number(y), Number(m) - 1, 1).toLocaleString('en-US', { month: 'short' })
+  return new Date(Number(y), Number(m) - 1, 1).toLocaleString('en-US', { month: 'short' }).toLowerCase()
 }
 
 function fmtDate(val) {
