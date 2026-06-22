@@ -17,22 +17,19 @@ const MEMBER_SELECT = {
  */
 export async function GET(request, { params }) {
   try {
-    const gymId        = request.headers.get('x-gym-id')
-    const { memberId } = params
+    const { gymSlug, memberId } = params
 
-    console.log('[members/get] memberId=%s gymId=%s', memberId, gymId)
+    const gym = await prisma.gym.findUnique({ where: { slug: gymSlug }, select: { id: true } })
+    if (!gym) return NextResponse.json({ error: 'Gym not found' }, { status: 404 })
+
+    const gymId = gym.id
 
     const member = await prisma.member.findFirst({
       where:  { id: memberId, gymId },
       select: MEMBER_SELECT,
     })
 
-    console.log('[members/get] found=%s', Boolean(member))
-
     if (!member) {
-      // Try without gymId to see if ID exists at all (for debugging)
-      const memberAnyGym = await prisma.member.findUnique({ where: { id: memberId }, select: { id: true, gymId: true } })
-      console.log('[members/get] member_any_gym=%j', memberAnyGym)
       return NextResponse.json({ error: 'Member not found' }, { status: 404 })
     }
 
@@ -50,9 +47,13 @@ export async function GET(request, { params }) {
  */
 export async function PATCH(request, { params }) {
   try {
-    const gymId        = request.headers.get('x-gym-id')
-    const { memberId } = params
-    const body         = await request.json()
+    const { gymSlug, memberId } = params
+    const body                  = await request.json()
+
+    const gym = await prisma.gym.findUnique({ where: { slug: gymSlug }, select: { id: true } })
+    if (!gym) return NextResponse.json({ error: 'Gym not found' }, { status: 404 })
+
+    const gymId = gym.id
     const { status, accessCode } = body
 
     console.log('[members/patch] memberId=%s gymId=%s body=%j', memberId, gymId, body)
@@ -104,13 +105,13 @@ export async function PATCH(request, { params }) {
     // ── Program Seam lock if access code changed ─────────────────────────────
     if (accessCode !== undefined && data.accessCode !== existing.accessCode) {
       try {
-        const gym = await prisma.gym.findUnique({
+        const gymSeam = await prisma.gym.findUnique({
           where:  { id: gymId },
           select: { seamApiKey: true, seamDeviceId: true },
         })
 
-        const apiKey   = gym?.seamApiKey
-        const deviceId = gym?.seamDeviceId
+        const apiKey   = gymSeam?.seamApiKey
+        const deviceId = gymSeam?.seamDeviceId
 
         console.log('[members/patch] seam check — hasApiKey=%s hasDeviceId=%s', Boolean(apiKey), Boolean(deviceId))
 
