@@ -52,6 +52,7 @@ export async function GET() {
       zapierOverdueWebhookUrl: gym.zapierOverdueWebhookUrl ?? '',
     }))
 
+    console.log('[admin/gyms GET] returning %d gym(s); seamDeviceIds: %j', result.length, result.map(g => `${g.slug}=${g.seamDeviceId || '(none)'}`))
     return NextResponse.json({ gyms: result })
   } catch (error) {
     console.error('[admin/gyms GET]', error.message)
