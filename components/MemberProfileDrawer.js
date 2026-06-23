@@ -64,7 +64,7 @@ export function DrawerField({ label, value, mono = false, children }) {
 
 // ── Drawer content ────────────────────────────────────────────────────────────
 
-function DrawerContent({ member, gymSlug, membershipBorder, onClose, onStatusChange, onSaveAccessCode, onDeleteCode, updating }) {
+function DrawerContent({ member, gymSlug, membershipBorder, onClose, onStatusChange, onSaveAccessCode, onDeleteCode, updating, simplified }) {
   const initials = (member.firstName?.[0] ?? '') + (member.lastName?.[0] ?? '')
   const [codeInput,    setCodeInput]    = useState(member.accessCode ?? '')
   const [savingCode,   setSavingCode]   = useState(false)
@@ -77,9 +77,9 @@ function DrawerContent({ member, gymSlug, membershipBorder, onClose, onStatusCha
     setCodeInput(member.accessCode ?? '')
   }, [member.id, member.accessCode])
 
-  // Fetch membership history whenever the member changes
+  // Fetch membership history whenever the member changes (skip in simplified mode)
   useEffect(() => {
-    if (!gymSlug || !member.id) return
+    if (simplified || !gymSlug || !member.id) return
     setEvents(null)
     const token = localStorage.getItem('ik_token')
     fetch(`/api/${gymSlug}/members/${member.id}/events`, {
@@ -192,8 +192,8 @@ function DrawerContent({ member, gymSlug, membershipBorder, onClose, onStatusCha
           )}
         </DrawerSection>
 
-        {/* Membership history */}
-        <DrawerSection icon={History} title="history">
+        {/* Membership history — hidden in simplified mode */}
+        {!simplified && <DrawerSection icon={History} title="history">
           {events === null ? (
             <div className="px-3 py-2.5 bg-[#1c1c1c]">
               <span className="text-xs text-neutral-600">loading…</span>
@@ -208,7 +208,7 @@ function DrawerContent({ member, gymSlug, membershipBorder, onClose, onStatusCha
               <span className="text-xs text-neutral-500 ml-4 shrink-0">{fmtDate(ev.date)}</span>
             </div>
           ))}
-        </DrawerSection>
+        </DrawerSection>}
 
       </div>
 
@@ -271,6 +271,7 @@ export default function MemberProfileDrawer({
   onSaveAccessCode,
   onDeleteCode,
   updating = false,
+  simplified = false,
 }) {
   useEffect(() => {
     document.body.style.overflow = open ? 'hidden' : ''
@@ -300,6 +301,7 @@ export default function MemberProfileDrawer({
             onSaveAccessCode={onSaveAccessCode}
             onDeleteCode={onDeleteCode}
             updating={updating}
+            simplified={simplified}
           />
         )}
       </div>

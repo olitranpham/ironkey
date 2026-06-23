@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams } from 'next/navigation'
-import { RefreshCw, KeyRound, AlertTriangle, X, Search } from 'lucide-react'
+import { RefreshCw, KeyRound, AlertTriangle, X, Search, UserPlus } from 'lucide-react'
 import { getGymTheme } from '@/lib/gymThemes'
 import MemberProfileDrawer from '@/components/MemberProfileDrawer'
 
@@ -45,10 +45,81 @@ export default function DoorAccessPage() {
   const [actionError,   setActionError]   = useState(null)
   const [newCode,       setNewCode]       = useState('')
 
+  // ── Add member modal ──────────────────────────────────────────────────────
+  const EMPTY_FORM = { firstName: '', lastName: '', email: '', phone: '', membershipType: '', accessCode: '', joinDate: '' }
+  const [addOpen,       setAddOpen]       = useState(false)
+  const [addForm,       setAddForm]       = useState(EMPTY_FORM)
+  const [addSubmitting, setAddSubmitting] = useState(false)
+  const [addError,      setAddError]      = useState(null)
+
+  function openAddModal() {
+    setAddForm(EMPTY_FORM)
+    setAddError(null)
+    setAddOpen(true)
+  }
+
+  function setField(field) {
+    return e => setAddForm(prev => ({ ...prev, [field]: e.target.value }))
+  }
+
+  async function handleAddSubmit(e) {
+    e.preventDefault()
+    if (!addForm.firstName.trim())      { setAddError('first name is required');      return }
+    if (!addForm.lastName.trim())       { setAddError('last name is required');       return }
+    if (!addForm.email.trim())          { setAddError('email is required');            return }
+    if (!addForm.phone.trim())          { setAddError('phone is required');            return }
+    if (!addForm.membershipType.trim()) { setAddError('membership type is required'); return }
+    if (!addForm.accessCode.trim())     { setAddError('access code is required');     return }
+    if (!addForm.joinDate)              { setAddError('joined date is required');     return }
+    setAddSubmitting(true)
+    setAddError(null)
+    try {
+      const token = localStorage.getItem('ik_token')
+      const res   = await fetch(`/api/${gymSlug}/members`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body:    JSON.stringify({
+          firstName:      addForm.firstName.trim(),
+          lastName:       addForm.lastName.trim(),
+          email:          addForm.email.trim(),
+          phone:          addForm.phone.trim(),
+          membershipType: addForm.membershipType.trim(),
+          accessCode:     addForm.accessCode.trim(),
+          joinDate:       addForm.joinDate,
+        }),
+      })
+      if (!res.ok) {
+        const { error: msg } = await res.json().catch(() => ({}))
+        throw new Error(msg || `${res.status}`)
+      }
+      const { member } = await res.json()
+      // Append optimistically — Seam won't index the new code instantly
+      const fullName = `${member.firstName} ${member.lastName}`.trim()
+      setCodes(prev => [...prev, {
+        id:             `pending-${member.id}`,
+        type:           'member',
+        name:           fullName,
+        code:           member.accessCode,
+        endsAt:         null,
+        memberId:       member.id,
+        email:          member.email,
+        phone:          member.phone          ?? null,
+        membershipType: member.membershipType ?? 'general',
+        memberStatus:   member.status,
+        joinDate:       member.dateAccessed   ?? member.createdAt,
+      }])
+      setAddOpen(false)
+    } catch (err) {
+      setAddError(err.message || 'something went wrong — please try again')
+    } finally {
+      setAddSubmitting(false)
+    }
+  }
+
   // ── Member profile drawer ─────────────────────────────────────────────────
   const [selectedMember, setSelectedMember] = useState(null)
+  const [selectedCode,   setSelectedCode]   = useState(null) // Seam code obj for the open member
   const [panelOpen,      setPanelOpen]      = useState(false)
-  const [updatingMember, setUpdatingMember] = useState(false)
   const closeTimer = useRef(null)
 
   function closePanel() {
@@ -59,6 +130,7 @@ export default function DoorAccessPage() {
 
   async function openMemberPanel(code) {
     if (code.type !== 'member' || !code.memberId) return
+    setSelectedCode(code)
     setPanelOpen(true)
     try {
       const token = localStorage.getItem('ik_token')
@@ -73,22 +145,21 @@ export default function DoorAccessPage() {
     }
   }
 
-  async function handleStatusChange(memberId, newStatus) {
-    setUpdatingMember(true)
+  async function handleDeleteCode() {
+    if (!selectedCode) return
     try {
       const token = localStorage.getItem('ik_token')
-      const res   = await fetch(`/api/${gymSlug}/members/${memberId}`, {
-        method:  'PATCH',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body:    JSON.stringify({ status: newStatus }),
+      const qs    = selectedCode.code ? `?code=${encodeURIComponent(selectedCode.code)}` : ''
+      const res   = await fetch(`/api/${gymSlug}/seam/codes/${selectedCode.id}${qs}`, {
+        method:  'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
       })
-      if (!res.ok) throw new Error('Failed')
-      const { member: updated } = await res.json()
-      setSelectedMember(prev => prev?.id === memberId ? { ...prev, ...updated } : prev)
-    } catch {
-      // non-fatal
-    } finally {
-      setUpdatingMember(false)
+      if (!res.ok) throw new Error(`${res.status}`)
+      setCodes(prev => prev.filter(c => c.id !== selectedCode.id))
+      closePanel()
+    } catch (err) {
+      console.error('[door-access] delete code failed', err.message)
+      // Don't re-throw — MemberProfileDrawer has no error boundary around onDeleteCode
     }
   }
 
@@ -103,7 +174,7 @@ export default function DoorAccessPage() {
       if (!res.ok) throw new Error('Failed')
       const { member: updated } = await res.json()
       setSelectedMember(prev => prev?.id === memberId ? { ...prev, ...updated } : prev)
-      fetchCodes() // refresh codes table to reflect updated code
+      fetchCodes()
     } catch {
       // non-fatal
     }
@@ -194,8 +265,15 @@ export default function DoorAccessPage() {
     <div className="md:flex-1 flex flex-col md:overflow-hidden">
 
       {/* Top bar */}
-      <header className="h-14 shrink-0 bg-[#1c1c1c] border-b border-neutral-800 flex items-center px-6">
+      <header className="h-14 shrink-0 bg-[#1c1c1c] border-b border-neutral-800 flex items-center justify-between px-6">
         <h1 className="text-sm font-semibold text-white">door access</h1>
+        <button
+          onClick={openAddModal}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-white text-black hover:bg-neutral-200 transition-colors"
+        >
+          <UserPlus size={12} />
+          add member
+        </button>
       </header>
 
       <main className="md:flex-1 flex flex-col p-5 gap-4 md:overflow-hidden md:min-h-0">
@@ -395,14 +473,103 @@ export default function DoorAccessPage() {
         </div>
       )}
 
+      {/* ── Add member modal ─────────────────────────────────────────────────── */}
+      {addOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/70" onClick={!addSubmitting ? () => setAddOpen(false) : undefined} />
+          <div className="relative bg-[#1c1c1c] border border-neutral-800 rounded-xl w-full max-w-md p-6 shadow-2xl">
+
+            {/* Header */}
+            <div className="flex items-center justify-between mb-5">
+              <p className="text-sm font-semibold text-white">add member</p>
+              <button onClick={() => setAddOpen(false)} disabled={addSubmitting} className="p-1.5 rounded-lg text-neutral-500 hover:text-white hover:bg-white/5 transition-colors">
+                <X size={15} />
+              </button>
+            </div>
+
+            <form onSubmit={handleAddSubmit} className="space-y-3">
+
+              {/* Name row */}
+              <div className="flex gap-3">
+                <div className="flex-1">
+                  <label className="block text-[11px] text-neutral-500 mb-1">first name</label>
+                  <input value={addForm.firstName} onChange={setField('firstName')} placeholder="jane"
+                    className="w-full bg-[#252525] border border-neutral-700 rounded-lg px-3 py-2 text-xs text-white placeholder-neutral-600 focus:outline-none focus:border-neutral-500" />
+                </div>
+                <div className="flex-1">
+                  <label className="block text-[11px] text-neutral-500 mb-1">last name</label>
+                  <input value={addForm.lastName} onChange={setField('lastName')} placeholder="smith"
+                    className="w-full bg-[#252525] border border-neutral-700 rounded-lg px-3 py-2 text-xs text-white placeholder-neutral-600 focus:outline-none focus:border-neutral-500" />
+                </div>
+              </div>
+
+              {/* Email */}
+              <div>
+                <label className="block text-[11px] text-neutral-500 mb-1">email</label>
+                <input value={addForm.email} onChange={setField('email')} type="email" placeholder="jane@example.com"
+                  className="w-full bg-[#252525] border border-neutral-700 rounded-lg px-3 py-2 text-xs text-white placeholder-neutral-600 focus:outline-none focus:border-neutral-500" />
+              </div>
+
+              {/* Phone */}
+              <div>
+                <label className="block text-[11px] text-neutral-500 mb-1">phone</label>
+                <input value={addForm.phone} onChange={setField('phone')} type="tel" placeholder="(555) 000-0000"
+                  className="w-full bg-[#252525] border border-neutral-700 rounded-lg px-3 py-2 text-xs text-white placeholder-neutral-600 focus:outline-none focus:border-neutral-500" />
+              </div>
+
+              {/* Membership type */}
+              <div>
+                <label className="block text-[11px] text-neutral-500 mb-1">membership type</label>
+                <input value={addForm.membershipType} onChange={setField('membershipType')} placeholder="e.g. general, student, vip"
+                  className="w-full bg-[#252525] border border-neutral-700 rounded-lg px-3 py-2 text-xs text-white placeholder-neutral-600 focus:outline-none focus:border-neutral-500" />
+              </div>
+
+              {/* Access code + joined date */}
+              <div className="flex gap-3">
+                <div className="flex-1">
+                  <label className="block text-[11px] text-neutral-500 mb-1">access code</label>
+                  <input
+                    value={addForm.accessCode}
+                    onChange={e => setAddForm(p => ({ ...p, accessCode: e.target.value.replace(/\D/g, '').slice(0, 6) }))}
+                    placeholder="e.g. 4821" maxLength={6}
+                    className="w-full bg-[#252525] border border-neutral-700 rounded-lg px-3 py-2 text-xs text-white placeholder-neutral-600 focus:outline-none focus:border-neutral-500 font-mono"
+                  />
+                </div>
+                <div className="flex-1">
+                  <label className="block text-[11px] text-neutral-500 mb-1">joined date</label>
+                  <input value={addForm.joinDate} onChange={setField('joinDate')} type="date"
+                    className="w-full bg-[#252525] border border-neutral-700 rounded-lg px-3 py-2 text-xs text-white placeholder-neutral-600 focus:outline-none focus:border-neutral-500" />
+                </div>
+              </div>
+
+              {addError && <p className="text-xs text-red-400">{addError}</p>}
+
+              {/* Actions */}
+              <div className="flex gap-2 pt-1">
+                <button type="button" onClick={() => setAddOpen(false)} disabled={addSubmitting}
+                  className="flex-1 py-2 rounded-lg text-xs font-medium text-neutral-400 border border-neutral-700 hover:text-white hover:border-neutral-600 disabled:opacity-40 transition-colors">
+                  cancel
+                </button>
+                <button type="submit" disabled={addSubmitting}
+                  className="flex-1 py-2 rounded-lg text-xs font-medium bg-white text-black hover:bg-neutral-200 disabled:opacity-40 transition-colors">
+                  {addSubmitting ? 'adding…' : 'add member'}
+                </button>
+              </div>
+
+            </form>
+          </div>
+        </div>
+      )}
+
       <MemberProfileDrawer
         member={selectedMember}
         open={panelOpen}
+        gymSlug={gymSlug}
         membershipBorder={membershipBorder}
         onClose={closePanel}
-        onStatusChange={handleStatusChange}
         onSaveAccessCode={handleSaveAccessCode}
-        updating={updatingMember}
+        onDeleteCode={handleDeleteCode}
+        simplified={true}
       />
 
     </div>
