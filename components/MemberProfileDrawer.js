@@ -85,10 +85,22 @@ function DrawerContent({ member, gymSlug, membershipBorder, onClose, onStatusCha
     fetch(`/api/${gymSlug}/members/${member.id}/events`, {
       headers: { Authorization: `Bearer ${token}` },
     })
-      .then(r => r.ok ? r.json() : { events: [] })
-      .then(({ events }) => setEvents(events ?? []))
-      .catch(() => setEvents([]))
-  }, [member.id, gymSlug])
+      .then(async r => {
+        if (!r.ok) {
+          console.error('[MemberProfileDrawer] events fetch failed status=%d memberId=%s', r.status, member.id)
+          return { events: [] }
+        }
+        return r.json()
+      })
+      .then(({ events }) => {
+        console.log('[MemberProfileDrawer] events loaded memberId=%s count=%d', member.id, events?.length ?? 0)
+        setEvents(events ?? [])
+      })
+      .catch(err => {
+        console.error('[MemberProfileDrawer] events fetch threw memberId=%s', member.id, err)
+        setEvents([])
+      })
+  }, [member.id, gymSlug, simplified])
 
   async function handleCodeSave() {
     if (!onSaveAccessCode) return

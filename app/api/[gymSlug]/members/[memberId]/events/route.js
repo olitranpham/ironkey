@@ -7,14 +7,21 @@ import prisma from '@/lib/prisma'
  */
 export async function GET(request, { params }) {
   try {
-    const gymId        = request.headers.get('x-gym-id')
-    const { memberId } = params
+    const { gymSlug, memberId } = params
+
+    const gym = await prisma.gym.findUnique({
+      where:  { slug: gymSlug },
+      select: { id: true },
+    })
+    if (!gym) return NextResponse.json({ error: 'Gym not found' }, { status: 404 })
 
     const events = await prisma.membershipEvent.findMany({
-      where:   { memberId, gymId },
+      where:   { memberId, gymId: gym.id },
       orderBy: { date: 'desc' },
       select:  { id: true, type: true, date: true },
     })
+
+    console.log('[members/events GET] gymSlug=%s memberId=%s events=%d', gymSlug, memberId, events.length)
 
     return NextResponse.json({ events })
   } catch (error) {
