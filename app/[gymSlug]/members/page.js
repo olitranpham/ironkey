@@ -59,6 +59,16 @@ const CONFIRM_COPY = {
     cta:     'yes, mark overdue',
     ctaCls:  'bg-amber-500/10 text-amber-400 hover:bg-amber-500/20',
   },
+  remove: {
+    title:   'remove member?',
+    bullets: [
+      'their record will be permanently deleted',
+      'their door access code will be removed from the lock',
+      'this action cannot be undone',
+    ],
+    cta:     'yes, remove',
+    ctaCls:  'bg-red-500/10 text-red-400 hover:bg-red-500/20',
+  },
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -164,14 +174,26 @@ export default function MembersPage() {
     setActionError(null)
     try {
       const token = localStorage.getItem('ik_token')
-      const res   = await fetch(`/api/${gymSlug}/${action}`, {
+
+      if (action === 'remove') {
+        const res = await fetch(`/api/${gymSlug}/members/${member.id}`, {
+          method:  'DELETE',
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        if (!res.ok) throw new Error('Request failed')
+        setMembers(prev => prev.filter(m => m.id !== member.id))
+        setConfirmModal(null)
+        closePanel()
+        return
+      }
+
+      const res = await fetch(`/api/${gymSlug}/${action}`, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body:    JSON.stringify({ memberId: member.id }),
       })
       if (!res.ok) throw new Error('Request failed')
       const { member: updated } = await res.json()
-      // Update list + open panel if this member is selected
       setMembers(prev => prev.map(m => m.id === updated.id ? { ...m, ...updated } : m))
       setSelectedMember(prev => prev?.id === updated.id ? { ...prev, ...updated } : prev)
       setConfirmModal(null)
@@ -369,6 +391,10 @@ export default function MembersPage() {
           const actionMap = { FROZEN: 'freeze', CANCELLED: 'cancel', ACTIVE: 'resume' }
           setActionError(null)
           setConfirmModal({ action: actionMap[newStatus], member: selectedMember })
+        }}
+        onRemoveMember={() => {
+          setActionError(null)
+          setConfirmModal({ action: 'remove', member: selectedMember })
         }}
         onSaveAccessCode={handleSaveAccessCode}
         updating={actionLoading}

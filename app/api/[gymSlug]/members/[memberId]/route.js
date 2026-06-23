@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
+import { deleteSeamCodeByPin } from '@/lib/seam'
 
 const SEAM_API = 'https://connect.getseam.com'
 const VALID_STATUSES = ['ACTIVE', 'FROZEN', 'CANCELLED']
@@ -182,6 +183,52 @@ export async function PATCH(request, { params }) {
     return NextResponse.json({ member })
   } catch (error) {
     console.error('[members/patch]', error)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  }
+}
+
+/**
+ * DELETE /api/[gymSlug]/members/[memberId]
+ * Permanently deletes a member record and removes their Seam access code.
+ */
+export async function DELETE(request, { params }) {
+  try {
+    const { gymSlug, memberId } = params
+
+    const gym = await prisma.gym.findUnique({
+      where:  { slug: gymSlug },
+      select: { id: true, seamApiKey: true, seamDeviceId: true },
+    })
+    if (!gym) return NextResponse.json({ error: 'Gym not found' }, { status: 404 })
+
+    const member = await prisma.member.findFirst({
+      where:  { id: memberId, gymId: gym.id },
+      select: { id: true, accessCode: true, firstName: true, lastName: true },
+    })
+    if (!member) return NextResponse.json({ error: 'Member not found' }, { status: 404 })
+
+    // ── Remove Seam access code ───────────────────────────────────────────────
+    const apiKey   = gym.seamApiKey   ?? process.env.SEAM_API_KEY
+    const deviceId = gym.seamDeviceId ?? process.env.SEAM_DEVICE_ID
+
+    if (member.accessCode && apiKey && deviceId) {
+      const { ok } = await deleteSeamCodeByPin(apiKey, member.accessCode, deviceId, '[members DELETE]')
+      console.log('[members DELETE] Seam delete — pin=%s ok=%s memberId=%s', member.accessCode, ok, memberId)
+    } else {
+      console.log('[members DELETE] skipping Seam — accessCode=%s apiKey=%s deviceId=%s',
+        member.accessCode ?? 'none',
+        apiKey   ? '(set)' : 'MISSING',
+        deviceId ? '(set)' : 'MISSING',
+      )
+    }
+
+    // ── Delete member from DB ─────────────────────────────────────────────────
+    await prisma.member.delete({ where: { id: memberId } })
+
+    console.log('[members DELETE] deleted memberId=%s gymId=%s', memberId, gym.id)
+    return NextResponse.json({ ok: true })
+  } catch (error) {
+    console.error('[members DELETE]', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

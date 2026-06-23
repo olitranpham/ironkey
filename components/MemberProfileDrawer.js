@@ -64,7 +64,7 @@ export function DrawerField({ label, value, mono = false, children }) {
 
 // ── Drawer content ────────────────────────────────────────────────────────────
 
-function DrawerContent({ member, gymSlug, membershipBorder, onClose, onStatusChange, onSaveAccessCode, onDeleteCode, updating, simplified }) {
+function DrawerContent({ member, gymSlug, membershipBorder, onClose, onStatusChange, onSaveAccessCode, onDeleteCode, onRemoveMember, updating, simplified }) {
   const initials = (member.firstName?.[0] ?? '') + (member.lastName?.[0] ?? '')
   const [codeInput,    setCodeInput]    = useState(member.accessCode ?? '')
   const [savingCode,   setSavingCode]   = useState(false)
@@ -223,33 +223,46 @@ function DrawerContent({ member, gymSlug, membershipBorder, onClose, onStatusCha
             {deletingCode ? 'removing…' : 'delete code'}
           </button>
         </div>
-      ) : member.status !== 'CANCELLED' && onStatusChange && (
+      ) : (onStatusChange || onRemoveMember) && (
         <div className="shrink-0 px-5 py-4 border-t border-neutral-800 space-y-2">
-          {(member.status === 'ACTIVE' || member.status === 'OVERDUE') && (
+          {onStatusChange && member.status !== 'CANCELLED' && (
             <>
-              <button
-                onClick={() => onStatusChange(member.id, 'FROZEN')}
-                disabled={updating}
-                className="w-full py-2 rounded-lg text-sm font-medium bg-sky-500/10 text-sky-400 hover:bg-sky-500/20 disabled:opacity-40 transition-colors"
-              >
-                freeze membership
-              </button>
-              <button
-                onClick={() => onStatusChange(member.id, 'CANCELLED')}
-                disabled={updating}
-                className="w-full py-2 rounded-lg text-sm font-medium bg-red-500/10 text-red-400 hover:bg-red-500/20 disabled:opacity-40 transition-colors"
-              >
-                cancel membership
-              </button>
+              {(member.status === 'ACTIVE' || member.status === 'OVERDUE') && (
+                <>
+                  <button
+                    onClick={() => onStatusChange(member.id, 'FROZEN')}
+                    disabled={updating}
+                    className="w-full py-2 rounded-lg text-sm font-medium bg-sky-500/10 text-sky-400 hover:bg-sky-500/20 disabled:opacity-40 transition-colors"
+                  >
+                    freeze membership
+                  </button>
+                  <button
+                    onClick={() => onStatusChange(member.id, 'CANCELLED')}
+                    disabled={updating}
+                    className="w-full py-2 rounded-lg text-sm font-medium bg-red-500/10 text-red-400 hover:bg-red-500/20 disabled:opacity-40 transition-colors"
+                  >
+                    cancel membership
+                  </button>
+                </>
+              )}
+              {member.status === 'FROZEN' && (
+                <button
+                  onClick={() => onStatusChange(member.id, 'ACTIVE')}
+                  disabled={updating}
+                  className="w-full py-2 rounded-lg text-sm font-medium bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 disabled:opacity-40 transition-colors"
+                >
+                  resume membership
+                </button>
+              )}
             </>
           )}
-          {member.status === 'FROZEN' && (
+          {onRemoveMember && (
             <button
-              onClick={() => onStatusChange(member.id, 'ACTIVE')}
+              onClick={onRemoveMember}
               disabled={updating}
-              className="w-full py-2 rounded-lg text-sm font-medium bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 disabled:opacity-40 transition-colors"
+              className="w-full py-2 rounded-lg text-sm font-medium bg-neutral-500/10 text-neutral-400 hover:bg-neutral-500/20 disabled:opacity-40 transition-colors"
             >
-              resume membership
+              remove member
             </button>
           )}
         </div>
@@ -270,6 +283,7 @@ export default function MemberProfileDrawer({
   onStatusChange,
   onSaveAccessCode,
   onDeleteCode,
+  onRemoveMember,
   updating = false,
   simplified = false,
 }) {
@@ -300,6 +314,7 @@ export default function MemberProfileDrawer({
             onStatusChange={onStatusChange}
             onSaveAccessCode={onSaveAccessCode}
             onDeleteCode={onDeleteCode}
+            onRemoveMember={onRemoveMember}
             updating={updating}
             simplified={simplified}
           />

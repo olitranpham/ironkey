@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams } from 'next/navigation'
-import { RefreshCw, Activity, Search, TrendingUp, Lock, Unlock } from 'lucide-react'
+import { RefreshCw, Activity, Search, TrendingUp, Lock, Unlock, AlertTriangle } from 'lucide-react'
 import { getGymTheme } from '@/lib/gymThemes'
 import MemberProfileDrawer from '@/components/MemberProfileDrawer'
 import {
@@ -144,6 +144,9 @@ export default function DashboardPage() {
   const [selectedMember, setSelectedMember] = useState(null)
   const [panelOpen,      setPanelOpen]      = useState(false)
   const [updatingStatus, setUpdatingStatus] = useState(false)
+  const [removeTarget,   setRemoveTarget]   = useState(null) // member to confirm-remove
+  const [removing,       setRemoving]       = useState(false)
+  const [removeError,    setRemoveError]    = useState(null)
 
   const timerRef     = useRef(null)
   const doorTimerRef = useRef(null)
@@ -177,6 +180,27 @@ export default function DashboardPage() {
       // non-fatal — leave UI as-is
     } finally {
       setUpdatingStatus(false)
+    }
+  }
+
+  async function handleConfirmRemove() {
+    if (!removeTarget) return
+    setRemoving(true)
+    setRemoveError(null)
+    try {
+      const token = localStorage.getItem('ik_token')
+      const res   = await fetch(`/api/${gymSlug}/members/${removeTarget.id}`, {
+        method:  'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!res.ok) throw new Error('Request failed')
+      setMembers(prev => prev.filter(m => m.id !== removeTarget.id))
+      setRemoveTarget(null)
+      closePanel()
+    } catch {
+      setRemoveError('something went wrong — please try again')
+    } finally {
+      setRemoving(false)
     }
   }
 
@@ -320,8 +344,56 @@ export default function DashboardPage() {
         onClose={closePanel}
         onStatusChange={handleStatusChange}
         onSaveAccessCode={handleAccessCodeSave}
+        onRemoveMember={() => { setRemoveError(null); setRemoveTarget(selectedMember) }}
         updating={updatingStatus}
       />
+
+      {/* ── Remove member confirm modal ───────────────────────────────────── */}
+      {removeTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/70" onClick={!removing ? () => setRemoveTarget(null) : undefined} />
+          <div className="relative bg-[#1c1c1c] border border-neutral-800 rounded-xl w-full max-w-sm p-6 shadow-2xl">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-9 h-9 rounded-lg bg-neutral-800 flex items-center justify-center shrink-0">
+                <AlertTriangle size={16} className="text-neutral-400" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-white">remove member?</p>
+                <p className="text-xs text-neutral-500">{removeTarget.firstName} {removeTarget.lastName}</p>
+              </div>
+            </div>
+            <ul className="space-y-1.5 mb-5">
+              {[
+                'their record will be permanently deleted',
+                'their door access code will be removed from the lock',
+                'this action cannot be undone',
+              ].map((b, i) => (
+                <li key={i} className="flex items-start gap-2 text-xs text-neutral-400">
+                  <span className="mt-1.5 w-1 h-1 rounded-full bg-neutral-600 shrink-0" />
+                  {b}
+                </li>
+              ))}
+            </ul>
+            {removeError && <p className="text-xs text-red-400 mb-3">{removeError}</p>}
+            <div className="flex gap-2">
+              <button
+                onClick={() => setRemoveTarget(null)}
+                disabled={removing}
+                className="flex-1 py-2 rounded-lg text-xs font-medium text-neutral-400 border border-neutral-700 hover:text-white hover:border-neutral-600 disabled:opacity-40 transition-colors"
+              >
+                cancel
+              </button>
+              <button
+                onClick={handleConfirmRemove}
+                disabled={removing}
+                className="flex-1 py-2 rounded-lg text-xs font-medium bg-red-500/10 text-red-400 hover:bg-red-500/20 disabled:opacity-40 transition-colors"
+              >
+                {removing ? 'removing…' : 'yes, remove'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   )
