@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { deleteSeamCodeByPin } from '@/lib/seam'
 
+const SEAM_API = 'https://connect.getseam.com'
+
 const PASS_TYPE_LABEL = {
   SINGLE:     'Day Pass',
   THREE_PACK: '3-Pack',
@@ -79,6 +81,28 @@ export async function POST(request, { params }) {
           guestProfileId: profile?.id ?? existing.guestProfileId,
         },
       })
+
+      // ── Ensure guest has a Seam code — generate one if missing ──────────
+      if (newCount > 0 && profile && !profile.accessCode && gym.seamApiKey && gym.seamDeviceId) {
+        const newCode = String(Math.floor(1000 + Math.random() * 9000))
+        await prisma.guest.update({
+          where: { id: profile.id },
+          data:  { accessCode: newCode },
+        })
+        profile = { ...profile, accessCode: newCode }
+        console.log('[checkin] generated missing accessCode=%s for guest=%s', newCode, email)
+        try {
+          const seamRes = await fetch(`${SEAM_API}/access_codes/create`, {
+            method:  'POST',
+            headers: { Authorization: `Bearer ${gym.seamApiKey}`, 'Content-Type': 'application/json' },
+            body:    JSON.stringify({ device_id: gym.seamDeviceId, name: profile.name || email, code: newCode }),
+          })
+          const seamJson = await seamRes.json()
+          console.log('[checkin] Seam code programmed — code=%s result=%s', newCode, seamJson.access_code?.access_code_id ?? seamJson.error?.type ?? 'unknown')
+        } catch (seamErr) {
+          console.error('[checkin] Seam create error:', seamErr.message)
+        }
+      }
 
       // ── Deactivate Seam code if pack is now exhausted ────────────────────
       if (newCount === 0 && profile?.accessCode && gym.seamApiKey && gym.seamDeviceId) {
