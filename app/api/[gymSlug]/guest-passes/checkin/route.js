@@ -37,6 +37,8 @@ export async function POST(request, { params }) {
     const email = (body.email ?? '').trim().toLowerCase()
     const name  = (body.name  ?? '').trim()
 
+    console.log('[checkin] POST gymSlug=%s email=%s', gymSlug, email)
+
     if (!email && !name) {
       return NextResponse.json({ error: 'email or name is required' }, { status: 400 })
     }

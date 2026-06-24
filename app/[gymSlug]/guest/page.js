@@ -373,10 +373,12 @@ export default function GuestPage() {
         }),
       })
       const json = await res.json()
+      console.log('[guest/checkin] response status=%d body=%o', res.status, json)
       if (!res.ok) throw new Error(json.error ?? 'check-in failed')
       setCheckinResult(json)
       setStep('checkin-done')
     } catch (e) {
+      console.error('[guest/checkin] failed:', e.message)
       setError(e.message)
     } finally {
       setSubmitting(false)
