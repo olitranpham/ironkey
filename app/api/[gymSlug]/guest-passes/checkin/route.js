@@ -84,25 +84,41 @@ export async function POST(request, { params }) {
         },
       })
 
-      // ── Ensure guest has a Seam code — generate one if missing ──────────
-      if (newCount > 0 && profile && !profile.accessCode && gym.seamApiKey && gym.seamDeviceId) {
-        const newCode = String(Math.floor(1000 + Math.random() * 9000))
-        await prisma.guest.update({
-          where: { id: profile.id },
-          data:  { accessCode: newCode },
-        })
-        profile = { ...profile, accessCode: newCode }
-        console.log('[checkin] generated missing accessCode=%s for guest=%s', newCode, email)
+      // ── Ensure Seam code is live on the lock ────────────────────────────
+      if (newCount > 0 && profile && gym.seamApiKey && gym.seamDeviceId) {
+        // Use existing code or generate a new one
+        let accessCode = profile.accessCode
+        if (!accessCode) {
+          accessCode = String(Math.floor(1000 + Math.random() * 9000))
+          await prisma.guest.update({ where: { id: profile.id }, data: { accessCode } })
+          profile = { ...profile, accessCode }
+          console.log('[checkin] generated missing accessCode=%s for guest=%s', accessCode, email)
+        }
+
         try {
-          const seamRes = await fetch(`${SEAM_API}/access_codes/create`, {
-            method:  'POST',
-            headers: { Authorization: `Bearer ${gym.seamApiKey}`, 'Content-Type': 'application/json' },
-            body:    JSON.stringify({ device_id: gym.seamDeviceId, name: profile.name || email, code: newCode }),
+          const seamHeaders = { Authorization: `Bearer ${gym.seamApiKey}`, 'Content-Type': 'application/json' }
+
+          // Check if code is already live on the device
+          const listRes  = await fetch(`${SEAM_API}/access_codes/list`, {
+            method: 'POST', headers: seamHeaders,
+            body:   JSON.stringify({ device_id: gym.seamDeviceId }),
           })
-          const seamJson = await seamRes.json()
-          console.log('[checkin] Seam code programmed — code=%s result=%s', newCode, seamJson.access_code?.access_code_id ?? seamJson.error?.type ?? 'unknown')
+          const listJson    = listRes.ok ? await listRes.json() : { access_codes: [] }
+          const pin         = String(accessCode).trim()
+          const liveSeamCode = listJson.access_codes?.find(c => String(c.code).trim() === pin)
+
+          if (liveSeamCode) {
+            console.log('[checkin] Seam code already live — code=%s id=%s status=%s', pin, liveSeamCode.access_code_id, liveSeamCode.status)
+          } else {
+            const createRes  = await fetch(`${SEAM_API}/access_codes/create`, {
+              method: 'POST', headers: seamHeaders,
+              body:   JSON.stringify({ device_id: gym.seamDeviceId, name: profile.name || email, code: accessCode }),
+            })
+            const createJson = await createRes.json()
+            console.log('[checkin] Seam code created — code=%s result=%s', accessCode, createJson.access_code?.access_code_id ?? createJson.error?.type ?? 'unknown')
+          }
         } catch (seamErr) {
-          console.error('[checkin] Seam create error:', seamErr.message)
+          console.error('[checkin] Seam error:', seamErr.message)
         }
       }
 
