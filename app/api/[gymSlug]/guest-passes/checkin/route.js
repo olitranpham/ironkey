@@ -113,11 +113,13 @@ export async function POST(request, { params }) {
             console.log('[checkin] deleted old Seam code — id=%s code=%s', oldCode.access_code_id, pin)
           }
 
+          const startsAt    = new Date().toISOString()
           const endsAt      = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
           const createPayload = {
             device_id: gym.seamDeviceId,
             name:      profile.name || email,
             code:      String(accessCode),
+            starts_at: startsAt,
             ends_at:   endsAt,
           }
           console.log('[checkin] Seam create payload — %j', createPayload)
