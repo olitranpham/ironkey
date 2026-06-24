@@ -177,21 +177,21 @@ export async function POST(request) {
               devices = devList
             }
           }
+          const isSingle  = passType === 'SINGLE'
           await Promise.all(
             devices.map(dev =>
               fetch(`${SEAM_API}/access_codes/create`, {
                 method:  'POST',
                 headers: seamHeaders,
                 body:    JSON.stringify({
-                  device_id:      dev.device_id,
-                  name:           guestName || email,
-                  code:           accessCode,
-                  starts_at:      startDt,
-                  ends_at:        endDt,
+                  device_id: dev.device_id,
+                  name:      guestName || email,
+                  code:      accessCode,
+                  ...(isSingle ? { starts_at: startDt, ends_at: endDt } : {}),
                 }),
               })
                 .then(r => r.json())
-                .then(r => console.log('[platform/webhook] Seam guest code programmed — device=%s code=%s ends_at=%s result=%s', dev.device_id, accessCode, endDt, r.access_code?.access_code_id ?? r.error?.type ?? 'unknown'))
+                .then(r => console.log('[platform/webhook] Seam guest code programmed — device=%s code=%s passType=%s ends_at=%s result=%s', dev.device_id, accessCode, passType, isSingle ? endDt : 'none', r.access_code?.access_code_id ?? r.error?.type ?? 'unknown'))
                 .catch(e  => console.error('[platform/webhook] Seam guest code error:', e.message))
             )
           )
