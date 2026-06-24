@@ -113,13 +113,20 @@ export async function POST(request, { params }) {
             console.log('[checkin] deleted old Seam code — id=%s code=%s', oldCode.access_code_id, pin)
           }
 
-          const endsAt     = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+          const endsAt      = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+          const createPayload = {
+            device_id: gym.seamDeviceId,
+            name:      profile.name || email,
+            code:      String(accessCode),
+            ends_at:   endsAt,
+          }
+          console.log('[checkin] Seam create payload — %j', createPayload)
           const createRes  = await fetch(`${SEAM_API}/access_codes/create`, {
             method: 'POST', headers: seamHeaders,
-            body:   JSON.stringify({ device_id: gym.seamDeviceId, name: profile.name || email, code: accessCode, ends_at: endsAt }),
+            body:   JSON.stringify(createPayload),
           })
           const createJson = await createRes.json()
-          console.log('[checkin] Seam code created — code=%s ends_at=%s result=%s', accessCode, endsAt, createJson.access_code?.access_code_id ?? createJson.error?.type ?? 'unknown')
+          console.log('[checkin] Seam create response — status=%d body=%j', createRes.status, createJson)
 
           // Persist accessCode to DB (handles null case or newly generated code)
           if (accessCode !== profile.accessCode) {
