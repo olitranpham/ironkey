@@ -84,38 +84,47 @@ export async function POST(request, { params }) {
         },
       })
 
-      // ── Ensure Seam code is live on the lock ────────────────────────────
+      // ── Refresh 24-hr Seam code on every checkin ────────────────────────
       if (newCount > 0 && profile && gym.seamApiKey && gym.seamDeviceId) {
         // Use existing code or generate a new one
         let accessCode = profile.accessCode
         if (!accessCode) {
           accessCode = String(Math.floor(1000 + Math.random() * 9000))
-          await prisma.guest.update({ where: { id: profile.id }, data: { accessCode } })
-          profile = { ...profile, accessCode }
           console.log('[checkin] generated missing accessCode=%s for guest=%s', accessCode, email)
         }
 
         try {
           const seamHeaders = { Authorization: `Bearer ${gym.seamApiKey}`, 'Content-Type': 'application/json' }
 
-          // Check if code is already live on the device
+          // Delete existing code if present, then recreate with a fresh 24-hr window
           const listRes  = await fetch(`${SEAM_API}/access_codes/list`, {
             method: 'POST', headers: seamHeaders,
             body:   JSON.stringify({ device_id: gym.seamDeviceId }),
           })
-          const listJson    = listRes.ok ? await listRes.json() : { access_codes: [] }
-          const pin         = String(accessCode).trim()
-          const liveSeamCode = listJson.access_codes?.find(c => String(c.code).trim() === pin)
+          const listJson = listRes.ok ? await listRes.json() : { access_codes: [] }
+          const pin      = String(accessCode).trim()
+          const oldCode  = listJson.access_codes?.find(c => String(c.code).trim() === pin)
 
-          if (liveSeamCode) {
-            console.log('[checkin] Seam code already live — code=%s id=%s status=%s', pin, liveSeamCode.access_code_id, liveSeamCode.status)
-          } else {
-            const createRes  = await fetch(`${SEAM_API}/access_codes/create`, {
+          if (oldCode) {
+            await fetch(`${SEAM_API}/access_codes/delete`, {
               method: 'POST', headers: seamHeaders,
-              body:   JSON.stringify({ device_id: gym.seamDeviceId, name: profile.name || email, code: accessCode }),
+              body:   JSON.stringify({ access_code_id: oldCode.access_code_id }),
             })
-            const createJson = await createRes.json()
-            console.log('[checkin] Seam code created — code=%s result=%s', accessCode, createJson.access_code?.access_code_id ?? createJson.error?.type ?? 'unknown')
+            console.log('[checkin] deleted old Seam code — id=%s code=%s', oldCode.access_code_id, pin)
+          }
+
+          const endsAt     = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+          const createRes  = await fetch(`${SEAM_API}/access_codes/create`, {
+            method: 'POST', headers: seamHeaders,
+            body:   JSON.stringify({ device_id: gym.seamDeviceId, name: profile.name || email, code: accessCode, ends_at: endsAt }),
+          })
+          const createJson = await createRes.json()
+          console.log('[checkin] Seam code created — code=%s ends_at=%s result=%s', accessCode, endsAt, createJson.access_code?.access_code_id ?? createJson.error?.type ?? 'unknown')
+
+          // Persist accessCode to DB (handles null case or newly generated code)
+          if (accessCode !== profile.accessCode) {
+            await prisma.guest.update({ where: { id: profile.id }, data: { accessCode } })
+            profile = { ...profile, accessCode }
           }
         } catch (seamErr) {
           console.error('[checkin] Seam error:', seamErr.message)
