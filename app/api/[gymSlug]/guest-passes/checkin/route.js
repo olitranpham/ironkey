@@ -149,10 +149,51 @@ export async function POST(request, { params }) {
         }
       }
 
-      // ── Deactivate Seam code if pack is now exhausted ────────────────────
+      // ── Pack exhausted — give guest a final 24-hr window then let Seam auto-expire ──
       if (newCount === 0 && profile?.accessCode && gym.seamApiKey && gym.seamDeviceId) {
-        console.log('[checkin] pack exhausted — deleting Seam code for guest=%s code=%s', email, profile.accessCode)
-        await deleteSeamCodeByPin(gym.seamApiKey, profile.accessCode, gym.seamDeviceId, '[checkin]')
+        const seamHeaders = { Authorization: `Bearer ${gym.seamApiKey}`, 'Content-Type': 'application/json' }
+        const pin         = String(profile.accessCode).trim()
+
+        // Delete existing code first
+        try {
+          const listRes  = await fetch(`${SEAM_API}/access_codes/list`, {
+            method: 'POST', headers: seamHeaders,
+            body:   JSON.stringify({ device_id: gym.seamDeviceId }),
+          })
+          const listJson = listRes.ok ? await listRes.json() : { access_codes: [] }
+          const oldCode  = listJson.access_codes?.find(c => String(c.code).trim() === pin)
+          if (oldCode) {
+            await fetch(`${SEAM_API}/access_codes/delete`, {
+              method: 'POST', headers: seamHeaders,
+              body:   JSON.stringify({ access_code_id: oldCode.access_code_id }),
+            })
+            console.log('[checkin] exhausted — deleted old Seam code id=%s code=%s', oldCode.access_code_id, pin)
+          }
+        } catch (deleteErr) {
+          console.error('[checkin] exhausted — Seam delete error (continuing to create):', deleteErr.message)
+        }
+
+        // Create a final 24-hr code — Seam will auto-expire it, no manual delete needed
+        try {
+          const startsAt      = new Date().toISOString()
+          const endsAt        = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+          const createPayload = {
+            device_id: gym.seamDeviceId,
+            name:      profile.name || email,
+            code:      pin,
+            starts_at: startsAt,
+            ends_at:   endsAt,
+          }
+          console.log('[checkin] exhausted — creating final 24-hr Seam code — %j', createPayload)
+          const createRes  = await fetch(`${SEAM_API}/access_codes/create`, {
+            method: 'POST', headers: seamHeaders,
+            body:   JSON.stringify(createPayload),
+          })
+          const createJson = await createRes.json()
+          console.log('[checkin] exhausted — Seam create response status=%d body=%j', createRes.status, createJson)
+        } catch (createErr) {
+          console.error('[checkin] exhausted — Seam create error:', createErr.message)
+        }
       }
 
       // ── Fire Zapier guest webhook (check-in) ─────────────────────────────
