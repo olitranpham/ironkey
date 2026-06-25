@@ -85,7 +85,10 @@ export async function POST(request, { params }) {
       })
 
       // ── Refresh 24-hr Seam code on every checkin ────────────────────────
+      console.log('[checkin] Seam gate check — newCount=%s profile=%s seamApiKey=%s seamDeviceId=%s',
+        newCount, profile?.id ?? 'null', gym.seamApiKey ? '(set)' : 'null', gym.seamDeviceId ?? 'null')
       if (newCount > 0 && profile && gym.seamApiKey && gym.seamDeviceId) {
+        console.log('[checkin] entering Seam refresh block')
         // Use existing code or generate a new one
         let accessCode = profile.accessCode
         if (!accessCode) {
@@ -142,6 +145,7 @@ export async function POST(request, { params }) {
 
       // ── Deactivate Seam code if pack is now exhausted ────────────────────
       if (newCount === 0 && profile?.accessCode && gym.seamApiKey && gym.seamDeviceId) {
+        console.log('[checkin] pack exhausted — deleting Seam code for guest=%s code=%s', email, profile.accessCode)
         await deleteSeamCodeByPin(gym.seamApiKey, profile.accessCode, gym.seamDeviceId, '[checkin]')
       }
 
