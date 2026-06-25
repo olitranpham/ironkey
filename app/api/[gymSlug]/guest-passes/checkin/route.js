@@ -96,32 +96,38 @@ export async function POST(request, { params }) {
           console.log('[checkin] generated missing accessCode=%s for guest=%s', accessCode, email)
         }
 
-        try {
-          const seamHeaders = { Authorization: `Bearer ${gym.seamApiKey}`, 'Content-Type': 'application/json' }
+        const seamHeaders = { Authorization: `Bearer ${gym.seamApiKey}`, 'Content-Type': 'application/json' }
+        const pin         = String(accessCode).trim()
 
-          // Delete existing code if present, then recreate with a fresh 24-hr window
+        // Step 1: delete any existing code for this PIN (best-effort — never blocks create)
+        try {
           const listRes  = await fetch(`${SEAM_API}/access_codes/list`, {
             method: 'POST', headers: seamHeaders,
             body:   JSON.stringify({ device_id: gym.seamDeviceId }),
           })
           const listJson = listRes.ok ? await listRes.json() : { access_codes: [] }
-          const pin      = String(accessCode).trim()
           const oldCode  = listJson.access_codes?.find(c => String(c.code).trim() === pin)
-
           if (oldCode) {
             await fetch(`${SEAM_API}/access_codes/delete`, {
               method: 'POST', headers: seamHeaders,
               body:   JSON.stringify({ access_code_id: oldCode.access_code_id }),
             })
             console.log('[checkin] deleted old Seam code — id=%s code=%s', oldCode.access_code_id, pin)
+          } else {
+            console.log('[checkin] no existing Seam code found for pin=%s', pin)
           }
+        } catch (deleteErr) {
+          console.error('[checkin] Seam delete step error (continuing to create):', deleteErr.message)
+        }
 
-          const startsAt    = new Date().toISOString()
-          const endsAt      = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+        // Step 2: always create a fresh 24-hr code
+        try {
+          const startsAt      = new Date().toISOString()
+          const endsAt        = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
           const createPayload = {
             device_id: gym.seamDeviceId,
             name:      profile.name || email,
-            code:      String(accessCode),
+            code:      pin,
             starts_at: startsAt,
             ends_at:   endsAt,
           }
@@ -132,14 +138,14 @@ export async function POST(request, { params }) {
           })
           const createJson = await createRes.json()
           console.log('[checkin] Seam create response — status=%d body=%j', createRes.status, createJson)
+        } catch (createErr) {
+          console.error('[checkin] Seam create step error:', createErr.message)
+        }
 
-          // Persist accessCode to DB (handles null case or newly generated code)
-          if (accessCode !== profile.accessCode) {
-            await prisma.guest.update({ where: { id: profile.id }, data: { accessCode } })
-            profile = { ...profile, accessCode }
-          }
-        } catch (seamErr) {
-          console.error('[checkin] Seam error:', seamErr.message)
+        // Persist accessCode to DB (handles null case or newly generated code)
+        if (accessCode !== profile.accessCode) {
+          await prisma.guest.update({ where: { id: profile.id }, data: { accessCode } })
+          profile = { ...profile, accessCode }
         }
       }
 
