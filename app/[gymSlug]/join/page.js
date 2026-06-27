@@ -447,10 +447,9 @@ export default function JoinPage() {
                         })
                       })()
                     : gymSlug === 'hydra-athletic-co'
-                    ? membershipPlans.filter(p => {
-                        const n = p.name.toLowerCase()
-                        return n.includes('pre-sale membership') || n.includes('coaching/program')
-                      })
+                    ? [...membershipPlans]
+                        .filter(p => p.name.toLowerCase().includes('pre-sale membership'))
+                        .sort((a, b) => a.name.toLowerCase().includes('pre-sale') ? -1 : 1)
                     : membershipPlans
                   ).map(p => {
                     let displayFmt
@@ -517,6 +516,35 @@ export default function JoinPage() {
             </div>
           </Field>
         )}
+
+        {/* Hydra: Coaching / Programming Add-on (pulled from membershipPlans) */}
+        {gymSlug === 'hydra-athletic-co' && (() => {
+          const hydraAddonPlans = membershipPlans.filter(p => p.name.toLowerCase().includes('coaching/program'))
+          if (!hydraAddonPlans.length) return null
+          return (
+            <Field label="coaching / programming add-on (optional)">
+              <div className="relative">
+                <select
+                  value={form.addonPriceId}
+                  onChange={e => set('addonPriceId', e.target.value)}
+                  className={SELECT}
+                >
+                  <option value="">None</option>
+                  {hydraAddonPlans.map(p => (
+                    <option key={p.priceId} value={p.priceId}>
+                      {p.name} — {fmt(p.amount, p.interval, p.intervalCount)}
+                    </option>
+                  ))}
+                </select>
+                <div className="pointer-events-none absolute inset-y-0 right-3 flex items-center">
+                  <svg className="w-4 h-4 text-neutral-500" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.17l3.71-3.94a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
+                  </svg>
+                </div>
+              </div>
+            </Field>
+          )
+        })()}
 
         {/* Coaching / Programming Add-on */}
         {addonPlans.length > 0 && (
