@@ -446,6 +446,11 @@ export default function JoinPage() {
                           return ar - br
                         })
                       })()
+                    : gymSlug === 'hydra-athletic-co'
+                    ? membershipPlans.filter(p => {
+                        const n = p.name.toLowerCase()
+                        return n.includes('pre-sale membership') || n.includes('coaching/program')
+                      })
                     : membershipPlans
                   ).map(p => {
                     let displayFmt
