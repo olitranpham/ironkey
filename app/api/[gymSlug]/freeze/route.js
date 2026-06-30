@@ -14,18 +14,25 @@ export async function POST(request) {
       prisma.member.findFirst({ where: { id: memberId, gymId } }),
       prisma.gym.findUnique({
         where:  { id: gymId },
-        select: { stripeSecretKey: true, seamApiKey: true, seamDeviceId: true },
+        select: { stripeSecretKey: true, stripeAccountId: true, seamApiKey: true, seamDeviceId: true },
       }),
     ])
 
     if (!existing) return NextResponse.json({ error: 'Member not found' }, { status: 404 })
 
-    const subId     = existing.stripeSubscriptionId
-    const stripeKey = gym?.stripeSecretKey
+    const subId          = existing.stripeSubscriptionId
+    const stripeKey      = gym?.stripeSecretKey
+    const stripeAccountId = gym?.stripeAccountId
     const freezeEnd = new Date()
     freezeEnd.setMonth(freezeEnd.getMonth() + 6)
 
-    console.log('[freeze] memberId:', memberId, '| subId:', subId, '| stripeKey set:', Boolean(stripeKey), '| key prefix:', stripeKey?.slice(0, 8) ?? 'n/a')
+    // ── Log exactly how the Stripe client will be instantiated ───────────────
+    // Model A: Stripe(gym.stripeSecretKey)              — gym's own key, no platform header
+    // Model B: Stripe(platformKey, { stripeAccount })   — platform key + connected account header
+    // This gym uses Model A (gym's own key stored in stripeSecretKey, no stripeAccount option passed)
+    console.log('[freeze] memberId:', memberId, '| subId:', subId)
+    console.log('[freeze] Stripe init model: Stripe(gym.stripeSecretKey) — NO stripeAccount header')
+    console.log('[freeze] key prefix:', stripeKey?.slice(0, 8) ?? 'n/a', '| stripeAccountId (for reference):', stripeAccountId ?? 'n/a')
     console.log('[freeze] freezeEndDate (maxFreeze):', freezeEnd.toISOString())
 
     // ── Pause + schedule cancel in Stripe ─────────────────────────────────
@@ -35,7 +42,7 @@ export async function POST(request) {
 
         // Retrieve first so we can log which Stripe account owns this sub
         const subCheck = await stripeClient.subscriptions.retrieve(subId)
-        console.log('[freeze] sub check — id:', subCheck.id, '| status:', subCheck.status, '| application:', subCheck.application ?? 'null (dashboard-created)')
+        console.log('[freeze] sub retrieve — id:', subCheck.id, '| status:', subCheck.status, '| application:', subCheck.application ?? 'null (dashboard-created or imported)')
 
         const sixMonthsFromNow = Math.floor(Date.now() / 1000) + (6 * 30 * 24 * 60 * 60)
         const result = await stripeClient.subscriptions.update(subId, {
