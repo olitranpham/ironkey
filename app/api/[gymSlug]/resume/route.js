@@ -26,6 +26,8 @@ export async function POST(request) {
 
     console.log('[resume] memberId:', memberId, '| subId:', subId, '| stripeKey set:', Boolean(stripeKey), '| key prefix:', stripeKey?.slice(0, 8) ?? 'n/a')
 
+    let stripeWarning = null
+
     // ── Resume Stripe subscription ────────────────────────────────────────
     if (subId && stripeKey) {
       try {
@@ -37,6 +39,9 @@ export async function POST(request) {
         console.log('[resume] Stripe result — status:', result.status, '| pause_collection:', JSON.stringify(result.pause_collection), '| cancel_at:', result.cancel_at)
       } catch (stripeErr) {
         console.error('[resume] Stripe error:', stripeErr.message)
+        if (stripeErr.message?.includes('not created by your application')) {
+          stripeWarning = 'stripe_dashboard_sub'
+        }
       }
     } else {
       console.warn('[resume] Skipping Stripe — subId:', subId, '| stripeKey present:', Boolean(stripeKey))
@@ -82,6 +87,15 @@ export async function POST(request) {
         updatedAt:  now,
       },
     })
+
+    if (stripeWarning === 'stripe_dashboard_sub') {
+      return NextResponse.json({
+        member,
+        ok:      false,
+        error:   'stripe_dashboard_sub',
+        message: 'This subscription was created outside of ironkey and cannot be resumed via the API. To resume this member, unpause their subscription manually in the Stripe dashboard.',
+      })
+    }
 
     return NextResponse.json({ member })
   } catch (error) {

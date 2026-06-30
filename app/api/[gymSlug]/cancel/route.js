@@ -22,6 +22,8 @@ export async function POST(request) {
 
     console.log('[cancel] memberId:', memberId, '| subId:', subId, '| stripeKey set:', Boolean(stripeKey), '| key prefix:', stripeKey?.slice(0, 8) ?? 'n/a')
 
+    let stripeWarning = null
+
     if (subId && stripeKey) {
       try {
         const stripeClient = new Stripe(stripeKey, { apiVersion: '2024-06-20' })
@@ -36,6 +38,9 @@ export async function POST(request) {
         console.log('[cancel] Stripe result — status:', result.status, '| cancel_at:', result.cancel_at)
       } catch (stripeErr) {
         console.error('[cancel] Stripe error:', stripeErr.message)
+        if (stripeErr.message?.includes('not created by your application')) {
+          stripeWarning = 'stripe_dashboard_sub'
+        }
       }
     } else {
       console.warn('[cancel] Skipping Stripe — subId:', subId, '| stripeKey present:', Boolean(stripeKey))
@@ -50,6 +55,15 @@ export async function POST(request) {
         updatedAt:   now,
       },
     })
+
+    if (stripeWarning === 'stripe_dashboard_sub') {
+      return NextResponse.json({
+        member,
+        ok:      false,
+        error:   'stripe_dashboard_sub',
+        message: 'This subscription was created outside of ironkey and cannot be cancelled via the API. To cancel this member, cancel their subscription manually in the Stripe dashboard.',
+      })
+    }
 
     return NextResponse.json({ member })
   } catch (error) {

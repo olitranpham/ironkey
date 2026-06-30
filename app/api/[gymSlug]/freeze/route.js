@@ -35,6 +35,8 @@ export async function POST(request) {
     console.log('[freeze] key prefix:', stripeKey?.slice(0, 8) ?? 'n/a', '| stripeAccountId (for reference):', stripeAccountId ?? 'n/a')
     console.log('[freeze] freezeEndDate (maxFreeze):', freezeEnd.toISOString())
 
+    let stripeWarning = null
+
     // ── Pause + schedule cancel in Stripe ─────────────────────────────────
     if (subId && stripeKey) {
       try {
@@ -52,6 +54,9 @@ export async function POST(request) {
         console.log('[freeze] Stripe result — status:', result.status, '| pause_collection:', JSON.stringify(result.pause_collection))
       } catch (stripeErr) {
         console.error('[freeze] Stripe error:', stripeErr.message)
+        if (stripeErr.message?.includes('not created by your application')) {
+          stripeWarning = 'stripe_dashboard_sub'
+        }
       }
     } else {
       console.warn('[freeze] Skipping Stripe — subId:', subId, '| stripeKey present:', Boolean(stripeKey))
@@ -79,6 +84,15 @@ export async function POST(request) {
         updatedAt:  now,
       },
     })
+
+    if (stripeWarning === 'stripe_dashboard_sub') {
+      return NextResponse.json({
+        member,
+        ok:      false,
+        error:   'stripe_dashboard_sub',
+        message: 'This subscription was created outside of ironkey and cannot be paused via the API. To freeze this member, pause their subscription manually in the Stripe dashboard.',
+      })
+    }
 
     return NextResponse.json({ member })
   } catch (error) {
