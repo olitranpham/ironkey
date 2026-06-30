@@ -127,10 +127,16 @@ export default function PaymentsPage() {
         body:    JSON.stringify({ memberId: member.id }),
       })
       if (!res.ok) throw new Error('Request failed')
-      const { member: updated } = await res.json()
+      const json = await res.json()
+      const { member: updated } = json
       setMembers(prev => prev.map(m => m.id === updated.id ? { ...m, ...updated } : m))
       setSelectedMember(prev => prev?.id === updated.id ? { ...prev, ...updated } : prev)
-      setConfirmModal(null)
+      if (json.error === 'stripe_dashboard_sub') {
+        setActionError(json.message)
+        // Leave modal open so the owner sees the message
+      } else {
+        setConfirmModal(null)
+      }
     } catch {
       setActionError('something went wrong — please try again')
     } finally {

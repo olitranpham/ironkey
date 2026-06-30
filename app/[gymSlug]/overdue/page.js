@@ -150,8 +150,14 @@ export default function OverduePage() {
           body:    JSON.stringify({ memberId: row.id }),
         })
         if (!res.ok) throw new Error('Cancel failed')
+        const json = await res.json()
         setRows(prev => prev.filter(r => r.id !== row.id))
         closePanel()
+        if (json.error === 'stripe_dashboard_sub') {
+          setActionError(json.message)
+          // Don't close modal — show the message even though the row was removed
+          return
+        }
       }
 
       setConfirmModal(null)
