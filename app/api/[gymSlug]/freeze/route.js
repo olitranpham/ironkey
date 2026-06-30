@@ -32,6 +32,11 @@ export async function POST(request) {
     if (subId && stripeKey) {
       try {
         const stripeClient     = new Stripe(stripeKey, { apiVersion: '2024-06-20' })
+
+        // Retrieve first so we can log which Stripe account owns this sub
+        const subCheck = await stripeClient.subscriptions.retrieve(subId)
+        console.log('[freeze] sub check — id:', subCheck.id, '| status:', subCheck.status, '| application:', subCheck.application ?? 'null (dashboard-created)')
+
         const sixMonthsFromNow = Math.floor(Date.now() / 1000) + (6 * 30 * 24 * 60 * 60)
         const result = await stripeClient.subscriptions.update(subId, {
           pause_collection: { behavior: 'void' },
