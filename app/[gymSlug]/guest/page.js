@@ -81,6 +81,66 @@ const OASIS_WAIVER_SECTIONS = [
   },
 ]
 
+const HYDRA_WAIVER_SECTIONS = [
+  {
+    title: 'Express Assumption of Risk',
+    body: 'I, the undersigned, am aware that there are significant risks involved in any physical training regimen. These risks include, but are not limited to: falls which can result in serious injury or death, injury or death due to negligence on the part of me, my training partner, or other people around me, injury or death due to improper use or failure of equipment. Injury may also result simply from the fact of physical training itself. By its very nature, physical training seeks to have me push beyond my limits in order to produce a physical adaptation by my body. This requires feedback from me to my trainer regarding what is happening with my body. Excessive work can result (in rare cases) in exertional rhabdomyolysis. I should look for signs of excessive soreness, darkened urine, and pain in the kidney areas in the days following a particularly intense workout. While this type of injury is relatively rare, it can occur due to a number of factors, including (but not limited to) genetic predisposition or dehydration that may be beyond the control of my trainer. I am aware that any of these above mentioned risks might result in serious injury or death to me and or my partner(s). I willingly assume full responsibility for the risks that I am exposing myself to and accept full responsibility for any injury or death that may result from participation in any activity or class while training. I, the undersigned acknowledge that I have no physical impairments or illnesses that I know of that will endanger others or myself.',
+  },
+  {
+    title: 'Release',
+    body: 'In consideration of the above mentioned risks and hazards and in consideration of the fact that I am willingly and voluntarily participating in the activities available at Hydra Athletic Co. in-person or online, I, the undersigned hereby release Hydra Athletic Co., their principals, agents, employees, and volunteers from any and all liability, claims, demands, actions or rights of action, which are related to, arise out of, or are in any way connected with my participation in this activity, including those allegedly attributed to the negligent acts or omissions of the above mentioned parties.\n\nThis agreement shall be binding upon successors, my representatives, heirs, executors, assigns, transferees, or me. If any portion of this agreement is held invalid, I agree that the remainder of the agreement shall remain in full legal force and effect.',
+  },
+  {
+    title: 'Equipment Use, Safety Waiver, and Member Negligence Release',
+    body: 'I expressly acknowledge that the use of strength training equipment, free weights, machines, squat racks, platforms, cables, resistance systems, specialty bars, attachments, and all other fitness equipment at Hydra Athletic Co. involves inherent and substantial risks of serious bodily injury, permanent disability, paralysis, or death. These risks exist regardless of the presence of staff, posted instructions, or safety features.\n\nI acknowledge that safety mechanisms may be available on certain equipment, including but not limited to safety arms, spotter arms, rack pins, safety bars, collars, clips, catches, and other protective devices. I understand and agree that it is solely my responsibility to properly set up, inspect, and utilize all safety mechanisms before engaging in any lift or activity.\n\nI expressly agree that failure to properly use available safety mechanisms, improper loading of equipment, lifting beyond my physical capacity, failure to secure weights or collars, failure to use a spotter when reasonably necessary, misuse of equipment, distraction, impairment, fatigue, reckless conduct, or failure to follow staff instruction constitutes my own negligence and assumption of risk.\n\nSpotter Acknowledgment. I acknowledge that Hydra Athletic Co. does not provide spotters unless expressly agreed to by an authorized employee or coach. It is solely my responsibility to determine whether a spotter is necessary for any exercise I choose to perform. If I elect to perform any lift without a spotter, I voluntarily assume all risks associated with that decision, including the risk of serious bodily injury, permanent disability, or death.\n\nTo the fullest extent permitted by law, I hereby RELEASE, WAIVE, DISCHARGE, AND COVENANT NOT TO SUE Hydra Athletic Co. and its owners, officers, employees, agents, and affiliates from any and all claims, liabilities, demands, causes of action, damages, costs, or expenses arising out of or related to misuse of equipment, failure to use safety mechanisms, or my own negligent conduct.',
+  },
+  {
+    title: 'Photo and Video Release',
+    body: 'I hereby grant Hydra Athletic Co. permission to use my photograph/video image in any and all publications for Hydra Athletic Co., including website entries, without payment or any other consideration in perpetuity. I hereby authorize Hydra Athletic Co. to edit, alter, copy, exhibit, publish or distribute all photos and images. I waive the right to inspect or approve the finished product. Additionally, I waive any right to royalties or other compensation arising or related to the use of the photograph or video images.',
+  },
+  {
+    title: 'Gym Membership Payment Terms',
+    body: 'I understand that membership commences on the date of sign up and the membership fee will be charged every four (4) weeks from my initial sign up unless otherwise noted. All memberships paid every four (4) weeks are non-refundable in part or full after auto-draft has gone through under any circumstances. All memberships are subject to Hydra Athletic Co. annual maintenance fee of $29.99 on January 30th each year. Memberships paid upfront are not refundable under any circumstances. All memberships will renew automatically regardless of if it\'s a weekly, monthly, or annual membership.\n\nFor cancellations, holds, and/or changes to memberships for any reason, member must notify Hydra Athletic Co. via email or in person through management at least 30 days prior to the next auto-draft. If you are cancelling a 12 month contract agreement, fees may apply: $150 before your 6 month mark and $95 after your 6 month mark.\n\nMembership upgrades to a higher price will not be subject to any fees. Membership downgrades to a lower price will be subject to all new expiration and cancellation dates, terms & fees applying, including registration and early cancellation fees. Membership rates are subject to change.',
+  },
+  {
+    title: 'Day Pass Policy',
+    body: 'Day passes grant access to Hydra Athletic Co. for a 24-hour period. A guest pass may only be used and assigned to a single individual. Any misuse of Day Pass policies may result in extra fees or banning from the premises. Please note that day passes provide access to the main gym floor only and do not include use of the recovery lounge or any recovery room amenities.',
+  },
+  {
+    title: 'Facility Access and Anti-Tailgating Policy',
+    body: 'Access credentials, key fobs, mobile credentials, door codes, or any other method of entry issued by Hydra Athletic Co. are assigned exclusively to the individual Member and may not be shared, loaned, transferred, duplicated, or used to admit any other person into the facility. Members shall not permit any individual to enter the facility by following them through a secured entrance ("tailgating" or "piggybacking") unless that individual has independently obtained authorized access or has been properly checked in as a guest. Any violation of this policy may result in immediate suspension or termination of membership, revocation of 24-hour access privileges, and assessment of applicable fees or damages.',
+  },
+  {
+    title: 'Personal Belongings Policy',
+    body: 'Hydra Athletic Co. is not responsible for any lost, stolen, or misplaced personal items within the facility, including but not limited to items left on the gym floor, in locker rooms, or in common areas. Members and visitors are strongly encouraged to secure all personal belongings in a locker and use a personal lock at all times while in the facility. Any items left unattended are done so at the individual\'s own risk. Hydra Athletic Co. assumes no liability for the loss, theft, or damage of personal property under any circumstances.',
+  },
+  {
+    title: 'Minor Membership Policy',
+    body: 'Members under the age of eighteen (18) may participate in Hydra Athletic Co. programs only with the written consent of a parent or legal guardian. The parent or legal guardian represents that they have the legal authority to execute this Agreement on behalf of the minor and agrees to all terms, conditions, waivers, releases, and obligations contained herein, both individually and on behalf of the minor participant.',
+  },
+  {
+    title: 'Cancellation Policy for Online Coaching and Personal Training Services',
+    body: 'All coaching plans continue month-to-month indefinitely until you submit a written cancellation request. If a Personal Training Package is purchased, it cannot be refunded. Client no-shows can result in an extra charge determined by the Personal Trainer. Clients may cancel their coaching or training plan at any time after the package period has been fulfilled.\n\nClient acknowledges that assignment to a specific personal trainer/coach is not guaranteed for the duration of this Agreement. If the assigned trainer/coach becomes unavailable for any reason, Hydra may reassign Client to another qualified trainer/coach at the same rate. Such reassignment shall not constitute a breach of this Agreement and does not entitle Client to a refund, credit, or cancellation.\n\nSession Cancellation Policy: Clients must provide at least 12 hours\' notice to cancel or reschedule a coaching session. Failure to do so will result in the session being counted as used and charged accordingly.',
+  },
+  {
+    title: 'Gym Policy',
+    body: 'Hydra Athletic Co. is committed to providing a safe environment for all its employees free from discrimination on any ground and from harassment at work including sexual harassment. Hydra Athletic Co. will operate a zero tolerance policy for any form of sexual harassment in the workplace. Any person found to have sexually harassed another will face disciplinary action, up to and including dismissal from employment or termination of membership.\n\nHydra Athletic Co. has a zero tolerance policy on being disrespectful to the gym itself, other members, or staff. Violation of this policy can result in membership termination, damage fine, and refusal of service. Hydra Athletic Co. has the right to terminate any membership at any point in time if deemed necessary by management/ownership.',
+  },
+  {
+    title: 'Marketing Consent Policy',
+    body: 'By signing below, you explicitly consent to receive marketing communications from Hydra Athletic Co. via email and SMS. These communications may include promotional offers and discounts, product updates and announcements, newsletters, and special events.\n\nYou may unsubscribe from marketing emails at any time by clicking the "unsubscribe" link in any email. To opt out of SMS messages, reply with "STOP" to any message you receive.',
+  },
+  {
+    title: 'Waiver of Liability and Hold Harmless Agreement',
+    body: 'In consideration for receiving permission (24/7 access) to be on premises at Hydra Athletic Co., I hereby acknowledge and agree to indemnify, defend and hold harmless Hydra Athletic Co. and all related parties from and against any and all claims, demands, suits, judgments, losses or expenses of any nature whatsoever (including attorneys\' fees), arising from or out of, or relating to, directly or indirectly, the infection of COVID-19 or any other illness or injury.\n\nIN SIGNING THIS AGREEMENT, I ACKNOWLEDGE AND REPRESENT THAT I have read the foregoing Waiver of Liability and Hold Harmless Agreement, understand it and sign it voluntarily as my own free act and deed. I am at least eighteen (18) years of age and fully competent, and I execute this Agreement for full, adequate and complete consideration fully intending to be bound by same.\n\nThis waiver & agreement applies for Hydra Athletic Co. in-person and online coaching services including training and nutrition.',
+  },
+]
+
+const WAIVER_BY_GYM = {
+  'oasis-boston':      OASIS_WAIVER_SECTIONS,
+  'hydra-athletic-co': HYDRA_WAIVER_SECTIONS,
+}
+
 // ── Waiver Modal ───────────────────────────────────────────────────────────────
 
 function WaiverModal({ sections, onClose }) {
@@ -968,7 +1028,7 @@ export default function GuestPage() {
 
       {waiverOpen && (
         <WaiverModal
-          sections={gymSlug === 'oasis-boston' ? OASIS_WAIVER_SECTIONS : WAIVER_SECTIONS}
+          sections={WAIVER_BY_GYM[gymSlug] ?? WAIVER_SECTIONS}
           onClose={() => setWaiverOpen(false)}
         />
       )}

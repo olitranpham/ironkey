@@ -59,7 +59,8 @@
       "Bash(awk -F',' '$2!=\"\"')",
       "Bash(awk -F',' '$2!=\"\" && $4==\"\"')",
       "Bash(DRY_RUN=1 node:*)",
-      "Bash(git show:*)"
+      "Bash(git show:*)",
+      "Bash(pdftotext \"/Users/olitranpham/Downloads/Member Contract \\(1\\).pdf\" -)"
     ]
   }
 }
