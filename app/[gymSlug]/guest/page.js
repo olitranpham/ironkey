@@ -242,7 +242,7 @@ export default function GuestPage() {
 
   // New guest form fields
   const [form, setForm] = useState({
-    firstName: '', lastName: '', email: '', phone: '', dob: '',
+    firstName: '', lastName: '', email: '', confirmEmail: '', phone: '', dob: '',
     address1: '', address2: '', city: '', state: '', zip: '',
     emergencyName: '', emergencyPhone: '', emergencyRelationship: '',
     waiver: false,
@@ -338,6 +338,7 @@ export default function GuestPage() {
 
     if (!form.firstName.trim() || !form.lastName.trim()) { setError('first and last name are required.'); return }
     if (!form.email.trim())    { setError('email is required.'); return }
+    if (form.email.trim().toLowerCase() !== form.confirmEmail.trim().toLowerCase()) { setError('email addresses don\'t match.'); return }
     if (!form.phone.trim())    { setError('phone number is required.'); return }
     if (!form.dob)             { setError('date of birth is required.'); return }
     const dobAge = (Date.now() - new Date(form.dob).getTime()) / (365.25 * 24 * 60 * 60 * 1000)
@@ -594,6 +595,19 @@ export default function GuestPage() {
               />
             </Field>
 
+            {/* Confirm Email */}
+            <Field label="confirm email" required>
+              <input
+                type="email" placeholder="jane@example.com"
+                value={form.confirmEmail} onChange={e => setField('confirmEmail', e.target.value)}
+                autoComplete="off"
+                className={INPUT} required
+              />
+              {form.confirmEmail && form.email.trim().toLowerCase() !== form.confirmEmail.trim().toLowerCase() && (
+                <p className="text-xs text-rose-400 mt-1">Email addresses don't match</p>
+              )}
+            </Field>
+
             {/* Phone */}
             <Field label="phone number" required>
               <input
@@ -731,7 +745,7 @@ export default function GuestPage() {
 
             <button
               type="submit"
-              disabled={submitting || plans.length === 0}
+              disabled={submitting || plans.length === 0 || (!!form.confirmEmail && form.email.trim().toLowerCase() !== form.confirmEmail.trim().toLowerCase())}
               className="w-full py-3 rounded-xl text-sm font-semibold bg-white text-[#1c1c1c] hover:bg-neutral-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
             >
               {submitting

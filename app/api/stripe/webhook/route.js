@@ -157,6 +157,7 @@ export async function POST(request) {
       }
 
       // ── Program time-bound Seam access code for guest (24-hour window) ────────
+      let alreadyActive = false
       if (gym.seamApiKey) {
         const deviceId    = gym.seamDeviceId ?? process.env.SEAM_DEVICE_ID
         const seamHeaders = {
@@ -178,7 +179,7 @@ export async function POST(request) {
             }
           }
           const isSingle  = passType === 'SINGLE'
-          await Promise.all(
+          const seamResults = await Promise.all(
             devices.map(dev =>
               fetch(`${SEAM_API}/access_codes/create`, {
                 method:  'POST',
@@ -191,10 +192,16 @@ export async function POST(request) {
                 }),
               })
                 .then(r => r.json())
-                .then(r => console.log('[platform/webhook] Seam guest code programmed — device=%s code=%s passType=%s ends_at=%s result=%s', dev.device_id, accessCode, passType, isSingle ? endDt : 'none', r.access_code?.access_code_id ?? r.error?.type ?? 'unknown'))
-                .catch(e  => console.error('[platform/webhook] Seam guest code error:', e.message))
+                .then(r => {
+                  const errType = r.error?.type ?? null
+                  const isDuplicate = errType === 'duplicate_access_code'
+                  console.log('[platform/webhook] Seam guest code — device=%s code=%s passType=%s result=%s', dev.device_id, accessCode, passType, isDuplicate ? 'already_active (duplicate)' : (r.access_code?.access_code_id ?? errType ?? 'unknown'))
+                  return { deviceId: dev.device_id, alreadyActive: isDuplicate, success: isDuplicate || Boolean(r.access_code?.access_code_id) }
+                })
+                .catch(e => { console.error('[platform/webhook] Seam guest code error:', e.message); return { alreadyActive: false, success: false } })
             )
           )
+          alreadyActive = seamResults.some(r => r.alreadyActive) && !seamResults.some(r => r.success && !r.alreadyActive)
         } catch (seamErr) {
           console.error('[platform/webhook] Seam guest error:', seamErr.message)
         }
@@ -236,7 +243,7 @@ export async function POST(request) {
         fetch(zapierGuestUrl, {
           method:  'POST',
           headers: { 'Content-Type': 'application/json' },
-          body:    JSON.stringify({ name: guestName, email, accessCode, passType, passesLeft: savedPassesLeft, firstTime }),
+          body:    JSON.stringify({ name: guestName, email, accessCode, passType, passesLeft: savedPassesLeft, firstTime, alreadyActive }),
         })
           .then(r => console.log('[platform/webhook] Zapier guest webhook status:', r.status))
           .catch(e => console.error('[platform/webhook] Zapier guest webhook error:', e.message))
@@ -279,6 +286,15 @@ export async function POST(request) {
 
     const isNew = !member
 
+    // Build full address from individual metadata fields
+    const addressParts = [
+      meta.address1,
+      meta.address2,
+      meta.city && meta.state ? `${meta.city}, ${meta.state}` : (meta.city || meta.state),
+      meta.zip,
+    ].filter(Boolean)
+    const fullAddress = addressParts.length ? addressParts.join(', ') : (meta.address || null)
+
     if (!member) {
       member = await prisma.member.create({
         data: {
@@ -292,6 +308,8 @@ export async function POST(request) {
           stripeSubscriptionId: subId,
           priceId,
           dateAccessed:        new Date(),
+          dateOfBirth:         meta.dob        || null,
+          address:             fullAddress,
         },
       })
       console.log('[platform/webhook] created member from checkout:', member.id, email)

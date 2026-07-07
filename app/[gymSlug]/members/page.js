@@ -168,6 +168,26 @@ export default function MembersPage() {
     }
   }
 
+  async function handleSaveField(memberId, fields) {
+    try {
+      const token = localStorage.getItem('ik_token')
+      const res = await fetch(`/api/${gymSlug}/members/${memberId}`, {
+        method:  'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body:    JSON.stringify(fields),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.error ?? 'Failed')
+      }
+      const { member: updated } = await res.json()
+      setMembers(prev => prev.map(m => m.id === memberId ? { ...m, ...updated } : m))
+      setSelectedMember(prev => prev?.id === memberId ? { ...prev, ...updated } : prev)
+    } catch (err) {
+      console.error('[handleSaveField] caught:', err.message)
+    }
+  }
+
   async function confirmAction() {
     const { action, member } = confirmModal
     setActionLoading(true)
@@ -403,6 +423,7 @@ export default function MembersPage() {
           setConfirmModal({ action: 'remove', member: selectedMember })
         }}
         onSaveAccessCode={handleSaveAccessCode}
+        onSaveField={handleSaveField}
         updating={actionLoading}
       />
 

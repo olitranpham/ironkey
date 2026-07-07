@@ -246,6 +246,7 @@ export default function JoinPage() {
     firstName:             '',
     lastName:              '',
     email:                 '',
+    confirmEmail:          '',
     phone:                 '',
     dob:                   '',
     address1:              '',
@@ -272,7 +273,12 @@ export default function JoinPage() {
         setMembershipPlans(membershipPlans)
         setAddonPlans(addonPlans)
         if (membershipPlans.length) {
-          const defaultPlan = membershipPlans.find(p => p.name.toLowerCase().includes('general')) ?? membershipPlans[0]
+          let defaultPlan
+          if (gymSlug === 'hydra-athletic-co') {
+            defaultPlan = membershipPlans.find(p => p.name.toLowerCase().includes('pre-sale membership')) ?? membershipPlans[0]
+          } else {
+            defaultPlan = membershipPlans.find(p => p.name.toLowerCase().includes('general')) ?? membershipPlans[0]
+          }
           setForm(f => ({ ...f, priceId: defaultPlan.priceId, membershipType: defaultPlan.membershipType }))
         }
       })
@@ -297,6 +303,7 @@ export default function JoinPage() {
 
     if (!form.firstName.trim() || !form.lastName.trim()) { setError('First and last name are required.'); return }
     if (!form.email.trim())    { setError('Email is required.'); return }
+    if (form.email.trim().toLowerCase() !== form.confirmEmail.trim().toLowerCase()) { setError('Email addresses don\'t match.'); return }
     if (!form.phone.trim())    { setError('Phone number is required.'); return }
     if (!form.dob)             { setError('Date of birth is required.'); return }
     if (!form.address1.trim()) { setError('Address is required.'); return }
@@ -405,6 +412,22 @@ export default function JoinPage() {
           />
         </Field>
 
+        {/* Confirm Email */}
+        <Field label="confirm email" required>
+          <input
+            type="email"
+            placeholder="jane@example.com"
+            value={form.confirmEmail}
+            onChange={e => set('confirmEmail', e.target.value)}
+            autoComplete="off"
+            className={INPUT}
+            required
+          />
+          {form.confirmEmail && form.email.trim().toLowerCase() !== form.confirmEmail.trim().toLowerCase() && (
+            <p className="text-xs text-rose-400 mt-1">Email addresses don't match</p>
+          )}
+        </Field>
+
         {/* Phone */}
         <Field label="phone number" required>
           <input
@@ -511,10 +534,6 @@ export default function JoinPage() {
                           return ar - br
                         })
                       })()
-                    : gymSlug === 'hydra-athletic-co'
-                    ? [...membershipPlans]
-                        .filter(p => p.name.toLowerCase().includes('pre-sale membership'))
-                        .sort((a, b) => a.name.toLowerCase().includes('pre-sale') ? -1 : 1)
                     : membershipPlans
                   ).map(p => {
                     let displayFmt
@@ -527,6 +546,8 @@ export default function JoinPage() {
                       } else {
                         displayFmt = `${Number(p.amount * 2).toLocaleString('en-US', { style: 'currency', currency: 'USD' })} every 4 weeks`
                       }
+                    } else if (gymSlug === 'hydra-athletic-co' && p.name.toLowerCase().includes('pre-sale membership')) {
+                      displayFmt = '$50.00 / 4 weeks'
                     } else {
                       displayFmt = fmt(p.amount, p.interval, p.intervalCount)
                     }
@@ -582,35 +603,6 @@ export default function JoinPage() {
           </Field>
         )}
 
-        {/* Hydra: Coaching / Programming Add-on (pulled from membershipPlans) */}
-        {gymSlug === 'hydra-athletic-co' && (() => {
-          const hydraAddonPlans = membershipPlans.filter(p => p.name.toLowerCase().includes('coaching/program'))
-          if (!hydraAddonPlans.length) return null
-          return (
-            <Field label="coaching / programming add-on (optional)">
-              <div className="relative">
-                <select
-                  value={form.addonPriceId}
-                  onChange={e => set('addonPriceId', e.target.value)}
-                  className={SELECT}
-                >
-                  <option value="">None</option>
-                  {hydraAddonPlans.map(p => (
-                    <option key={p.priceId} value={p.priceId}>
-                      {p.name} — {fmt(p.amount, p.interval, p.intervalCount)}
-                    </option>
-                  ))}
-                </select>
-                <div className="pointer-events-none absolute inset-y-0 right-3 flex items-center">
-                  <svg className="w-4 h-4 text-neutral-500" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.17l3.71-3.94a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
-                  </svg>
-                </div>
-              </div>
-            </Field>
-          )
-        })()}
-
         {/* Coaching / Programming Add-on */}
         {addonPlans.length > 0 && (
           <Field label="coaching / programming add-on (optional)">
@@ -621,11 +613,18 @@ export default function JoinPage() {
                 className={SELECT}
               >
                 <option value="">None</option>
-                {addonPlans.map(p => (
-                  <option key={p.priceId} value={p.priceId}>
-                    {p.name} — {fmt(p.amount, p.interval, p.intervalCount)}
-                  </option>
-                ))}
+                {addonPlans.map(p => {
+                  const isHydra4Week = gymSlug === 'hydra-athletic-co' &&
+                    (p.interval === 'month' || (p.interval === 'week' && p.intervalCount === 4))
+                  const addonFmt = isHydra4Week
+                    ? `${Number(p.amount).toLocaleString('en-US', { style: 'currency', currency: 'USD' })} / 4 weeks`
+                    : fmt(p.amount, p.interval, p.intervalCount)
+                  return (
+                    <option key={p.priceId} value={p.priceId}>
+                      {p.name} — {addonFmt}
+                    </option>
+                  )
+                })}
               </select>
               <div className="pointer-events-none absolute inset-y-0 right-3 flex items-center">
                 <svg className="w-4 h-4 text-neutral-500" viewBox="0 0 20 20" fill="currentColor">
@@ -712,7 +711,7 @@ export default function JoinPage() {
 
         <button
           type="submit"
-          disabled={submitting || membershipPlans.length === 0}
+          disabled={submitting || membershipPlans.length === 0 || (!!form.confirmEmail && form.email.trim().toLowerCase() !== form.confirmEmail.trim().toLowerCase())}
           className="w-full py-3 rounded-xl text-sm font-semibold bg-white text-[#1c1c1c] hover:bg-neutral-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
         >
           {submitting ? (

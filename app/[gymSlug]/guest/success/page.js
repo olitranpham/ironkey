@@ -1,12 +1,19 @@
 'use client'
 
-import { useParams } from 'next/navigation'
+import { useParams, useSearchParams } from 'next/navigation'
 import { useEffect, useState } from 'react'
-import { CheckCircle2 } from 'lucide-react'
+import { CheckCircle2, Loader2 } from 'lucide-react'
 
 export default function GuestSuccessPage() {
-  const { gymSlug } = useParams()
-  const [gymName, setGymName] = useState('')
+  const { gymSlug }     = useParams()
+  const searchParams    = useSearchParams()
+  const sessionId       = searchParams.get('session_id')
+
+  const [gymName,    setGymName]    = useState('')
+  const [accessCode, setAccessCode] = useState(null)
+  const [passesLeft, setPassesLeft] = useState(null)
+  const [passType,   setPassType]   = useState(null)
+  const [loading,    setLoading]    = useState(Boolean(sessionId))
 
   useEffect(() => {
     fetch(`/api/${gymSlug}/guest`)
@@ -14,6 +21,45 @@ export default function GuestSuccessPage() {
       .then(({ gym }) => setGymName(gym?.name ?? gymSlug))
       .catch(() => {})
   }, [gymSlug])
+
+  useEffect(() => {
+    if (!sessionId) return
+    // Poll briefly to give the webhook time to fire and save the access code
+    let attempts = 0
+    const maxAttempts = 6
+    const interval = 2000
+
+    async function fetchResult() {
+      try {
+        const res  = await fetch(`/api/${gymSlug}/guest/session-result?session_id=${sessionId}`)
+        const json = await res.json()
+        if (json.accessCode) {
+          setAccessCode(json.accessCode)
+          setPassesLeft(json.passesLeft)
+          setPassType(json.passType)
+          setLoading(false)
+          return true
+        }
+      } catch {}
+      return false
+    }
+
+    async function poll() {
+      const found = await fetchResult()
+      if (found) return
+      attempts++
+      if (attempts < maxAttempts) {
+        setTimeout(poll, interval)
+      } else {
+        setLoading(false) // Give up — show generic message
+      }
+    }
+
+    poll()
+  }, [gymSlug, sessionId])
+
+  const isSingle     = passType === 'SINGLE' || passesLeft === null
+  const isReturning  = passesLeft !== null && !isSingle
 
   return (
     <div className="min-h-screen bg-[#292929] flex flex-col items-center justify-center px-4">
@@ -30,16 +76,53 @@ export default function GuestSuccessPage() {
           </p>
         </div>
 
-        <div className="w-full bg-neutral-900 rounded-xl p-4 text-left space-y-2">
-          <p className="text-xs text-neutral-400 flex items-start gap-2">
-            <span className="text-emerald-400 font-bold shrink-0">✓</span>
-            your guest pass is now active.
-          </p>
-          <p className="text-xs text-neutral-400 flex items-start gap-2">
-            <span className="text-emerald-400 font-bold shrink-0">✓</span>
-            your access code will be sent to your email shortly.
-          </p>
-        </div>
+        {loading ? (
+          <div className="w-full bg-neutral-900 rounded-xl p-4 flex items-center justify-center gap-2">
+            <Loader2 size={14} className="text-neutral-500 animate-spin" />
+            <span className="text-xs text-neutral-500">loading your pass info…</span>
+          </div>
+        ) : accessCode ? (
+          <div className="w-full bg-neutral-900 rounded-xl p-4 text-left space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-neutral-400">your door code</span>
+              <span className="text-lg font-bold text-white font-mono tracking-widest">{accessCode}</span>
+            </div>
+            {!isSingle && passesLeft !== null && (
+              <div className="flex items-center justify-between border-t border-neutral-800 pt-3">
+                <span className="text-xs text-neutral-400">passes remaining</span>
+                <span className="text-sm font-semibold text-white">{passesLeft}</span>
+              </div>
+            )}
+            <div className="border-t border-neutral-800 pt-3 space-y-2">
+              {isReturning ? (
+                <p className="text-xs text-neutral-400 flex items-start gap-2">
+                  <span className="text-emerald-400 font-bold shrink-0">✓</span>
+                  your door code <span className="font-mono text-white">{accessCode}</span> is already active — you can use it to enter right now. your passes remaining have been updated.
+                </p>
+              ) : (
+                <p className="text-xs text-neutral-400 flex items-start gap-2">
+                  <span className="text-emerald-400 font-bold shrink-0">✓</span>
+                  your door code is active. use it at the entrance.
+                </p>
+              )}
+              <p className="text-xs text-neutral-400 flex items-start gap-2">
+                <span className="text-emerald-400 font-bold shrink-0">✓</span>
+                your access code will also be sent to your email shortly.
+              </p>
+            </div>
+          </div>
+        ) : (
+          <div className="w-full bg-neutral-900 rounded-xl p-4 text-left space-y-2">
+            <p className="text-xs text-neutral-400 flex items-start gap-2">
+              <span className="text-emerald-400 font-bold shrink-0">✓</span>
+              your guest pass is now active.
+            </p>
+            <p className="text-xs text-neutral-400 flex items-start gap-2">
+              <span className="text-emerald-400 font-bold shrink-0">✓</span>
+              your access code will be sent to your email shortly.
+            </p>
+          </div>
+        )}
 
         <p className="text-[11px] text-neutral-600">
           questions? contact admin@ironkeyentry.com

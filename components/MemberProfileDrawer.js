@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { X, Phone, KeyRound, History } from 'lucide-react'
+import { X, Phone, KeyRound, History, User } from 'lucide-react'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -64,18 +64,25 @@ export function DrawerField({ label, value, mono = false, children }) {
 
 // ── Drawer content ────────────────────────────────────────────────────────────
 
-function DrawerContent({ member, gymSlug, membershipBorder, onClose, onStatusChange, onSaveAccessCode, onDeleteCode, onRemoveMember, updating, simplified }) {
+function DrawerContent({ member, gymSlug, membershipBorder, onClose, onStatusChange, onSaveAccessCode, onSaveField, onDeleteCode, onRemoveMember, updating, simplified }) {
   const initials = (member.firstName?.[0] ?? '') + (member.lastName?.[0] ?? '')
   const [codeInput,    setCodeInput]    = useState(member.accessCode ?? '')
   const [savingCode,   setSavingCode]   = useState(false)
   const [deletingCode, setDeletingCode] = useState(false)
   const [events,       setEvents]       = useState(null)  // null = loading, [] = loaded empty
 
+  const [dobInput,     setDobInput]     = useState(member.dateOfBirth ?? '')
+  const [savingDob,    setSavingDob]    = useState(false)
+  const [addressInput, setAddressInput] = useState(member.address ?? '')
+  const [savingAddr,   setSavingAddr]   = useState(false)
+
   // Keep codeInput in sync when the member prop changes (different member opened,
   // or same member's accessCode updated by parent after a successful save).
   useEffect(() => {
     setCodeInput(member.accessCode ?? '')
-  }, [member.id, member.accessCode])
+    setDobInput(member.dateOfBirth ?? '')
+    setAddressInput(member.address ?? '')
+  }, [member.id, member.accessCode, member.dateOfBirth, member.address])
 
   // Fetch membership history whenever the member changes (skip in simplified mode)
   useEffect(() => {
@@ -107,6 +114,20 @@ function DrawerContent({ member, gymSlug, membershipBorder, onClose, onStatusCha
     setSavingCode(true)
     await onSaveAccessCode(member.id, codeInput.trim())
     setSavingCode(false)
+  }
+
+  async function handleDobSave() {
+    if (!onSaveField) return
+    setSavingDob(true)
+    await onSaveField(member.id, { dateOfBirth: dobInput.trim() })
+    setSavingDob(false)
+  }
+
+  async function handleAddrSave() {
+    if (!onSaveField) return
+    setSavingAddr(true)
+    await onSaveField(member.id, { address: addressInput.trim() })
+    setSavingAddr(false)
   }
 
   async function handleDeleteCode() {
@@ -149,6 +170,52 @@ function DrawerContent({ member, gymSlug, membershipBorder, onClose, onStatusCha
         <DrawerSection icon={Phone} title="contact">
           <DrawerField label="email" value={member.email} />
           <DrawerField label="phone" value={member.phone} />
+        </DrawerSection>
+
+        {/* Personal info */}
+        <DrawerSection icon={User} title="personal info">
+          {/* Date of birth */}
+          <DrawerField label="date of birth">
+            <div className="flex items-center gap-2 ml-4">
+              <input
+                type="date"
+                value={dobInput}
+                onChange={e => setDobInput(e.target.value)}
+                className="bg-[#252525] border border-neutral-700 rounded px-2 py-1 text-xs text-white placeholder-neutral-600 focus:outline-none focus:border-neutral-500 w-36"
+              />
+              {onSaveField && (
+                <button
+                  onClick={handleDobSave}
+                  disabled={savingDob || dobInput.trim() === (member.dateOfBirth ?? '')}
+                  className="text-[10px] px-2 py-1 rounded bg-white/10 text-white hover:bg-white/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shrink-0"
+                >
+                  {savingDob ? '…' : 'save'}
+                </button>
+              )}
+            </div>
+          </DrawerField>
+
+          {/* Address */}
+          <DrawerField label="address">
+            <div className="flex items-center gap-2 ml-4">
+              <input
+                type="text"
+                value={addressInput}
+                onChange={e => setAddressInput(e.target.value)}
+                placeholder="123 main st, boston, ma"
+                className="bg-[#252525] border border-neutral-700 rounded px-2 py-1 text-xs text-white placeholder-neutral-600 focus:outline-none focus:border-neutral-500 w-44 truncate"
+              />
+              {onSaveField && (
+                <button
+                  onClick={handleAddrSave}
+                  disabled={savingAddr || addressInput.trim() === (member.address ?? '')}
+                  className="text-[10px] px-2 py-1 rounded bg-white/10 text-white hover:bg-white/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shrink-0"
+                >
+                  {savingAddr ? '…' : 'save'}
+                </button>
+              )}
+            </div>
+          </DrawerField>
         </DrawerSection>
 
         {/* Membership */}
@@ -294,6 +361,7 @@ export default function MemberProfileDrawer({
   onClose,
   onStatusChange,
   onSaveAccessCode,
+  onSaveField,
   onDeleteCode,
   onRemoveMember,
   updating = false,
@@ -325,6 +393,7 @@ export default function MemberProfileDrawer({
             onClose={onClose}
             onStatusChange={onStatusChange}
             onSaveAccessCode={onSaveAccessCode}
+            onSaveField={onSaveField}
             onDeleteCode={onDeleteCode}
             onRemoveMember={onRemoveMember}
             updating={updating}

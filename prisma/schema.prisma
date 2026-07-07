@@ -62,6 +62,10 @@ model Member {
   stripeSubscriptionId String?
   priceId              String?
 
+  // Personal info collected at signup
+  dateOfBirth      String?
+  address          String?
+
   // Seam / smart-lock access code
   accessCode       String?
   seamDeviceId     String?

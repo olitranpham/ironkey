@@ -8,6 +8,7 @@ const VALID_STATUSES = ['ACTIVE', 'FROZEN', 'CANCELLED']
 const MEMBER_SELECT = {
   id: true, firstName: true, lastName: true, email: true, phone: true,
   status: true, membershipType: true, accessCode: true,
+  dateOfBirth: true, address: true,
   dateFrozen: true, dateCanceled: true, createdAt: true,
   stripeCustomerId: true, stripeSubscriptionId: true,
 }
@@ -55,7 +56,7 @@ export async function PATCH(request, { params }) {
     if (!gym) return NextResponse.json({ error: 'Gym not found' }, { status: 404 })
 
     const gymId = gym.id
-    const { status, accessCode } = body
+    const { status, accessCode, dateOfBirth, address } = body
 
     console.log('[members/patch] memberId=%s gymId=%s body=%j', memberId, gymId, body)
 
@@ -82,6 +83,14 @@ export async function PATCH(request, { params }) {
 
     if (accessCode !== undefined) {
       data.accessCode = accessCode === '' ? null : String(accessCode).trim()
+    }
+
+    if (dateOfBirth !== undefined) {
+      data.dateOfBirth = dateOfBirth === '' ? null : String(dateOfBirth).trim()
+    }
+
+    if (address !== undefined) {
+      data.address = address === '' ? null : String(address).trim()
     }
 
     const member = await prisma.member.update({

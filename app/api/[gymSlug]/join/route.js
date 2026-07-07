@@ -73,6 +73,24 @@ export async function GET(request, { params }) {
           .filter(p => OASIS_PRODUCT_IDS.has(p.product?.id))
           .map(toplan)
           .sort((a, b) => a.amount - b.amount)
+      } else if (gymSlug === 'hydra-athletic-co') {
+        // Membership plans: only Pre-Sale Membership
+        membershipPlans = recurring
+          .filter(p => {
+            const n = (p.nickname ?? p.product?.name ?? '').toLowerCase()
+            return n.includes('pre-sale membership')
+          })
+          .map(toplan)
+          .sort((a, b) => a.amount - b.amount)
+
+        // Coaching add-ons: all Coaching/Programs prices
+        addonPlans = recurring
+          .filter(p => {
+            const n = (p.nickname ?? p.product?.name ?? '').toLowerCase()
+            return n.includes('coaching/program')
+          })
+          .map(toplan)
+          .sort((a, b) => a.amount - b.amount)
       } else {
         membershipPlans = recurring.map(toplan).sort((a, b) => a.amount - b.amount)
       }
