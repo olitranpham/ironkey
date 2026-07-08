@@ -13,28 +13,38 @@ export async function GET(request, { params }) {
 
     const [gym, member] = await Promise.all([
       prisma.gym.findUnique({ where: { slug: gymSlug }, select: { id: true } }),
-      prisma.member.findUnique({ where: { id: memberId }, select: { dateAccessed: true, createdAt: true } }),
+      prisma.member.findUnique({
+        where:  { id: memberId },
+        select: { dateAccessed: true, createdAt: true, dateFrozen: true, dateCanceled: true },
+      }),
     ])
     if (!gym) return NextResponse.json({ error: 'Gym not found' }, { status: 404 })
 
-    const events = await prisma.membershipEvent.findMany({
+    const real = await prisma.membershipEvent.findMany({
       where:   { memberId, gymId: gym.id },
       orderBy: { date: 'asc' },
       select:  { id: true, type: true, date: true },
     })
 
-    const hasJoined = events.some(e => e.type === 'joined')
+    const synthetic = []
 
-    if (!hasJoined) {
-      const joinDate = member?.dateAccessed ?? member?.createdAt ?? null
-      events.unshift({
-        id:   'synthetic-joined',
-        type: 'joined',
-        date: joinDate,
-      })
+    if (!real.some(e => e.type === 'joined')) {
+      synthetic.push({ id: 'synthetic-joined', type: 'joined', date: member?.dateAccessed ?? member?.createdAt ?? null })
+    }
+    if (member?.dateFrozen && !real.some(e => e.type === 'frozen')) {
+      synthetic.push({ id: 'synthetic-frozen', type: 'frozen', date: member.dateFrozen })
+    }
+    if (member?.dateCanceled && !real.some(e => e.type === 'cancelled')) {
+      synthetic.push({ id: 'synthetic-cancelled', type: 'cancelled', date: member.dateCanceled })
     }
 
-    console.log('[members/events GET] gymSlug=%s memberId=%s events=%d hasJoined=%s', gymSlug, memberId, events.length, hasJoined)
+    const events = [...real, ...synthetic].sort((a, b) => {
+      if (!a.date) return -1
+      if (!b.date) return  1
+      return new Date(a.date) - new Date(b.date)
+    })
+
+    console.log('[members/events GET] gymSlug=%s memberId=%s real=%d synthetic=%d', gymSlug, memberId, real.length, synthetic.length)
 
     return NextResponse.json({ events })
   } catch (error) {
