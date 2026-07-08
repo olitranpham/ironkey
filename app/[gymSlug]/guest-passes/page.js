@@ -566,7 +566,7 @@ function GuestProfilePanel({ profile, passTypeBorder, onClose, onSaveCode, savin
     }
   }
 
-  const GEditField = ({ label, value, setValue, onSave, saved, type = 'text', onBlur }) => (
+  const GEditField = ({ label, value, setValue, onSave, saved, type = 'text', onBlur, placeholder }) => (
     <div className="flex items-center justify-between px-3 py-2.5 bg-[#1c1c1c]">
       <span className="text-xs text-zinc-400 shrink-0">{label}</span>
       <div className="flex items-center gap-1.5 ml-4 flex-1 justify-end">
@@ -576,7 +576,8 @@ function GuestProfilePanel({ profile, passTypeBorder, onClose, onSaveCode, savin
           onChange={e => setValue(e.target.value)}
           onBlur={onBlur}
           disabled={isUnlinked}
-          className="bg-[#252525] border border-neutral-700 rounded px-2 py-1 text-xs text-white text-right focus:outline-none focus:border-neutral-500 w-36 disabled:opacity-40"
+          placeholder={placeholder}
+          className="bg-[#252525] border border-neutral-700 rounded px-2 py-1 text-xs text-white text-right placeholder-neutral-600 focus:outline-none focus:border-neutral-500 w-36 disabled:opacity-40"
         />
         {!isUnlinked && (
           <button
@@ -664,6 +665,7 @@ function GuestProfilePanel({ profile, passTypeBorder, onClose, onSaveCode, savin
             setValue={setAddrInput}
             saved={profile.address ?? ''}
             onSave={() => onSaveProfile({ address: addrInput.trim() })}
+            placeholder="123 main st, boston, ma"
           />
         </GSection>
 
@@ -675,6 +677,7 @@ function GuestProfilePanel({ profile, passTypeBorder, onClose, onSaveCode, savin
             setValue={setEcNameInput}
             saved={profile.emergencyContactName ?? ''}
             onSave={() => onSaveProfile({ emergencyContactName: ecNameInput.trim() })}
+            placeholder="jane smith"
           />
           <GEditField
             label="phone"
@@ -683,6 +686,7 @@ function GuestProfilePanel({ profile, passTypeBorder, onClose, onSaveCode, savin
             saved={profile.emergencyContactPhone ?? ''}
             onSave={() => onSaveProfile({ emergencyContactPhone: ecPhoneInput })}
             onBlur={() => setEcPhoneInput(v => formatPhone(v) ?? v)}
+            placeholder="(555) 000-0000"
           />
           <GEditField
             label="relationship"
@@ -690,6 +694,7 @@ function GuestProfilePanel({ profile, passTypeBorder, onClose, onSaveCode, savin
             setValue={setEcRelInput}
             saved={profile.emergencyContactRelationship ?? ''}
             onSave={() => onSaveProfile({ emergencyContactRelationship: ecRelInput.trim() })}
+            placeholder="spouse, parent, friend…"
           />
         </GSection>
 
