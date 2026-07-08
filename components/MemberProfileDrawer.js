@@ -440,8 +440,6 @@ function DrawerContent({ member, gymSlug, membershipBorder, onClose, onStatusCha
             </div>
           </DrawerField>
 
-          {member.status === 'FROZEN'    && <DrawerField label="frozen"   value={fmtDate(member.dateFrozen)} />}
-          {member.status === 'CANCELLED' && <DrawerField label="canceled" value={fmtDate(member.dateCanceled)} />}
 
           {/* Flex check-ins — oasis-boston only */}
           {gymSlug === 'oasis-boston' && member.membershipType?.toLowerCase().includes('flex') && (

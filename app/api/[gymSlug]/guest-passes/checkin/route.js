@@ -85,6 +85,7 @@ export async function POST(request, { params }) {
       })
 
       // ── Refresh 24-hr Seam code on every checkin ────────────────────────
+      let alreadyActive = false
       console.log('[checkin] Seam gate check — newCount=%s profile=%s seamApiKey=%s seamDeviceId=%s',
         newCount, profile?.id ?? 'null', gym.seamApiKey ? '(set)' : 'null', gym.seamDeviceId ?? 'null')
       if (newCount > 0 && profile && gym.seamApiKey && gym.seamDeviceId) {
@@ -138,6 +139,10 @@ export async function POST(request, { params }) {
           })
           const createJson = await createRes.json()
           console.log('[checkin] Seam create response — status=%d body=%j', createRes.status, createJson)
+          if (!createRes.ok && createJson?.error?.type === 'duplicate_access_code') {
+            alreadyActive = true
+            console.log('[checkin] duplicate_access_code — code already active for pin=%s', pin)
+          }
         } catch (createErr) {
           console.error('[checkin] Seam create step error:', createErr.message)
         }
@@ -214,7 +219,7 @@ export async function POST(request, { params }) {
           .catch(e => console.error('[checkin] Zapier guest webhook error:', e.message))
       }
 
-      return NextResponse.json({ ok: true, passesLeft: updated.passesLeft, passType: updated.passType, passTypeLabel: PASS_TYPE_LABEL[updated.passType] ?? updated.passType, accessCode: profile?.accessCode ?? null })
+      return NextResponse.json({ ok: true, passesLeft: updated.passesLeft, passType: updated.passType, passTypeLabel: PASS_TYPE_LABEL[updated.passType] ?? updated.passType, accessCode: profile?.accessCode ?? null, alreadyActive })
     }
 
     // ── No pack found — create a single-use record and deactivate immediately
@@ -259,7 +264,7 @@ export async function POST(request, { params }) {
         .catch(e => console.error('[checkin] Zapier guest webhook error:', e.message))
     }
 
-    return NextResponse.json({ ok: true, passesLeft: null, passType: 'SINGLE', passTypeLabel: 'Day Pass', accessCode: profile?.accessCode ?? null })
+    return NextResponse.json({ ok: true, passesLeft: null, passType: 'SINGLE', passTypeLabel: 'Day Pass', accessCode: profile?.accessCode ?? null, alreadyActive: false })
   } catch (error) {
     console.error('[guest-passes/checkin]', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

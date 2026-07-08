@@ -85,6 +85,8 @@ export async function POST(request) {
       },
     })
 
+    await prisma.membershipEvent.create({ data: { memberId, gymId, type: 'frozen', date: now } })
+
     if (stripeWarning === 'stripe_dashboard_sub') {
       return NextResponse.json({
         member,

@@ -1011,19 +1011,32 @@ export default function GuestPage() {
             <div className="w-14 h-14 rounded-full bg-emerald-500/15 flex items-center justify-center">
               <CheckCircle2 size={28} className="text-emerald-400" />
             </div>
-            <div>
-              <h2 className="text-xl font-bold text-white">checked in!</h2>
-              <p className="text-sm text-neutral-400 mt-1">
-                welcome{lookupResult?.profile?.name ? `, ${lookupResult.profile.name.split(' ')[0].toLowerCase()}` : ''}.
-              </p>
-            </div>
-            {checkinResult?.passesLeft != null && (
-              <div className="w-full bg-neutral-900 rounded-xl p-4">
-                <p className="text-xs text-neutral-400">
-                  <span className="text-white font-semibold">{checkinResult.passesLeft}</span>{' '}
-                  pass{checkinResult.passesLeft !== 1 ? 'es' : ''} remaining after this visit
+            {checkinResult?.alreadyActive ? (
+              <div>
+                <h2 className="text-xl font-bold text-white">you're already checked in</h2>
+                <p className="text-sm text-neutral-400 mt-2">
+                  your door code{' '}
+                  <span className="font-mono text-white font-semibold">{checkinResult.accessCode}</span>{' '}
+                  is still active. use it to enter.
                 </p>
               </div>
+            ) : (
+              <>
+                <div>
+                  <h2 className="text-xl font-bold text-white">checked in!</h2>
+                  <p className="text-sm text-neutral-400 mt-1">
+                    welcome{lookupResult?.profile?.name ? `, ${lookupResult.profile.name.split(' ')[0].toLowerCase()}` : ''}.
+                  </p>
+                </div>
+                {checkinResult?.passesLeft != null && (
+                  <div className="w-full bg-neutral-900 rounded-xl p-4">
+                    <p className="text-xs text-neutral-400">
+                      <span className="text-white font-semibold">{checkinResult.passesLeft}</span>{' '}
+                      pass{checkinResult.passesLeft !== 1 ? 'es' : ''} remaining after this visit
+                    </p>
+                  </div>
+                )}
+              </>
             )}
             <button
               onClick={() => { setStep('intent'); setMode(null); setLookupEmail(''); setLookupResult(null); clearError() }}
