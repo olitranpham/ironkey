@@ -9,7 +9,7 @@ import { formatPhone } from '@/lib/phone'
 const STATUS_TEXT = {
   ACTIVE:    'text-emerald-500',
   FROZEN:    'text-blue-400',
-  CANCELLED: 'text-zinc-500',
+  CANCELED: 'text-zinc-500',
   OVERDUE:   'text-red-400',
 }
 
@@ -20,11 +20,11 @@ const EVENT_LABEL = {
   reactivated: 'reactivated',
   frozen:      'frozen',
   unfrozen:    'unfrozen',
-  cancelled:   'cancelled',
+  canceled:    'canceled',
 }
 
 function fmtStatus(status) {
-  return status === 'CANCELLED' ? 'canceled' : (status?.toLowerCase() ?? '—')
+  return status === 'CANCELED' ? 'canceled' : (status?.toLowerCase() ?? '—')
 }
 
 function fmtDate(iso) {
@@ -490,7 +490,7 @@ function DrawerContent({ member, gymSlug, membershipBorder, onClose, onStatusCha
         </div>
       ) : (onStatusChange || onRemoveMember) && (
         <div className="shrink-0 px-5 py-4 border-t border-neutral-800 space-y-2">
-          {onStatusChange && member.status !== 'CANCELLED' && (
+          {onStatusChange && member.status !== 'CANCELED' && (
             <>
               {(member.status === 'ACTIVE' || member.status === 'OVERDUE') && (
                 <>
@@ -502,7 +502,7 @@ function DrawerContent({ member, gymSlug, membershipBorder, onClose, onStatusCha
                     freeze membership
                   </button>
                   <button
-                    onClick={() => onStatusChange(member.id, 'CANCELLED')}
+                    onClick={() => onStatusChange(member.id, 'CANCELED')}
                     disabled={updating}
                     className="w-full py-2 rounded-lg text-sm font-medium bg-red-500/10 text-red-400 hover:bg-red-500/20 disabled:opacity-40 transition-colors"
                   >

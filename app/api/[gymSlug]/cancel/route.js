@@ -50,20 +50,20 @@ export async function POST(request) {
     const member = await prisma.member.update({
       where: { id: memberId },
       data: {
-        status:      'CANCELLED',
+        status:      'CANCELED',
         dateCanceled: existing.dateCanceled ?? now,
         updatedAt:   now,
       },
     })
 
-    await prisma.membershipEvent.create({ data: { memberId, gymId, type: 'cancelled', date: now } })
+    await prisma.membershipEvent.create({ data: { memberId, gymId, type: 'canceled', date: now } })
 
     if (stripeWarning === 'stripe_dashboard_sub') {
       return NextResponse.json({
         member,
         ok:      false,
         error:   'stripe_dashboard_sub',
-        message: 'This subscription was created outside of ironkey and cannot be cancelled via the API. To cancel this member, cancel their subscription manually in the Stripe dashboard.',
+        message: 'This subscription was created outside of ironkey and cannot be canceled via the API. To cancel this member, cancel their subscription manually in the Stripe dashboard.',
       })
     }
 

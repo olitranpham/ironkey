@@ -45,7 +45,7 @@ export async function GET() {
       createdAt:    gym.createdAt,
       active:                 countsMap[gym.id]?.ACTIVE    ?? 0,
       frozen:                 countsMap[gym.id]?.FROZEN    ?? 0,
-      canceled:               countsMap[gym.id]?.CANCELLED ?? 0,
+      canceled:               countsMap[gym.id]?.CANCELED  ?? 0,
       overdue:                countsMap[gym.id]?.OVERDUE   ?? 0,
       zapierMemberWebhookUrl:  gym.zapierMemberWebhookUrl  ?? '',
       zapierGuestWebhookUrl:   gym.zapierGuestWebhookUrl   ?? '',

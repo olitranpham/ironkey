@@ -11,7 +11,7 @@ import { deleteSeamCodeByPin } from '@/lib/seam'
  *
  * For each past_due / unpaid Stripe subscription:
  *   1–13 days overdue  → fire Zapier warning webhook
- *  14+  days overdue  → cancel sub, set member CANCELLED, delete Seam code, fire Zapier cancel webhook
+ *  14+  days overdue  → cancel sub, set member CANCELED, delete Seam code, fire Zapier cancel webhook
  */
 export async function POST(request, { params }) {
   try {
@@ -48,7 +48,7 @@ export async function POST(request, { params }) {
     const subs = [...r1.data, ...r2.data]
 
     if (subs.length === 0) {
-      return NextResponse.json({ ok: true, processed: 0, warnings: 0, cancelled: 0 })
+      return NextResponse.json({ ok: true, processed: 0, warnings: 0, canceled: 0 })
     }
 
     // ── Batch-fetch matching DB members ───────────────────────────────────────
@@ -70,8 +70,8 @@ export async function POST(request, { params }) {
     const zapierUrl = gym.zapierOverdueWebhookUrl || process.env.ZAPIER_OVERDUE_WEBHOOK_URL
     const nowSecs   = Math.floor(Date.now() / 1000)
 
-    let warnings  = 0
-    let cancelled = 0
+    let warnings = 0
+    let canceled = 0
 
     for (const sub of subs) {
       const email      = sub.customer?.email?.toLowerCase().trim()
@@ -117,21 +117,21 @@ export async function POST(request, { params }) {
         // 1. Cancel Stripe subscription immediately
         try {
           await stripe.subscriptions.cancel(sub.id)
-          console.log('[overdue-cancel] cancelled Stripe sub %s', sub.id)
+          console.log('[overdue-cancel] canceled Stripe sub %s', sub.id)
         } catch (err) {
           console.error('[overdue-cancel] Stripe cancel error for %s: %s', sub.id, err.message)
         }
 
         // 2. Update DB member status
-        if (member && member.status !== 'CANCELLED') {
+        if (member && member.status !== 'CANCELED') {
           await prisma.member.update({
             where: { id: member.id },
-            data:  { status: 'CANCELLED', dateCanceled: new Date() },
+            data:  { status: 'CANCELED', dateCanceled: new Date() },
           })
           await prisma.membershipEvent.create({
-            data: { memberId: member.id, gymId: gym.id, type: 'cancelled' },
+            data: { memberId: member.id, gymId: gym.id, type: 'canceled' },
           })
-          console.log('[overdue-cancel] set member %s CANCELLED', member.id)
+          console.log('[overdue-cancel] set member %s CANCELED', member.id)
         }
 
         // 3. Delete Seam access code and clear from DB
@@ -150,11 +150,11 @@ export async function POST(request, { params }) {
           fetch(zapierUrl, {
             method:  'POST',
             headers: { 'Content-Type': 'application/json' },
-            body:    JSON.stringify({ name, email, status: 'overdue_cancelled', daysOverdue, invoiceUrl }),
+            body:    JSON.stringify({ name, email, status: 'overdue_canceled', daysOverdue, invoiceUrl }),
           }).catch(e => console.error('[overdue-cancel] zapier cancel webhook error:', e.message))
         }
 
-        cancelled++
+        canceled++
       } else {
         // ── Warning (day 1, 7, or 13 only) ───────────────────────────────────────
 
@@ -170,11 +170,11 @@ export async function POST(request, { params }) {
     }
 
     console.log(
-      '[overdue-cancel] gym=%s total=%d warnings=%d cancelled=%d',
-      gymSlug, subs.length, warnings, cancelled,
+      '[overdue-cancel] gym=%s total=%d warnings=%d canceled=%d',
+      gymSlug, subs.length, warnings, canceled,
     )
 
-    return NextResponse.json({ ok: true, processed: subs.length, warnings, cancelled })
+    return NextResponse.json({ ok: true, processed: subs.length, warnings, canceled })
   } catch (error) {
     console.error('[overdue-cancel]', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

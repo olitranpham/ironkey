@@ -22,14 +22,14 @@ const TABS = ['active', 'frozen', 'canceled', 'overdue']
 const STATUS_TEXT = {
   ACTIVE:    'text-emerald-600',
   FROZEN:    'text-blue-400/70',
-  CANCELLED: 'text-zinc-500',
+  CANCELED: 'text-zinc-500',
   OVERDUE:   'text-red-400/70',
 }
 
 const AVATAR_COLOR = 'bg-white'
 
 function fmtStatus(status) {
-  return status === 'CANCELLED' ? 'canceled' : status.toLowerCase()
+  return status === 'CANCELED' ? 'canceled' : status.toLowerCase()
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -54,7 +54,7 @@ function fmtDate(iso) {
 // Returns the most relevant date for a member row based on status
 function statusDate(m) {
   if (m.status === 'FROZEN')    return m.dateFrozen   ?? m.createdAt
-  if (m.status === 'CANCELLED') return m.dateCanceled ?? m.createdAt
+  if (m.status === 'CANCELED')  return m.dateCanceled ?? m.createdAt
   return m.createdAt
 }
 
@@ -96,9 +96,9 @@ function buildChartData(members) {
     for (const m of members) {
       if (new Date(m.createdAt) > endOfMonth) continue  // hadn't joined yet
 
-      // For cancelled members without a dateCanceled, fall back to createdAt so
-      // they still register in the cancelled bucket rather than the active bucket.
-      const effectiveCancelDate = m.status === 'CANCELLED'
+      // For canceled members without a dateCanceled, fall back to createdAt so
+      // they still register in the canceled bucket rather than the active bucket.
+      const effectiveCancelDate = m.status === 'CANCELED'
         ? new Date(m.dateCanceled ?? m.createdAt)
         : null
       const canceledByThen = effectiveCancelDate && effectiveCancelDate <= endOfMonth
@@ -271,11 +271,11 @@ export default function DashboardPage() {
 
   // ── Derived ─────────────────────────────────────────────────────────────
 
-  const STATUS_ORDER = { ACTIVE: 0, OVERDUE: 1, FROZEN: 2, CANCELLED: 3 }
+  const STATUS_ORDER = { ACTIVE: 0, OVERDUE: 1, FROZEN: 2, CANCELED: 3 }
 
   const visible = members
     .filter(m => {
-      const tabStatus = activeTab === 'canceled' ? 'cancelled' : activeTab
+      const tabStatus = activeTab === 'canceled' ? 'canceled' : activeTab
       const matchTab = activeTab === 'all' || m.status.toLowerCase() === tabStatus
       const q = search.trim().toLowerCase()
       const matchSearch = !q ||

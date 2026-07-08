@@ -14,7 +14,7 @@ const FLEX_GYMS = new Set(['oasis-boston'])
 const STATUS_TEXT = {
   ACTIVE:    'text-emerald-600',
   FROZEN:    'text-blue-400/70',
-  CANCELLED: 'text-zinc-500',
+  CANCELED: 'text-zinc-500',
   OVERDUE:   'text-red-400/70',
 }
 
@@ -74,7 +74,7 @@ const CONFIRM_COPY = {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function fmtStatus(status) {
-  return status === 'CANCELLED' ? 'canceled' : status.toLowerCase()
+  return status === 'CANCELED' ? 'canceled' : status.toLowerCase()
 }
 
 
@@ -289,7 +289,7 @@ export default function MembersPage() {
     if (tab === 'active')   return (m.status === 'ACTIVE' || m.status === 'OVERDUE') && !isFlex(m)
     if (tab === 'flex')     return isFlex(m)
     if (tab === 'frozen')   return m.status === 'FROZEN'
-    if (tab === 'canceled') return m.status === 'CANCELLED'
+    if (tab === 'canceled') return m.status === 'CANCELED'
     return true
   }
 
@@ -429,7 +429,7 @@ export default function MembersPage() {
         membershipBorder={membershipBorder}
         onClose={closePanel}
         onStatusChange={(memberId, newStatus) => {
-          const actionMap = { FROZEN: 'freeze', CANCELLED: 'cancel', ACTIVE: 'resume' }
+          const actionMap = { FROZEN: 'freeze', CANCELED: 'cancel', ACTIVE: 'resume' }
           setActionError(null)
           setConfirmModal({ action: actionMap[newStatus], member: selectedMember })
         }}

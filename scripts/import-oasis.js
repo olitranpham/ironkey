@@ -45,7 +45,7 @@ const DOWNLOADS = '/Users/olitranpham/Downloads'
 
 const MEMBER_FILES = [
   { file: '[OASIS] Codes - Active.csv',       status: 'ACTIVE',    membershipType: 'general', dateCol: 'Date Purchased', statusDateField: null },
-  { file: '[OASIS] Codes - Canceled.csv',     status: 'CANCELLED', membershipType: 'general', dateCol: 'Date Canceled',  statusDateField: 'dateCanceled' },
+  { file: '[OASIS] Codes - Canceled.csv',     status: 'CANCELED',  membershipType: 'general', dateCol: 'Date Canceled',  statusDateField: 'dateCanceled' },
   { file: '[OASIS] Codes - Frozen.csv',       status: 'FROZEN',    membershipType: 'general', dateCol: 'Date Frozen',    statusDateField: 'dateFrozen' },
   { file: '[OASIS] Codes - Flex Members.csv', status: 'ACTIVE',    membershipType: 'flex',    dateCol: 'Date Purchased', statusDateField: null },
 ]

@@ -186,6 +186,11 @@ export async function GET(request, { params }) {
         email:      true,
         phone:      true,
         accessCode: true,
+        dateOfBirth:                  true,
+        address:                      true,
+        emergencyContactName:         true,
+        emergencyContactPhone:        true,
+        emergencyContactRelationship: true,
       },
     })
 

@@ -13,7 +13,7 @@ const TAB_STATUSES = {
   all:      null,
   active:   ['ACTIVE', 'OVERDUE'],
   frozen:   ['FROZEN'],
-  canceled: ['CANCELLED'],
+  canceled: ['CANCELED'],
 }
 
 const CONFIRM_COPY = {
@@ -110,7 +110,7 @@ export default function PaymentsPage() {
       return matchTab && matchSearch
     })
     .sort((a, b) => {
-      const order = { ACTIVE: 0, OVERDUE: 1, FROZEN: 2, CANCELLED: 3 }
+      const order = { ACTIVE: 0, OVERDUE: 1, FROZEN: 2, CANCELED: 3 }
       return (order[a.status] ?? 9) - (order[b.status] ?? 9)
     })
 
@@ -350,7 +350,7 @@ function PaymentPanel({ member, priceMap, priceIdMap, onClose, onAction, actionL
       </div>
 
       {/* Action buttons */}
-      {member.status !== 'CANCELLED' && (
+      {member.status !== 'CANCELED' && (
         <div className="shrink-0 px-5 py-4 border-t border-neutral-800 space-y-2">
           {(member.status === 'ACTIVE' || member.status === 'OVERDUE') && (
             <>

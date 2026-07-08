@@ -99,7 +99,7 @@ model Member {
 enum MemberStatus {
   ACTIVE
   FROZEN
-  CANCELLED
+  CANCELED
   OVERDUE
 }
 
@@ -113,6 +113,12 @@ model Guest {
   email      String?  @unique
   phone      String?
   accessCode String?
+
+  dateOfBirth                  String?
+  address                      String?
+  emergencyContactName         String?
+  emergencyContactPhone        String?
+  emergencyContactRelationship String?
 
   passes   GuestVisit[]
   waivers  GuestWaiver[]
@@ -206,7 +212,7 @@ model MembershipEvent {
   id       String   @id @default(cuid())
   memberId String
   gymId    String
-  type     String   // 'joined' | 'reactivated' | 'frozen' | 'unfrozen' | 'cancelled'
+  type     String   // 'joined' | 'reactivated' | 'frozen' | 'unfrozen' | 'canceled'
   date     DateTime @default(now())
 
   member   Member   @relation(fields: [memberId], references: [id], onDelete: Cascade)

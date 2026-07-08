@@ -44,8 +44,8 @@ function mapMember(gymId, row) {
   const STATUS_MAP = {
     active:    'ACTIVE',
     frozen:    'FROZEN',
-    cancelled: 'CANCELLED',
-    canceled:  'CANCELLED',
+    cancelled: 'CANCELED',
+    canceled:  'CANCELED',
     overdue:   'OVERDUE',
   }
   const status = STATUS_MAP[(row.status ?? '').toLowerCase()] ?? 'ACTIVE'

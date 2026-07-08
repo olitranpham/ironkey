@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams } from 'next/navigation'
-import { Search, RefreshCw, X, KeyRound, Phone, TrendingUp } from 'lucide-react'
+import { Search, RefreshCw, X, KeyRound, Phone, TrendingUp, User, ShieldAlert } from 'lucide-react'
+import { formatPhone } from '@/lib/phone'
 import { getGymTheme } from '@/lib/gymThemes'
 import {
   AreaChart,
@@ -263,6 +264,23 @@ export default function GuestPassesPage() {
     }
   }
 
+  async function saveProfileFields(profileId, fields) {
+    try {
+      const token = localStorage.getItem('ik_token')
+      const res   = await fetch(`/api/${gymSlug}/guest-passes/profiles/${profileId}`, {
+        method:  'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body:    JSON.stringify(fields),
+      })
+      if (!res.ok) throw new Error('Failed')
+      const { profile: updated } = await res.json()
+      setProfiles(prev => prev.map(p => p.id === profileId ? { ...p, ...updated } : p))
+      setSelectedProfile(prev => prev?.id === profileId ? { ...prev, ...updated } : prev)
+    } catch {
+      // non-fatal
+    }
+  }
+
   async function savePassesLeft(passId, passesLeft, profileId) {
     try {
       const token = localStorage.getItem('ik_token')
@@ -484,6 +502,7 @@ export default function GuestPassesPage() {
             onSaveCode={saveAccessCode}
             saving={savingCode}
             onSavePassesLeft={(passId, passesLeft) => savePassesLeft(passId, passesLeft, selectedProfile.id)}
+            onSaveProfile={(fields) => saveProfileFields(selectedProfile.id, fields)}
           />
         )}
       </div>
@@ -494,22 +513,44 @@ export default function GuestPassesPage() {
 
 // ── Guest Profile Panel ───────────────────────────────────────────────────────
 
-function GuestProfilePanel({ profile, passTypeBorder, onClose, onSaveCode, saving, onSavePassesLeft }) {
+function GuestProfilePanel({ profile, passTypeBorder, onClose, onSaveCode, saving, onSavePassesLeft, onSaveProfile }) {
   const [codeInput,    setCodeInput]    = useState(profile.accessCode ?? '')
-  const [passEdits,    setPassEdits]    = useState({})  // { [passId]: editedValue }
+  const [passEdits,    setPassEdits]    = useState({})
   const [savingPassId, setSavingPassId] = useState(null)
+
+  // Contact
+  const [nameInput,  setNameInput]  = useState(profile.name  ?? '')
+  const [emailInput, setEmailInput] = useState(profile.email ?? '')
+  const [phoneInput, setPhoneInput] = useState(profile.phone ?? '')
+
+  // Personal info
+  const [dobInput,  setDobInput]  = useState(profile.dateOfBirth ?? '')
+  const [addrInput, setAddrInput] = useState(profile.address     ?? '')
+
+  // Emergency contact
+  const [ecNameInput, setEcNameInput] = useState(profile.emergencyContactName         ?? '')
+  const [ecPhoneInput, setEcPhoneInput] = useState(profile.emergencyContactPhone      ?? '')
+  const [ecRelInput,  setEcRelInput]  = useState(profile.emergencyContactRelationship ?? '')
+
   const visits     = totalVisits(profile)
   const isUnlinked = profile._unlinked === true
   const nameParts  = profile.name.trim().split(/\s+/)
   const initials   = (nameParts[0]?.[0] ?? '') + (nameParts[1]?.[0] ?? '')
 
-  // Reset edits when a different guest is opened
   useEffect(() => {
     setCodeInput(profile.accessCode ?? '')
     setPassEdits({})
-  }, [profile.id, profile.accessCode])
+    setNameInput(profile.name  ?? '')
+    setEmailInput(profile.email ?? '')
+    setPhoneInput(profile.phone ?? '')
+    setDobInput(profile.dateOfBirth ?? '')
+    setAddrInput(profile.address    ?? '')
+    setEcNameInput(profile.emergencyContactName         ?? '')
+    setEcPhoneInput(profile.emergencyContactPhone       ?? '')
+    setEcRelInput(profile.emergencyContactRelationship  ?? '')
+  }, [profile.id])
 
-  function handleSave() {
+  function handleSaveCode() {
     onSaveCode(profile.id, codeInput.trim())
   }
 
@@ -517,14 +558,38 @@ function GuestProfilePanel({ profile, passTypeBorder, onClose, onSaveCode, savin
     setSavingPassId(passId)
     try {
       await onSavePassesLeft(passId, value)
-      // Clear the pending edit — the parent has already updated pass.passesLeft
       setPassEdits(prev => { const n = { ...prev }; delete n[passId]; return n })
     } catch {
-      // non-fatal — leave edit value in place so user can retry
+      // non-fatal
     } finally {
       setSavingPassId(null)
     }
   }
+
+  const GEditField = ({ label, value, setValue, onSave, saved, type = 'text', onBlur }) => (
+    <div className="flex items-center justify-between px-3 py-2.5 bg-[#1c1c1c]">
+      <span className="text-xs text-zinc-400 shrink-0">{label}</span>
+      <div className="flex items-center gap-1.5 ml-4 flex-1 justify-end">
+        <input
+          type={type}
+          value={value}
+          onChange={e => setValue(e.target.value)}
+          onBlur={onBlur}
+          disabled={isUnlinked}
+          className="bg-[#252525] border border-neutral-700 rounded px-2 py-1 text-xs text-white text-right focus:outline-none focus:border-neutral-500 w-36 disabled:opacity-40"
+        />
+        {!isUnlinked && (
+          <button
+            onClick={onSave}
+            disabled={value === saved}
+            className="text-[10px] px-2 py-1 rounded bg-white/10 text-white hover:bg-white/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shrink-0"
+          >
+            save
+          </button>
+        )}
+      </div>
+    </div>
+  )
 
   return (
     <div className="flex flex-col h-full">
@@ -559,8 +624,73 @@ function GuestProfilePanel({ profile, passTypeBorder, onClose, onSaveCode, savin
 
         {/* Contact */}
         <GSection icon={Phone} title="contact">
-          <GField label="email" value={profile.email} />
-          <GField label="phone" value={profile.phone} />
+          <GEditField
+            label="name"
+            value={nameInput}
+            setValue={setNameInput}
+            saved={profile.name ?? ''}
+            onSave={() => onSaveProfile({ name: nameInput.trim() })}
+          />
+          <GEditField
+            label="email"
+            value={emailInput}
+            setValue={setEmailInput}
+            saved={profile.email ?? ''}
+            onSave={() => onSaveProfile({ email: emailInput.trim() })}
+          />
+          <GEditField
+            label="phone"
+            value={phoneInput}
+            setValue={setPhoneInput}
+            saved={profile.phone ?? ''}
+            onSave={() => onSaveProfile({ phone: phoneInput })}
+            onBlur={() => setPhoneInput(v => formatPhone(v) ?? v)}
+          />
+        </GSection>
+
+        {/* Personal info */}
+        <GSection icon={User} title="personal info">
+          <GEditField
+            label="date of birth"
+            value={dobInput}
+            setValue={setDobInput}
+            saved={profile.dateOfBirth ?? ''}
+            onSave={() => onSaveProfile({ dateOfBirth: dobInput.trim() })}
+            type="date"
+          />
+          <GEditField
+            label="address"
+            value={addrInput}
+            setValue={setAddrInput}
+            saved={profile.address ?? ''}
+            onSave={() => onSaveProfile({ address: addrInput.trim() })}
+          />
+        </GSection>
+
+        {/* Emergency contact */}
+        <GSection icon={ShieldAlert} title="emergency contact">
+          <GEditField
+            label="name"
+            value={ecNameInput}
+            setValue={setEcNameInput}
+            saved={profile.emergencyContactName ?? ''}
+            onSave={() => onSaveProfile({ emergencyContactName: ecNameInput.trim() })}
+          />
+          <GEditField
+            label="phone"
+            value={ecPhoneInput}
+            setValue={setEcPhoneInput}
+            saved={profile.emergencyContactPhone ?? ''}
+            onSave={() => onSaveProfile({ emergencyContactPhone: ecPhoneInput })}
+            onBlur={() => setEcPhoneInput(v => formatPhone(v) ?? v)}
+          />
+          <GEditField
+            label="relationship"
+            value={ecRelInput}
+            setValue={setEcRelInput}
+            saved={profile.emergencyContactRelationship ?? ''}
+            onSave={() => onSaveProfile({ emergencyContactRelationship: ecRelInput.trim() })}
+          />
         </GSection>
 
         {/* Access code */}
@@ -586,7 +716,7 @@ function GuestProfilePanel({ profile, passTypeBorder, onClose, onSaveCode, savin
                     gen
                   </button>
                   <button
-                    onClick={handleSave}
+                    onClick={handleSaveCode}
                     disabled={saving || codeInput.trim() === (profile.accessCode ?? '')}
                     className="text-[10px] px-2 py-1 rounded bg-white/10 text-white hover:bg-white/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shrink-0"
                   >

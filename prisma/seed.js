@@ -37,7 +37,7 @@ async function main() {
     { firstName: 'Camille',  lastName: 'Dubois',   email: 'camille@example.com',  phone: '555-0108', status: 'ACTIVE' },
     { firstName: 'Lena',     lastName: 'Hartmann', email: 'lena@example.com',     phone: '555-0109', status: 'FROZEN' },
     { firstName: 'Omar',     lastName: 'Shaikh',   email: 'omar@example.com',     phone: '555-0110', status: 'FROZEN' },
-    { firstName: 'Brianna',  lastName: 'Wallace',  email: 'brianna@example.com',  phone: '555-0111', status: 'CANCELLED' },
+    { firstName: 'Brianna',  lastName: 'Wallace',  email: 'brianna@example.com',  phone: '555-0111', status: 'CANCELED' },
     { firstName: 'Tyler',    lastName: 'Brooks',   email: 'tyler@example.com',    phone: '555-0112', status: 'OVERDUE' },
   ]
 

@@ -34,8 +34,8 @@ export async function GET(request, { params }) {
     if (member?.dateFrozen && !real.some(e => e.type === 'frozen')) {
       synthetic.push({ id: 'synthetic-frozen', type: 'frozen', date: member.dateFrozen })
     }
-    if (member?.dateCanceled && !real.some(e => e.type === 'cancelled')) {
-      synthetic.push({ id: 'synthetic-cancelled', type: 'cancelled', date: member.dateCanceled })
+    if (member?.dateCanceled && !real.some(e => e.type === 'canceled')) {
+      synthetic.push({ id: 'synthetic-canceled', type: 'canceled', date: member.dateCanceled })
     }
 
     const events = [...real, ...synthetic].sort((a, b) => {

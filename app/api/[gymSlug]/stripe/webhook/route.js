@@ -79,16 +79,16 @@ export async function POST(request, { params }) {
       await deleteSeamCodeByPin(gym.seamApiKey, member.accessCode, gym.seamDeviceId, '[webhook]')
     }
 
-    // ── Ensure DB status is CANCELLED ───────────────────────────────────────
-    if (member.status !== 'CANCELLED') {
+    // ── Ensure DB status is CANCELED ────────────────────────────────────────
+    if (member.status !== 'CANCELED') {
       await prisma.member.update({
         where: { id: member.id },
-        data:  { status: 'CANCELLED', dateCanceled: new Date(), updatedAt: new Date() },
+        data:  { status: 'CANCELED', dateCanceled: new Date(), updatedAt: new Date() },
       })
       await prisma.membershipEvent.create({
-        data: { memberId: member.id, gymId: gym.id, type: 'cancelled' },
+        data: { memberId: member.id, gymId: gym.id, type: 'canceled' },
       })
-      console.log('[webhook] member status updated to CANCELLED:', member.id)
+      console.log('[webhook] member status updated to CANCELED:', member.id)
     }
   }
 

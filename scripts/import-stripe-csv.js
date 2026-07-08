@@ -26,13 +26,13 @@ const PRICE_MAP = {
 
 const STATUS_MAP = {
   active:           'ACTIVE',
-  canceled:         'CANCELLED',
-  cancelled:        'CANCELLED',
+  canceled:         'CANCELED',
+  cancelled:        'CANCELED',
   past_due:         'OVERDUE',
   unpaid:           'OVERDUE',
   trialing:         'ACTIVE',
   incomplete:       'ACTIVE',
-  incomplete_expired: 'CANCELLED',
+  incomplete_expired: 'CANCELED',
   paused:           'FROZEN',
 }
 
@@ -139,7 +139,7 @@ async function main() {
     }
 
     const dateAccessed = toDate(row['Start Date (UTC)'])
-    const dateCanceled = status === 'CANCELLED' ? (toDate(row['Canceled At (UTC)']) ?? toDate(row['Ended At (UTC)'])) : null
+    const dateCanceled = status === 'CANCELED' ? (toDate(row['Canceled At (UTC)']) ?? toDate(row['Ended At (UTC)'])) : null
     const createdAt    = dateAccessed ?? new Date()
 
     const customerId = (row['Customer ID'] ?? '').trim() || null
@@ -204,7 +204,7 @@ import complete
     ACTIVE    : ${counts.ACTIVE    ?? 0}
     FROZEN    : ${counts.FROZEN    ?? 0}
     OVERDUE   : ${counts.OVERDUE   ?? 0}
-    CANCELLED : ${counts.CANCELLED ?? 0}
+    CANCELED  : ${counts.CANCELED  ?? 0}
     total     : ${Object.values(counts).reduce((s, n) => s + n, 0)}
 ─────────────────────────────────────────`)
 

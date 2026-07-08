@@ -441,7 +441,7 @@ export async function POST(request) {
     if (sub.status === 'active') {
       update.status = 'ACTIVE'
     } else if (sub.status === 'canceled') {
-      update.status = 'CANCELLED'
+      update.status = 'CANCELED'
     }
     // past_due / unpaid / trialing / paused — no change here
 
@@ -476,15 +476,15 @@ export async function POST(request) {
       await deleteSeamCodeByPin(gym.seamApiKey, member.accessCode, gym.seamDeviceId, '[platform/webhook]')
     }
 
-    if (member.status !== 'CANCELLED') {
+    if (member.status !== 'CANCELED') {
       await prisma.member.update({
         where: { id: member.id },
-        data:  { status: 'CANCELLED', dateCanceled: new Date(), updatedAt: new Date() },
+        data:  { status: 'CANCELED', dateCanceled: new Date(), updatedAt: new Date() },
       })
       await prisma.membershipEvent.create({
-        data: { memberId: member.id, gymId: gym.id, type: 'cancelled' },
+        data: { memberId: member.id, gymId: gym.id, type: 'canceled' },
       })
-      console.log('[platform/webhook] member status updated to CANCELLED:', member.id)
+      console.log('[platform/webhook] member status updated to CANCELED:', member.id)
     }
   }
 

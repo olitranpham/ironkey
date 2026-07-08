@@ -3,7 +3,7 @@ import prisma from '@/lib/prisma'
 import { deleteSeamCodeByPin } from '@/lib/seam'
 
 const SEAM_API = 'https://connect.getseam.com'
-const VALID_STATUSES = ['ACTIVE', 'FROZEN', 'CANCELLED']
+const VALID_STATUSES = ['ACTIVE', 'FROZEN', 'CANCELED']
 
 const MEMBER_SELECT = {
   id: true, firstName: true, lastName: true, email: true, phone: true,
@@ -80,7 +80,7 @@ export async function PATCH(request, { params }) {
       }
       data.status = status
       if (status === 'FROZEN'    && !existing.dateFrozen)   data.dateFrozen   = now
-      if (status === 'CANCELLED' && !existing.dateCanceled) data.dateCanceled = now
+      if (status === 'CANCELED'  && !existing.dateCanceled) data.dateCanceled = now
       if (status === 'ACTIVE')                              data.dateFrozen   = null
     }
 
@@ -125,7 +125,7 @@ export async function PATCH(request, { params }) {
     if (status !== undefined && status !== existing.status) {
       let eventType
       if (status === 'FROZEN')    eventType = 'frozen'
-      if (status === 'CANCELLED') eventType = 'cancelled'
+      if (status === 'CANCELED')  eventType = 'canceled'
       if (status === 'ACTIVE')    eventType = existing.status === 'FROZEN' ? 'unfrozen' : 'reactivated'
       if (eventType) {
         await prisma.membershipEvent.create({ data: { memberId, gymId, type: eventType } })

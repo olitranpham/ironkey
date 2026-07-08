@@ -39,7 +39,7 @@ async function processFile(db, gymId, filePath, status) {
   const raw     = fs.readFileSync(filePath, 'utf8')
   const rows    = parse(raw, { columns: true, skip_empty_lines: true, trim: true })
   const isFrozen   = status === 'FROZEN'
-  const isCanceled = status === 'CANCELLED'
+  const isCanceled = status === 'CANCELED'
 
   console.log(`\n  ${path.basename(filePath)}: ${rows.length} rows`)
   if (rows.length > 0) console.log('  columns:', Object.keys(rows[0]).join(', '))
@@ -127,7 +127,7 @@ async function main() {
   console.log(`✓ Found gym id=${gymId}`)
 
   const frozen   = await processFile(db, gymId, FROZEN_FILE,   'FROZEN')
-  const canceled = await processFile(db, gymId, CANCELED_FILE, 'CANCELLED')
+  const canceled = await processFile(db, gymId, CANCELED_FILE, 'CANCELED')
 
   console.log(`
 ─────────────────────────────────────────

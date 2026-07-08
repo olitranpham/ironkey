@@ -76,7 +76,7 @@ export async function GET(request, { params }) {
           await prisma.member.updateMany({
             where: {
               id:     { in: memberIdsToMark },
-              status: { notIn: ['CANCELLED', 'OVERDUE'] },
+              status: { notIn: ['CANCELED', 'OVERDUE'] },
             },
             data: { status: 'OVERDUE' },
           })
@@ -139,7 +139,7 @@ export async function POST(request, { params }) {
     }
 
     if (!member) return NextResponse.json({ error: 'Member not found' }, { status: 404 })
-    if (member.status === 'CANCELLED') {
+    if (member.status === 'CANCELED') {
       return NextResponse.json({ error: 'Cannot mark a canceled membership as overdue' }, { status: 400 })
     }
 
