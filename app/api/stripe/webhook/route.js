@@ -122,10 +122,28 @@ export async function POST(request) {
 
       let guestProfile = null
       if (email) {
+        console.log('[platform/webhook] guest upsert — dob:', meta.dob || '(empty)', '| address:', meta.address || '(empty)', '| emergencyName:', meta.emergencyName || '(empty)', '| emergencyPhone:', meta.emergencyPhone || '(empty)', '| emergencyRelationship:', meta.emergencyRelationship || '(empty)')
         guestProfile = await prisma.guest.upsert({
           where:  { email },
-          update: { name: guestName || undefined, phone: phone || undefined },
-          create: { name: guestName || email, email, phone },
+          update: {
+            name:                        guestName             || undefined,
+            phone:                       phone                 || undefined,
+            dateOfBirth:                 meta.dob              || undefined,
+            address:                     meta.address          || undefined,
+            emergencyContactName:        meta.emergencyName    || undefined,
+            emergencyContactPhone:       meta.emergencyPhone   || undefined,
+            emergencyContactRelationship: meta.emergencyRelationship || undefined,
+          },
+          create: {
+            name:                        guestName || email,
+            email,
+            phone,
+            dateOfBirth:                 meta.dob              || null,
+            address:                     meta.address          || null,
+            emergencyContactName:        meta.emergencyName    || null,
+            emergencyContactPhone:       meta.emergencyPhone   || null,
+            emergencyContactRelationship: meta.emergencyRelationship || null,
+          },
         })
       }
 
