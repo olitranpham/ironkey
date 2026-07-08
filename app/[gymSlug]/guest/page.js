@@ -754,9 +754,6 @@ export default function GuestPage() {
               }
             </button>
 
-            <p className="text-center text-[11px] text-neutral-600">
-              powered by <span className="text-neutral-500 font-medium">ironkey</span> · secured by Stripe
-            </p>
           </form>
         )}
 
@@ -854,9 +851,6 @@ export default function GuestPage() {
               }
             </button>
 
-            <p className="text-center text-[11px] text-neutral-600">
-              powered by <span className="text-neutral-500 font-medium">ironkey</span> · secured by Stripe
-            </p>
           </div>
         )}
 
@@ -1048,10 +1042,6 @@ export default function GuestPage() {
         )}
 
       </div>
-
-      <p className="mt-8 text-[11px] text-neutral-700">
-        powered by <span className="text-neutral-600 font-medium">ironkey</span>
-      </p>
 
       {waiverOpen && (
         <WaiverModal
