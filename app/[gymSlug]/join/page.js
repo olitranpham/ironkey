@@ -236,6 +236,7 @@ export default function JoinPage() {
   const [gymName,          setGymName]          = useState('')
   const [membershipPlans,  setMembershipPlans]  = useState([])
   const [addonPlans,       setAddonPlans]       = useState([])
+  const [ptPlans,          setPtPlans]          = useState([])
   const [loading,          setLoading]          = useState(true)
   const [submitting,       setSubmitting]       = useState(false)
   const [error,            setError]            = useState(null)
@@ -268,10 +269,11 @@ export default function JoinPage() {
   useEffect(() => {
     fetch(`/api/${gymSlug}/join`)
       .then(r => r.json())
-      .then(({ gym, membershipPlans = [], addonPlans = [] }) => {
+      .then(({ gym, membershipPlans = [], addonPlans = [], ptPlans = [] }) => {
         setGymName(gym?.name ?? gymSlug)
         setMembershipPlans(membershipPlans)
         setAddonPlans(addonPlans)
+        setPtPlans(ptPlans)
         if (membershipPlans.length) {
           let defaultPlan
           if (gymSlug === 'hydra-athletic-co') {
@@ -291,7 +293,7 @@ export default function JoinPage() {
   }
 
   function selectPlan(priceId) {
-    const plan = membershipPlans.find(p => p.priceId === priceId)
+    const plan = [...membershipPlans, ...ptPlans].find(p => p.priceId === priceId)
     setForm(f => ({ ...f, priceId, membershipType: plan?.membershipType ?? '' }))
     // Clear student ID if switching away from a student plan
     if (!plan?.membershipType?.toLowerCase().includes('student')) setStudentIdFile(null)
@@ -505,15 +507,15 @@ export default function JoinPage() {
           />
         </Field>
 
-        {/* Membership type */}
-        <Field label="membership type" required>
+        {/* Membership type — hidden for Oasis when a PT plan is selected */}
+        {!(gymSlug === 'oasis-boston' && ptPlans.some(p => p.priceId === form.priceId)) && <Field label="membership type" required>
           {membershipPlans.length === 0 ? (
             <p className="text-xs text-neutral-600 px-1">No plans available — contact the gym directly.</p>
           ) : (
             <div className="flex flex-col gap-1.5">
               <div className="relative">
                 <select
-                  value={form.priceId}
+                  value={membershipPlans.some(p => p.priceId === form.priceId) ? form.priceId : ''}
                   onChange={e => selectPlan(e.target.value)}
                   className={SELECT}
                 >
@@ -572,13 +574,50 @@ export default function JoinPage() {
                 const biweekly = Number(selected.amount).toLocaleString('en-US', { style: 'currency', currency: 'USD' })
                 return (
                   <p className="text-[11px] text-neutral-500 px-0.5">
-                    you'll be billed every 2 weeks at {biweekly}.
+                    billed every 2 weeks at {biweekly}.
                   </p>
                 )
               })()}
             </div>
           )}
-        </Field>
+        </Field>}
+
+        {/* Personal Training — oasis-boston only */}
+        {gymSlug === 'oasis-boston' && ptPlans.length > 0 && (
+          <Field label="personal training">
+            <div className="flex flex-col gap-1.5">
+              <div className="relative">
+                <select
+                  value={ptPlans.some(p => p.priceId === form.priceId) ? form.priceId : ''}
+                  onChange={e => {
+                    if (e.target.value) {
+                      selectPlan(e.target.value)
+                    } else {
+                      // Deselect PT — clear priceId so user must pick a regular plan
+                      setForm(f => ({ ...f, priceId: '', membershipType: '' }))
+                    }
+                  }}
+                  className={SELECT}
+                >
+                  <option value="">— none —</option>
+                  {ptPlans.map(p => (
+                    <option key={p.priceId} value={p.priceId}>
+                      {p.name} — {Number(p.amount).toLocaleString('en-US', { style: 'currency', currency: 'USD' })} / 4 weeks
+                    </option>
+                  ))}
+                </select>
+                <div className="pointer-events-none absolute inset-y-0 right-3 flex items-center">
+                  <svg className="w-4 h-4 text-neutral-500" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.17l3.71-3.94a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
+                  </svg>
+                </div>
+              </div>
+              {ptPlans.some(p => p.priceId === form.priceId) && (
+                <p className="text-[11px] text-neutral-500 px-0.5">gym membership included.</p>
+              )}
+            </div>
+          </Field>
+        )}
 
         {/* Student ID upload — triumph-barbell student plans only */}
         {isStudent && (

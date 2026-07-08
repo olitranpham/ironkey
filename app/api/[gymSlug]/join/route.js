@@ -20,6 +20,7 @@ export async function GET(request, { params }) {
 
     let membershipPlans = []
     let addonPlans      = []
+    let ptPlans         = []
 
     if (gym.stripeSecretKey) {
       const stripe = new Stripe(gym.stripeSecretKey, { apiVersion: '2024-06-20' })
@@ -73,6 +74,12 @@ export async function GET(request, { params }) {
           .filter(p => OASIS_PRODUCT_IDS.has(p.product?.id))
           .map(toplan)
           .sort((a, b) => a.amount - b.amount)
+
+        // Personal Training plans (gym membership included)
+        ptPlans = recurring
+          .filter(p => p.product?.id === 'prod_Uqf1w4GB1ESyRI')
+          .map(toplan)
+          .sort((a, b) => a.amount - b.amount)
       } else if (gymSlug === 'hydra-athletic-co') {
         // Membership plans: only Pre-Sale Membership
         membershipPlans = recurring
@@ -96,7 +103,7 @@ export async function GET(request, { params }) {
       }
     }
 
-    return NextResponse.json({ gym: { name: gym.name, slug: gymSlug }, membershipPlans, addonPlans })
+    return NextResponse.json({ gym: { name: gym.name, slug: gymSlug }, membershipPlans, addonPlans, ptPlans })
   } catch (error) {
     console.error('[join GET]', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
