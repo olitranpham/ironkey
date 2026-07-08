@@ -577,7 +577,7 @@ function GuestProfilePanel({ profile, passTypeBorder, onClose, onSaveCode, savin
           onBlur={onBlur}
           disabled={isUnlinked}
           placeholder={placeholder}
-          className="bg-[#252525] border border-neutral-700 rounded px-2 py-1 text-xs text-white text-right placeholder-neutral-600 focus:outline-none focus:border-neutral-500 w-36 disabled:opacity-40"
+          className="bg-[#252525] border border-neutral-700 rounded px-2 py-1 text-xs text-white placeholder-neutral-600 focus:outline-none focus:border-neutral-500 w-36 disabled:opacity-40"
         />
         {!isUnlinked && (
           <button
@@ -709,7 +709,7 @@ function GuestProfilePanel({ profile, passTypeBorder, onClose, onSaveCode, savin
                 onChange={e => setCodeInput(e.target.value.replace(/\D/g, '').slice(0, 6))}
                 placeholder={isUnlinked ? 'no profile linked' : '——'}
                 disabled={isUnlinked}
-                className="bg-[#252525] border border-neutral-700 rounded px-2 py-1 text-xs text-white text-right placeholder-neutral-600 focus:outline-none focus:border-neutral-500 w-20 font-mono disabled:opacity-40"
+                className="bg-[#252525] border border-neutral-700 rounded px-2 py-1 text-xs text-white placeholder-neutral-600 focus:outline-none focus:border-neutral-500 w-20 font-mono disabled:opacity-40"
               />
               {!isUnlinked && (
                 <>

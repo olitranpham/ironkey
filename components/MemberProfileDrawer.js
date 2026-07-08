@@ -420,7 +420,7 @@ function DrawerContent({ member, gymSlug, membershipBorder, onClose, onStatusCha
                 onChange={e => setCodeInput(e.target.value.replace(/\D/g, '').slice(0, 6))}
                 placeholder="——"
                 maxLength={6}
-                className="bg-[#252525] border border-neutral-700 rounded px-2 py-1 text-xs text-white text-right placeholder-neutral-600 focus:outline-none focus:border-neutral-500 w-20 font-mono"
+                className="bg-[#252525] border border-neutral-700 rounded px-2 py-1 text-xs text-white placeholder-neutral-600 focus:outline-none focus:border-neutral-500 w-20 font-mono"
               />
               <button
                 onClick={() => setCodeInput(String(Math.floor(1000 + Math.random() * 9000)))}
