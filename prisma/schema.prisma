@@ -65,8 +65,9 @@ model Member {
   // Personal info collected at signup
   dateOfBirth           String?
   address               String?
-  emergencyContactName  String?
-  emergencyContactPhone String?
+  emergencyContactName         String?
+  emergencyContactPhone        String?
+  emergencyContactRelationship String?
 
   // Seam / smart-lock access code
   accessCode       String?

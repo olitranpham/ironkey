@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { X, Phone, KeyRound, History, User, ShieldAlert } from 'lucide-react'
+import { formatPhone } from '@/lib/phone'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -71,6 +72,13 @@ function DrawerContent({ member, gymSlug, membershipBorder, onClose, onStatusCha
   const [deletingCode, setDeletingCode] = useState(false)
   const [events,       setEvents]       = useState(null)  // null = loading, [] = loaded empty
 
+  const [nameInput,    setNameInput]    = useState(`${member.firstName ?? ''} ${member.lastName ?? ''}`.trim())
+  const [savingName,   setSavingName]   = useState(false)
+  const [emailInput,   setEmailInput]   = useState(member.email ?? '')
+  const [savingEmail,  setSavingEmail]  = useState(false)
+  const [phoneInput,   setPhoneInput]   = useState(member.phone ?? '')
+  const [savingPhone,  setSavingPhone]  = useState(false)
+
   const [dobInput,     setDobInput]     = useState(member.dateOfBirth ?? '')
   const [savingDob,    setSavingDob]    = useState(false)
   const [addressInput, setAddressInput] = useState(member.address ?? '')
@@ -78,18 +86,26 @@ function DrawerContent({ member, gymSlug, membershipBorder, onClose, onStatusCha
 
   const [ecNameInput,  setEcNameInput]  = useState(member.emergencyContactName  ?? '')
   const [savingEcName, setSavingEcName] = useState(false)
-  const [ecPhoneInput, setEcPhoneInput] = useState(member.emergencyContactPhone ?? '')
-  const [savingEcPhone, setSavingEcPhone] = useState(false)
+  const [ecPhoneInput,   setEcPhoneInput]   = useState(member.emergencyContactPhone        ?? '')
+  const [savingEcPhone,  setSavingEcPhone]  = useState(false)
+  const [ecRelInput,     setEcRelInput]     = useState(member.emergencyContactRelationship ?? '')
+  const [savingEcRel,    setSavingEcRel]    = useState(false)
 
   // Keep codeInput in sync when the member prop changes (different member opened,
   // or same member's accessCode updated by parent after a successful save).
   useEffect(() => {
+    setNameInput(`${member.firstName ?? ''} ${member.lastName ?? ''}`.trim())
+    setEmailInput(member.email ?? '')
+    setPhoneInput(member.phone ?? '')
     setCodeInput(member.accessCode ?? '')
     setDobInput(member.dateOfBirth ?? '')
     setAddressInput(member.address ?? '')
-    setEcNameInput(member.emergencyContactName  ?? '')
-    setEcPhoneInput(member.emergencyContactPhone ?? '')
-  }, [member.id, member.accessCode, member.dateOfBirth, member.address, member.emergencyContactName, member.emergencyContactPhone])
+    setEcNameInput(member.emergencyContactName         ?? '')
+    setEcPhoneInput(member.emergencyContactPhone        ?? '')
+    setEcRelInput(member.emergencyContactRelationship  ?? '')
+  }, [member.id, member.firstName, member.lastName, member.email, member.phone,
+      member.accessCode, member.dateOfBirth, member.address,
+      member.emergencyContactName, member.emergencyContactPhone, member.emergencyContactRelationship])
 
   // Fetch membership history whenever the member changes (skip in simplified mode)
   useEffect(() => {
@@ -123,6 +139,30 @@ function DrawerContent({ member, gymSlug, membershipBorder, onClose, onStatusCha
     setSavingCode(false)
   }
 
+  async function handleNameSave() {
+    if (!onSaveField) return
+    const parts     = nameInput.trim().split(/\s+/)
+    const firstName = parts[0] ?? ''
+    const lastName  = parts.slice(1).join(' ')
+    setSavingName(true)
+    await onSaveField(member.id, { firstName, lastName })
+    setSavingName(false)
+  }
+
+  async function handleEmailSave() {
+    if (!onSaveField) return
+    setSavingEmail(true)
+    await onSaveField(member.id, { email: emailInput.trim() })
+    setSavingEmail(false)
+  }
+
+  async function handlePhoneSave() {
+    if (!onSaveField) return
+    setSavingPhone(true)
+    await onSaveField(member.id, { phone: phoneInput.trim() })
+    setSavingPhone(false)
+  }
+
   async function handleDobSave() {
     if (!onSaveField) return
     setSavingDob(true)
@@ -149,6 +189,13 @@ function DrawerContent({ member, gymSlug, membershipBorder, onClose, onStatusCha
     setSavingEcPhone(true)
     await onSaveField(member.id, { emergencyContactPhone: ecPhoneInput.trim() })
     setSavingEcPhone(false)
+  }
+
+  async function handleEcRelSave() {
+    if (!onSaveField) return
+    setSavingEcRel(true)
+    await onSaveField(member.id, { emergencyContactRelationship: ecRelInput.trim() })
+    setSavingEcRel(false)
   }
 
   async function handleDeleteCode() {
@@ -189,8 +236,64 @@ function DrawerContent({ member, gymSlug, membershipBorder, onClose, onStatusCha
 
         {/* Contact */}
         <DrawerSection icon={Phone} title="contact">
-          <DrawerField label="email" value={member.email} />
-          <DrawerField label="phone" value={member.phone} />
+          <DrawerField label="name">
+            <div className="flex items-center gap-2 ml-4">
+              <input
+                type="text"
+                value={nameInput}
+                onChange={e => setNameInput(e.target.value)}
+                className="bg-[#252525] border border-neutral-700 rounded px-2 py-1 text-xs text-white placeholder-neutral-600 focus:outline-none focus:border-neutral-500 w-36 truncate"
+              />
+              {onSaveField && (
+                <button
+                  onClick={handleNameSave}
+                  disabled={savingName || nameInput.trim() === `${member.firstName ?? ''} ${member.lastName ?? ''}`.trim()}
+                  className="text-[10px] px-2 py-1 rounded bg-white/10 text-white hover:bg-white/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shrink-0"
+                >
+                  {savingName ? '…' : 'save'}
+                </button>
+              )}
+            </div>
+          </DrawerField>
+          <DrawerField label="email">
+            <div className="flex items-center gap-2 ml-4">
+              <input
+                type="email"
+                value={emailInput}
+                onChange={e => setEmailInput(e.target.value)}
+                className="bg-[#252525] border border-neutral-700 rounded px-2 py-1 text-xs text-white placeholder-neutral-600 focus:outline-none focus:border-neutral-500 w-36 truncate"
+              />
+              {onSaveField && (
+                <button
+                  onClick={handleEmailSave}
+                  disabled={savingEmail || emailInput.trim().toLowerCase() === (member.email ?? '').toLowerCase()}
+                  className="text-[10px] px-2 py-1 rounded bg-white/10 text-white hover:bg-white/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shrink-0"
+                >
+                  {savingEmail ? '…' : 'save'}
+                </button>
+              )}
+            </div>
+          </DrawerField>
+          <DrawerField label="phone">
+            <div className="flex items-center gap-2 ml-4">
+              <input
+                type="tel"
+                value={phoneInput}
+                onChange={e => setPhoneInput(e.target.value)}
+                onBlur={e => setPhoneInput(formatPhone(e.target.value))}
+                className="bg-[#252525] border border-neutral-700 rounded px-2 py-1 text-xs text-white placeholder-neutral-600 focus:outline-none focus:border-neutral-500 w-36 truncate"
+              />
+              {onSaveField && (
+                <button
+                  onClick={handlePhoneSave}
+                  disabled={savingPhone || phoneInput.trim() === (member.phone ?? '')}
+                  className="text-[10px] px-2 py-1 rounded bg-white/10 text-white hover:bg-white/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shrink-0"
+                >
+                  {savingPhone ? '…' : 'save'}
+                </button>
+              )}
+            </div>
+          </DrawerField>
         </DrawerSection>
 
         {/* Personal info */}
@@ -267,6 +370,7 @@ function DrawerContent({ member, gymSlug, membershipBorder, onClose, onStatusCha
                 type="tel"
                 value={ecPhoneInput}
                 onChange={e => setEcPhoneInput(e.target.value)}
+                onBlur={e => setEcPhoneInput(formatPhone(e.target.value))}
                 placeholder="(555) 000-0000"
                 className="bg-[#252525] border border-neutral-700 rounded px-2 py-1 text-xs text-white placeholder-neutral-600 focus:outline-none focus:border-neutral-500 w-36 truncate"
               />
@@ -277,6 +381,26 @@ function DrawerContent({ member, gymSlug, membershipBorder, onClose, onStatusCha
                   className="text-[10px] px-2 py-1 rounded bg-white/10 text-white hover:bg-white/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shrink-0"
                 >
                   {savingEcPhone ? '…' : 'save'}
+                </button>
+              )}
+            </div>
+          </DrawerField>
+          <DrawerField label="relationship">
+            <div className="flex items-center gap-2 ml-4">
+              <input
+                type="text"
+                value={ecRelInput}
+                onChange={e => setEcRelInput(e.target.value)}
+                placeholder="spouse, parent, friend…"
+                className="bg-[#252525] border border-neutral-700 rounded px-2 py-1 text-xs text-white placeholder-neutral-600 focus:outline-none focus:border-neutral-500 w-36 truncate"
+              />
+              {onSaveField && (
+                <button
+                  onClick={handleEcRelSave}
+                  disabled={savingEcRel || ecRelInput.trim() === (member.emergencyContactRelationship ?? '')}
+                  className="text-[10px] px-2 py-1 rounded bg-white/10 text-white hover:bg-white/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shrink-0"
+                >
+                  {savingEcRel ? '…' : 'save'}
                 </button>
               )}
             </div>
@@ -316,7 +440,6 @@ function DrawerContent({ member, gymSlug, membershipBorder, onClose, onStatusCha
             </div>
           </DrawerField>
 
-          <DrawerField label="joined" value={fmtDate(member.createdAt)} />
           {member.status === 'FROZEN'    && <DrawerField label="frozen"   value={fmtDate(member.dateFrozen)} />}
           {member.status === 'CANCELLED' && <DrawerField label="canceled" value={fmtDate(member.dateCanceled)} />}
 

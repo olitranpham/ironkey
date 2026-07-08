@@ -9,7 +9,7 @@ const MEMBER_SELECT = {
   id: true, firstName: true, lastName: true, email: true, phone: true,
   status: true, membershipType: true, accessCode: true,
   dateOfBirth: true, address: true,
-  emergencyContactName: true, emergencyContactPhone: true,
+  emergencyContactName: true, emergencyContactPhone: true, emergencyContactRelationship: true,
   dateFrozen: true, dateCanceled: true, createdAt: true,
   stripeCustomerId: true, stripeSubscriptionId: true,
 }
@@ -57,7 +57,9 @@ export async function PATCH(request, { params }) {
     if (!gym) return NextResponse.json({ error: 'Gym not found' }, { status: 404 })
 
     const gymId = gym.id
-    const { status, accessCode, dateOfBirth, address, emergencyContactName, emergencyContactPhone } = body
+    const { status, accessCode, firstName, lastName, email, phone,
+            dateOfBirth, address, emergencyContactName, emergencyContactPhone,
+            emergencyContactRelationship } = body
 
     console.log('[members/patch] memberId=%s gymId=%s body=%j', memberId, gymId, body)
 
@@ -82,6 +84,11 @@ export async function PATCH(request, { params }) {
       if (status === 'ACTIVE')                              data.dateFrozen   = null
     }
 
+    if (firstName !== undefined && firstName.trim()) data.firstName = firstName.trim()
+    if (lastName  !== undefined && lastName.trim())  data.lastName  = lastName.trim()
+    if (email     !== undefined && email.trim())     data.email     = email.trim().toLowerCase()
+    if (phone     !== undefined)                     data.phone     = phone.trim() || null
+
     if (accessCode !== undefined) {
       data.accessCode = accessCode === '' ? null : String(accessCode).trim()
     }
@@ -100,6 +107,10 @@ export async function PATCH(request, { params }) {
 
     if (emergencyContactPhone !== undefined) {
       data.emergencyContactPhone = emergencyContactPhone === '' ? null : String(emergencyContactPhone).trim()
+    }
+
+    if (emergencyContactRelationship !== undefined) {
+      data.emergencyContactRelationship = emergencyContactRelationship === '' ? null : String(emergencyContactRelationship).trim()
     }
 
     const member = await prisma.member.update({

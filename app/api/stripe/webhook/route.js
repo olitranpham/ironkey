@@ -310,8 +310,9 @@ export async function POST(request) {
           dateAccessed:        new Date(),
           dateOfBirth:           meta.dob               || null,
           address:               fullAddress,
-          emergencyContactName:  meta.emergencyName     || null,
-          emergencyContactPhone: meta.emergencyPhone    || null,
+          emergencyContactName:         meta.emergencyName         || null,
+          emergencyContactPhone:        meta.emergencyPhone        || null,
+          emergencyContactRelationship: meta.emergencyRelationship || null,
         },
       })
       console.log('[platform/webhook] created member from checkout:', member.id, email)
