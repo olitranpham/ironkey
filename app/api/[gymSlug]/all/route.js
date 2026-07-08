@@ -46,6 +46,8 @@ export async function GET(request, { params }) {
         status:         true,
         membershipType: true,
         accessCode:     true,
+        dateOfBirth:    true,
+        address:        true,
         freezeStartDate:      true,
         freezeEndDate:        true,
         dateAccessed:         true,
