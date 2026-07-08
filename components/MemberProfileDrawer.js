@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { X, Phone, KeyRound, History, User } from 'lucide-react'
+import { X, Phone, KeyRound, History, User, ShieldAlert } from 'lucide-react'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -76,13 +76,20 @@ function DrawerContent({ member, gymSlug, membershipBorder, onClose, onStatusCha
   const [addressInput, setAddressInput] = useState(member.address ?? '')
   const [savingAddr,   setSavingAddr]   = useState(false)
 
+  const [ecNameInput,  setEcNameInput]  = useState(member.emergencyContactName  ?? '')
+  const [savingEcName, setSavingEcName] = useState(false)
+  const [ecPhoneInput, setEcPhoneInput] = useState(member.emergencyContactPhone ?? '')
+  const [savingEcPhone, setSavingEcPhone] = useState(false)
+
   // Keep codeInput in sync when the member prop changes (different member opened,
   // or same member's accessCode updated by parent after a successful save).
   useEffect(() => {
     setCodeInput(member.accessCode ?? '')
     setDobInput(member.dateOfBirth ?? '')
     setAddressInput(member.address ?? '')
-  }, [member.id, member.accessCode, member.dateOfBirth, member.address])
+    setEcNameInput(member.emergencyContactName  ?? '')
+    setEcPhoneInput(member.emergencyContactPhone ?? '')
+  }, [member.id, member.accessCode, member.dateOfBirth, member.address, member.emergencyContactName, member.emergencyContactPhone])
 
   // Fetch membership history whenever the member changes (skip in simplified mode)
   useEffect(() => {
@@ -128,6 +135,20 @@ function DrawerContent({ member, gymSlug, membershipBorder, onClose, onStatusCha
     setSavingAddr(true)
     await onSaveField(member.id, { address: addressInput.trim() })
     setSavingAddr(false)
+  }
+
+  async function handleEcNameSave() {
+    if (!onSaveField) return
+    setSavingEcName(true)
+    await onSaveField(member.id, { emergencyContactName: ecNameInput.trim() })
+    setSavingEcName(false)
+  }
+
+  async function handleEcPhoneSave() {
+    if (!onSaveField) return
+    setSavingEcPhone(true)
+    await onSaveField(member.id, { emergencyContactPhone: ecPhoneInput.trim() })
+    setSavingEcPhone(false)
   }
 
   async function handleDeleteCode() {
@@ -212,6 +233,50 @@ function DrawerContent({ member, gymSlug, membershipBorder, onClose, onStatusCha
                   className="text-[10px] px-2 py-1 rounded bg-white/10 text-white hover:bg-white/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shrink-0"
                 >
                   {savingAddr ? '…' : 'save'}
+                </button>
+              )}
+            </div>
+          </DrawerField>
+        </DrawerSection>
+
+        {/* Emergency Contact */}
+        <DrawerSection icon={ShieldAlert} title="emergency contact">
+          <DrawerField label="name">
+            <div className="flex items-center gap-2 ml-4">
+              <input
+                type="text"
+                value={ecNameInput}
+                onChange={e => setEcNameInput(e.target.value)}
+                placeholder="jane smith"
+                className="bg-[#252525] border border-neutral-700 rounded px-2 py-1 text-xs text-white placeholder-neutral-600 focus:outline-none focus:border-neutral-500 w-36 truncate"
+              />
+              {onSaveField && (
+                <button
+                  onClick={handleEcNameSave}
+                  disabled={savingEcName || ecNameInput.trim() === (member.emergencyContactName ?? '')}
+                  className="text-[10px] px-2 py-1 rounded bg-white/10 text-white hover:bg-white/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shrink-0"
+                >
+                  {savingEcName ? '…' : 'save'}
+                </button>
+              )}
+            </div>
+          </DrawerField>
+          <DrawerField label="phone">
+            <div className="flex items-center gap-2 ml-4">
+              <input
+                type="tel"
+                value={ecPhoneInput}
+                onChange={e => setEcPhoneInput(e.target.value)}
+                placeholder="(555) 000-0000"
+                className="bg-[#252525] border border-neutral-700 rounded px-2 py-1 text-xs text-white placeholder-neutral-600 focus:outline-none focus:border-neutral-500 w-36 truncate"
+              />
+              {onSaveField && (
+                <button
+                  onClick={handleEcPhoneSave}
+                  disabled={savingEcPhone || ecPhoneInput.trim() === (member.emergencyContactPhone ?? '')}
+                  className="text-[10px] px-2 py-1 rounded bg-white/10 text-white hover:bg-white/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shrink-0"
+                >
+                  {savingEcPhone ? '…' : 'save'}
                 </button>
               )}
             </div>

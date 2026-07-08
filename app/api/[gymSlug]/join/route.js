@@ -90,11 +90,11 @@ export async function GET(request, { params }) {
           .map(toplan)
           .sort((a, b) => a.amount - b.amount)
 
-        // Coaching add-ons: all Coaching/Programs prices
+        // Coaching add-ons: members-only Coaching/Programs (non-member tier excluded)
         addonPlans = recurring
           .filter(p => {
             const n = (p.nickname ?? p.product?.name ?? '').toLowerCase()
-            return n.includes('coaching/program')
+            return n.includes('coaching/program') && !n.includes('non-member')
           })
           .map(toplan)
           .sort((a, b) => a.amount - b.amount)

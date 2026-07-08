@@ -308,8 +308,10 @@ export async function POST(request) {
           stripeSubscriptionId: subId,
           priceId,
           dateAccessed:        new Date(),
-          dateOfBirth:         meta.dob        || null,
-          address:             fullAddress,
+          dateOfBirth:           meta.dob               || null,
+          address:               fullAddress,
+          emergencyContactName:  meta.emergencyName     || null,
+          emergencyContactPhone: meta.emergencyPhone    || null,
         },
       })
       console.log('[platform/webhook] created member from checkout:', member.id, email)

@@ -63,8 +63,10 @@ model Member {
   priceId              String?
 
   // Personal info collected at signup
-  dateOfBirth      String?
-  address          String?
+  dateOfBirth           String?
+  address               String?
+  emergencyContactName  String?
+  emergencyContactPhone String?
 
   // Seam / smart-lock access code
   accessCode       String?

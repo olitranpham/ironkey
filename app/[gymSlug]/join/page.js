@@ -507,9 +507,8 @@ export default function JoinPage() {
           />
         </Field>
 
-        {/* Membership type — hidden for Oasis PT plans, and for Hydra non-member coaching add-on */}
+        {/* Membership type — hidden for Oasis PT plans */}
         {!(gymSlug === 'oasis-boston' && ptPlans.some(p => p.priceId === form.priceId)) &&
-         !(gymSlug === 'hydra-athletic-co' && addonPlans.find(p => p.priceId === form.addonPriceId)?.name.toLowerCase().includes('non-member')) &&
          <Field label="membership type" required>
           {membershipPlans.length === 0 ? (
             <p className="text-xs text-neutral-600 px-1">No plans available — contact the gym directly.</p>
