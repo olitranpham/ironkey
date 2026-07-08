@@ -242,7 +242,15 @@ export default function MembersPage() {
         : s
     }
 
-    const header = ['first name', 'last name', 'email', 'phone', 'membership type', 'status', 'access code', 'date joined']
+    const fmtDate = iso => iso ? new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' }) : ''
+
+    const header = [
+      'first name', 'last name', 'email', 'phone',
+      'membership type', 'status', 'access code',
+      'join date', 'freeze date', 'cancel date',
+      'date of birth', 'address',
+      'emergency contact name', 'emergency contact phone', 'emergency contact relationship',
+    ]
     const rows = visible.map(m => [
       m.firstName,
       m.lastName,
@@ -251,7 +259,14 @@ export default function MembersPage() {
       m.membershipType,
       m.status,
       m.accessCode,
-      m.createdAt ? new Date(m.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' }) : '',
+      fmtDate(m.dateAccessed ?? m.createdAt),
+      fmtDate(m.dateFrozen),
+      fmtDate(m.dateCanceled),
+      m.dateOfBirth,
+      m.address,
+      m.emergencyContactName,
+      m.emergencyContactPhone,
+      m.emergencyContactRelationship,
     ].map(escape))
 
     const csv  = [header, ...rows].map(r => r.join(',')).join('\n')
