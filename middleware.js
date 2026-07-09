@@ -6,6 +6,7 @@ export async function middleware(request) {
 
   // ── Public routes ────────────────────────────────────────────────────────
   if (
+    pathname === '/api/v1/checkin' ||
     pathname.startsWith('/api/auth') ||
     pathname === '/api/stripe/callback' ||
     (request.method === 'POST' && pathname === '/api/stripe/webhook') ||

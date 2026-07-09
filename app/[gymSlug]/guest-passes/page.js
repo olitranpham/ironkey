@@ -200,6 +200,12 @@ export default function GuestPassesPage() {
   const [savingCode,      setSavingCode]      = useState(false)
   const closeTimer = useRef(null)
 
+  // Partner check-ins (REP Gym Pass — oasis-boston only)
+  const [partnerCheckins,      setPartnerCheckins]      = useState([])
+  const [partnerLoading,       setPartnerLoading]       = useState(false)
+  const [partnerErr,           setPartnerErr]           = useState(null)
+  const [partnerFetched,       setPartnerFetched]       = useState(false)
+
   useEffect(() => {
     document.body.style.overflow = panelOpen ? 'hidden' : ''
     return () => { document.body.style.overflow = '' }
@@ -232,6 +238,32 @@ export default function GuestPassesPage() {
   }, [gymSlug])
 
   useEffect(() => { fetchPasses() }, [fetchPasses])
+
+  async function fetchPartnerCheckins() {
+    setPartnerLoading(true)
+    setPartnerErr(null)
+    try {
+      const token = localStorage.getItem('ik_token')
+      const res   = await fetch(`/api/${gymSlug}/rep-gym-pass/checkins`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!res.ok) throw new Error(`${res.status}`)
+      const data = await res.json()
+      setPartnerCheckins(data.checkins ?? [])
+      setPartnerFetched(true)
+    } catch {
+      setPartnerErr('could not load partner check-ins')
+    } finally {
+      setPartnerLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (activeTab === 'partner' && !partnerFetched) {
+      fetchPartnerCheckins()
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab])
 
   function openPanel(profile) {
     console.log('[guest-passes] row clicked, opening panel for:', profile.name, profile.email)
@@ -424,11 +456,64 @@ export default function GuestPassesPage() {
                 {tab}
               </button>
             ))}
+            {gymSlug === 'oasis-boston' && (
+              <button
+                onClick={() => setActiveTab('partner')}
+                className={`py-2.5 px-2.5 mr-1 text-xs font-medium border-b-2 transition-colors ${
+                  activeTab === 'partner'
+                    ? 'border-white text-white'
+                    : 'border-transparent text-neutral-500 hover:text-neutral-300'
+                }`}
+              >
+                partner check-ins
+              </button>
+            )}
           </div>
 
           {/* Body */}
           <div className="md:flex-1 md:overflow-y-auto overflow-x-auto">
-            {loading ? (
+            {activeTab === 'partner' ? (
+              partnerLoading ? (
+                <div className="flex items-center justify-center h-48 gap-2">
+                  <RefreshCw size={16} className="text-neutral-600 animate-spin" />
+                  <span className="text-sm text-neutral-600">loading…</span>
+                </div>
+              ) : partnerErr ? (
+                <div className="flex flex-col items-center justify-center h-48 gap-3">
+                  <p className="text-sm text-red-400">{partnerErr}</p>
+                  <button onClick={fetchPartnerCheckins} className="text-xs text-neutral-400 border border-neutral-700 rounded-lg px-3 py-1.5 hover:text-white transition-colors">
+                    retry
+                  </button>
+                </div>
+              ) : partnerCheckins.length === 0 ? (
+                <div className="flex items-center justify-center h-48">
+                  <p className="text-sm text-neutral-600">No partner check-ins yet.</p>
+                </div>
+              ) : (
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-neutral-800">
+                      <th className="px-5 py-2 text-left text-xs text-neutral-500 font-medium">Name</th>
+                      <th className="px-5 py-2 text-left text-xs text-neutral-500 font-medium">Email</th>
+                      <th className="px-5 py-2 text-left text-xs text-neutral-500 font-medium">Access Code</th>
+                      <th className="px-5 py-2 text-right text-xs text-neutral-500 font-medium">Check-in Time</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {partnerCheckins.map((c, i) => (
+                      <tr key={c.id} className={`${i % 2 === 0 ? 'bg-white/[0.02]' : ''}`}>
+                        <td className="px-5 py-3 text-white text-xs">{c.userName}</td>
+                        <td className="px-5 py-3 text-neutral-400 text-xs">{c.userEmail}</td>
+                        <td className="px-5 py-3 text-neutral-300 text-xs font-mono">{c.accessCode}</td>
+                        <td className="px-5 py-3 text-right text-xs text-neutral-500">
+                          {new Date(c.createdAt).toLocaleString()}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )
+            ) : loading ? (
               <div className="flex items-center justify-center h-48 gap-2">
                 <RefreshCw size={16} className="text-neutral-600 animate-spin" />
                 <span className="text-sm text-neutral-600">loading…</span>

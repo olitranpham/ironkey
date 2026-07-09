@@ -63,7 +63,10 @@
       "Bash(pdftotext \"/Users/olitranpham/Downloads/Member Contract \\(1\\).pdf\" -)",
       "Bash(2>&1)",
       "Bash(PGPASSWORD=\"bYiBErlRQHoxEbGLAIXLDacTznrYTsLT\" psql:*)",
-      "Bash(git checkout:*)"
+      "Bash(git checkout:*)",
+      "Bash(railway variables:*)",
+      "Bash(npx:*)",
+      "Bash(npm uninstall:*)"
     ]
   }
 }

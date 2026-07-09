@@ -26,6 +26,9 @@ model Gym {
   seamApiKey             String?
   seamDeviceId           String?
 
+  // REP Gym Pass integration
+  repGymPassEnabled Boolean @default(false)
+
   // Branding
   logoUrl String?
 
@@ -37,12 +40,13 @@ model Gym {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  members          Member[]
-  guestVisits      GuestVisit[]
-  guestWaivers     GuestWaiver[]
-  users            GymUser[]
-  financialEntries FinancialEntry[]
-  inventoryItems   InventoryItem[]
+  members              Member[]
+  guestVisits          GuestVisit[]
+  guestWaivers         GuestWaiver[]
+  users                GymUser[]
+  financialEntries     FinancialEntry[]
+  inventoryItems       InventoryItem[]
+  repGymPassCheckins   RepGymPassCheckin[]
 }
 
 // ─── Member ───────────────────────────────────────────────────────────────────
@@ -183,6 +187,24 @@ model GuestWaiver {
   gym            Gym   @relation(fields: [gymId], references: [id])
 
   @@unique([guestProfileId, gymId])
+}
+
+// ─── RepGymPassCheckin ────────────────────────────────────────────────────────
+// Records each check-in initiated by the REP Gym Pass partner integration.
+
+model RepGymPassCheckin {
+  id              String   @id @default(cuid())
+  gymId           String
+  gym             Gym      @relation(fields: [gymId], references: [id])
+  userName        String
+  userEmail       String
+  accessCode      String
+  startsAt        DateTime
+  expiresAt       DateTime
+  idempotencyKey  String?  @unique
+  createdAt       DateTime @default(now())
+
+  @@index([gymId])
 }
 
 // ─── GymUser (staff / admin accounts) ────────────────────────────────────────
