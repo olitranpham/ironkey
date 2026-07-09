@@ -196,7 +196,6 @@ export async function POST(request) {
               devices = devList
             }
           }
-          const isSingle  = passType === 'SINGLE'
           const seamResults = await Promise.all(
             devices.map(dev =>
               fetch(`${SEAM_API}/access_codes/create`, {
@@ -206,7 +205,8 @@ export async function POST(request) {
                   device_id: dev.device_id,
                   name:      guestName || email,
                   code:      accessCode,
-                  ...(isSingle ? { starts_at: startDt, ends_at: endDt } : {}),
+                  starts_at: startDt,
+                  ends_at:   endDt,
                 }),
               })
                 .then(r => r.json())

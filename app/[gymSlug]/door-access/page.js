@@ -321,8 +321,10 @@ export default function DoorAccessPage() {
               <table className="w-full text-sm">
                 <tbody>
                   {visible.map((c, i) => {
-                    const tl        = c.codeType === 'time_bound' ? timeLeft(c.endsAt) : null
-                    const typeLabel = tl ? `${c.type} · ${tl}` : c.type
+                    const tl = c.codeType === 'time_bound' ? timeLeft(c.endsAt) : null
+                    if (c.type === 'guest') {
+                      console.log('[door-access] guest code:', { name: c.name, code: c.code, codeType: c.codeType, endsAt: c.endsAt, type: c.type })
+                    }
                     return (
                       <tr
                         key={c.id}
@@ -339,10 +341,15 @@ export default function DoorAccessPage() {
                             </div>
                             <div>
                               <p className="text-white text-sm leading-tight">{c.name}</p>
-                              {c.endsAt !== null && (
-                                <span className={`text-[11px] mt-0.5 ${CODE_TYPE_BORDER[c.type] ?? 'text-zinc-400'} ${tl === 'expired' ? '!text-red-400' : ''}`}>
-                                  {typeLabel}
-                                </span>
+                              {c.type === 'guest' && (
+                                <div className="flex items-center gap-1.5 mt-0.5">
+                                  <span className="text-[11px] text-amber-400">guest</span>
+                                  {tl && (
+                                    <span className={`text-[11px] ${tl === 'expired' ? 'text-red-400' : 'text-neutral-500'}`}>
+                                      · {tl}
+                                    </span>
+                                  )}
+                                </div>
                               )}
                             </div>
                           </div>
