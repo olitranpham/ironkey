@@ -29,7 +29,7 @@ export async function GET(request, { params }) {
     const { gymSlug } = await params
     const gym = await prisma.gym.findUnique({
       where:  { slug: gymSlug },
-      select: { id: true, name: true, stripeSecretKey: true },
+      select: { id: true, name: true, logoUrl: true, stripeSecretKey: true },
     })
     if (!gym) return NextResponse.json({ error: 'Gym not found' }, { status: 404 })
 
@@ -67,7 +67,7 @@ export async function GET(request, { params }) {
         .sort((a, b) => a.amount - b.amount)
     }
 
-    return NextResponse.json({ gym: { name: gym.name, slug: gymSlug }, plans })
+    return NextResponse.json({ gym: { name: gym.name, slug: gymSlug, logoUrl: gym.logoUrl ?? null }, plans })
   } catch (error) {
     console.error('[guest GET]', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

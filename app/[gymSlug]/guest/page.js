@@ -3,7 +3,12 @@
 import { useState, useEffect } from 'react'
 import { useParams } from 'next/navigation'
 import { Loader2, X, ShoppingCart, LogIn, CheckCircle2, ChevronLeft, Dumbbell } from 'lucide-react'
-import { formatPhone } from '@/lib/phone'
+function maskPhone(value) {
+  const d = value.replace(/\D/g, '').slice(0, 10)
+  if (d.length < 4) return d.length ? `(${d}` : ''
+  if (d.length < 7) return `(${d.slice(0, 3)}) ${d.slice(3)}`
+  return `(${d.slice(0, 3)}) ${d.slice(3, 6)}-${d.slice(6)}`
+}
 
 // ── Waiver text (Triumph Barbell membership T&C) ──────────────────────────────
 
@@ -197,6 +202,16 @@ function Field({ label, required, children }) {
   )
 }
 
+function SectionDivider({ label }) {
+  return (
+    <div className="flex items-center gap-3 py-1">
+      <div className="flex-1 border-t border-white/8" />
+      <span className="text-[10px] font-semibold tracking-widest text-neutral-600 uppercase">{label}</span>
+      <div className="flex-1 border-t border-white/8" />
+    </div>
+  )
+}
+
 const INPUT  = "w-full bg-[#1c1c1c] border border-neutral-700 rounded-lg px-3 py-2.5 text-sm text-white placeholder-neutral-600 focus:outline-none focus:border-neutral-500 transition-colors"
 const SELECT = "w-full bg-[#1c1c1c] border border-neutral-700 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-neutral-500 transition-colors appearance-none"
 
@@ -262,7 +277,7 @@ export default function GuestPage() {
     fetch(`/api/${gymSlug}/guest`)
       .then(r => r.json())
       .then(({ gym, plans }) => {
-        setGymName(gym?.name ?? gymSlug)
+        setGymName((gym?.name ?? gymSlug).replace(/-/g, ' '))
         const p = plans ?? []
         console.log('[guest/page] plans from API:', JSON.stringify(p))
         setPlans(p)
@@ -348,6 +363,7 @@ export default function GuestPage() {
     if (!form.state.trim())    { setError('state is required.'); return }
     if (!form.zip.trim())      { setError('zip code is required.'); return }
     if (!form.emergencyName.trim() || !form.emergencyPhone.trim()) { setError('emergency contact name and phone are required.'); return }
+    if (!form.emergencyRelationship.trim()) { setError('emergency contact relationship is required.'); return }
     if (!form.waiver)          { setError('you must agree to the liability waiver.'); return }
     if (!selectedPriceId)      { setError('please select a pass type.'); return }
 
@@ -568,6 +584,8 @@ export default function GuestPage() {
             onSubmit={handleNewGuestSubmit}
             className="bg-[#1c1c1c] border border-neutral-800 rounded-2xl p-6 flex flex-col gap-5 shadow-2xl"
           >
+            <SectionDivider label="member info" />
+
             {/* Name */}
             <div className="grid grid-cols-2 gap-3">
               <Field label="first name" required>
@@ -601,6 +619,8 @@ export default function GuestPage() {
                 type="email" placeholder="jane@example.com"
                 value={form.confirmEmail} onChange={e => setField('confirmEmail', e.target.value)}
                 autoComplete="off"
+                onPaste={e => e.preventDefault()}
+                onDrop={e => e.preventDefault()}
                 className={INPUT} required
               />
               {form.confirmEmail && form.email.trim().toLowerCase() !== form.confirmEmail.trim().toLowerCase() && (
@@ -612,8 +632,7 @@ export default function GuestPage() {
             <Field label="phone number" required>
               <input
                 type="tel" placeholder="(555) 000-0000"
-                value={form.phone} onChange={e => setField('phone', e.target.value)}
-                onBlur={e => setField('phone', formatPhone(e.target.value))}
+                value={form.phone} onChange={e => setField('phone', maskPhone(e.target.value))}
                 className={INPUT} required
               />
             </Field>
@@ -666,10 +685,7 @@ export default function GuestPage() {
               />
             </Field>
 
-            <div className="border-t border-neutral-800 pt-1" />
-
-            {/* Emergency contact */}
-            <p className="text-xs font-semibold text-neutral-500 uppercase tracking-wider -mb-2">emergency contact</p>
+            <SectionDivider label="emergency contact" />
             <div className="grid grid-cols-2 gap-3">
               <Field label="name" required>
                 <input
@@ -681,21 +697,20 @@ export default function GuestPage() {
               <Field label="phone" required>
                 <input
                   type="tel" placeholder="(555) 000-0000"
-                  value={form.emergencyPhone} onChange={e => setField('emergencyPhone', e.target.value)}
-                  onBlur={e => setField('emergencyPhone', formatPhone(e.target.value))}
+                  value={form.emergencyPhone} onChange={e => setField('emergencyPhone', maskPhone(e.target.value))}
                   className={INPUT} required
                 />
               </Field>
             </div>
-            <Field label="relationship">
+            <Field label="relationship" required>
               <input
                 type="text" placeholder="spouse, parent, friend…"
                 value={form.emergencyRelationship} onChange={e => setField('emergencyRelationship', e.target.value)}
-                className={INPUT}
+                className={INPUT} required
               />
             </Field>
 
-            <div className="border-t border-neutral-800 pt-1" />
+            <SectionDivider label="pass type" />
 
             {/* Pass type */}
             <Field label="pass type" required>
@@ -706,7 +721,7 @@ export default function GuestPage() {
               />
             </Field>
 
-            <div className="border-t border-neutral-800 pt-1" />
+            <SectionDivider label="terms" />
 
             {/* Waiver */}
             <label className="flex items-start gap-3 cursor-pointer group">
@@ -750,7 +765,7 @@ export default function GuestPage() {
             >
               {submitting
                 ? <><Loader2 size={15} className="animate-spin" /> redirecting to checkout…</>
-                : 'continue to payment'
+                : 'continue to payment →'
               }
             </button>
 
@@ -847,7 +862,7 @@ export default function GuestPage() {
             >
               {submitting
                 ? <><Loader2 size={15} className="animate-spin" /> redirecting to checkout…</>
-                : 'continue to payment'
+                : 'continue to payment →'
               }
             </button>
 
@@ -1042,6 +1057,8 @@ export default function GuestPage() {
         )}
 
       </div>
+
+      <p className="text-center text-[11px] text-neutral-700 mt-6">powered by <strong>ironkey</strong> · secured by <strong>Stripe</strong></p>
 
       {waiverOpen && (
         <WaiverModal

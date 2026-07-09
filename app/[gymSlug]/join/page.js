@@ -3,7 +3,12 @@
 import { useState, useEffect } from 'react'
 import { useParams } from 'next/navigation'
 import { Loader2, X } from 'lucide-react'
-import { formatPhone } from '@/lib/phone'
+function maskPhone(value) {
+  const d = value.replace(/\D/g, '').slice(0, 10)
+  if (d.length < 4) return d.length ? `(${d}` : ''
+  if (d.length < 7) return `(${d.slice(0, 3)}) ${d.slice(3)}`
+  return `(${d.slice(0, 3)}) ${d.slice(3, 6)}-${d.slice(6)}`
+}
 
 // ── Waiver text ───────────────────────────────────────────────────────────────
 
@@ -218,8 +223,8 @@ function fmt(n, interval, intervalCount = 1, raw = false) {
 
 function Field({ label, required, children }) {
   return (
-    <div className="flex flex-col gap-1.5">
-      <label className="text-xs text-neutral-400">
+    <div className="flex flex-col gap-2">
+      <label className="text-xs font-semibold text-neutral-300 tracking-wide">
         {label}{required && <span className="text-rose-400 ml-0.5">*</span>}
       </label>
       {children}
@@ -227,13 +232,24 @@ function Field({ label, required, children }) {
   )
 }
 
-const INPUT = "w-full bg-[#1c1c1c] border border-neutral-700 rounded-lg px-3 py-2.5 text-sm text-white placeholder-neutral-600 focus:outline-none focus:border-neutral-500 transition-colors"
-const SELECT = "w-full bg-[#1c1c1c] border border-neutral-700 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-neutral-500 transition-colors appearance-none"
+function SectionDivider({ label }) {
+  return (
+    <div className="flex items-center gap-3 py-1">
+      <div className="flex-1 border-t border-white/8" />
+      <span className="text-[10px] font-semibold tracking-widest text-neutral-600 uppercase">{label}</span>
+      <div className="flex-1 border-t border-white/8" />
+    </div>
+  )
+}
+
+const INPUT  = "w-full bg-[#242424] border border-neutral-700/60 rounded-lg px-3.5 py-2.5 text-sm text-white placeholder-neutral-600 focus:outline-none focus:ring-2 focus:ring-white/10 focus:border-neutral-500 transition-all duration-150"
+const SELECT = "w-full bg-[#242424] border border-neutral-700/60 rounded-lg px-3.5 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-white/10 focus:border-neutral-500 transition-all duration-150 appearance-none"
 
 export default function JoinPage() {
   const { gymSlug } = useParams()
 
   const [gymName,          setGymName]          = useState('')
+  const [gymLogo,          setGymLogo]          = useState(null)
   const [membershipPlans,  setMembershipPlans]  = useState([])
   const [addonPlans,       setAddonPlans]       = useState([])
   const [ptPlans,          setPtPlans]          = useState([])
@@ -270,7 +286,8 @@ export default function JoinPage() {
     fetch(`/api/${gymSlug}/join`)
       .then(r => r.json())
       .then(({ gym, membershipPlans = [], addonPlans = [], ptPlans = [] }) => {
-        setGymName(gym?.name ?? gymSlug)
+        setGymName((gym?.name ?? gymSlug).replace(/-/g, ' '))
+        setGymLogo(gym?.logoUrl ?? null)
         setMembershipPlans(membershipPlans)
         setAddonPlans(addonPlans)
         setPtPlans(ptPlans)
@@ -316,6 +333,7 @@ export default function JoinPage() {
     const dobAge = (Date.now() - new Date(form.dob).getTime()) / (365.25 * 24 * 60 * 60 * 1000)
     if (dobAge < 18) { setError('Members under 18 must have a parent or guardian complete this form on their behalf (see Section 14 of the terms).'); return }
     if (!form.emergencyName.trim() || !form.emergencyPhone.trim()) { setError('Emergency contact name and phone are required.'); return }
+    if (!form.emergencyRelationship.trim()) { setError('Emergency contact relationship is required.'); return }
     if (!form.waiver)          { setError('You must agree to the membership terms.'); return }
     if (isStudent && !studentIdFile) { setError('A student ID photo is required for student memberships.'); return }
 
@@ -366,17 +384,24 @@ export default function JoinPage() {
   return (
     <div className="min-h-screen bg-[#292929] flex flex-col items-center py-12 px-4">
 
-      {/* Header */}
-      <div className="text-center mb-8">
-<h1 className="text-2xl font-bold text-white">{gymName}</h1>
-        <p className="text-neutral-500 text-sm mt-1">membership registration</p>
-      </div>
-
       {/* Form card */}
       <form
         onSubmit={handleSubmit}
-        className="w-full max-w-md bg-[#1c1c1c] border border-neutral-800 rounded-2xl p-6 flex flex-col gap-5 shadow-2xl"
+        className="w-full max-w-md bg-[#1c1c1c] border border-white/10 rounded-2xl p-7 flex flex-col gap-5 shadow-2xl"
       >
+
+        {/* Header */}
+        <div className="flex flex-col items-center text-center gap-3 pb-2">
+          {gymLogo && (
+            <img src={gymLogo} alt={gymName} className="h-12 w-auto object-contain" />
+          )}
+          <div>
+            {!gymLogo && <h1 className="text-xl font-bold text-white">{gymName}</h1>}
+            <p className="text-sm text-neutral-500 mt-0.5">membership registration</p>
+          </div>
+        </div>
+
+        <SectionDivider label="member info" />
 
         {/* Name */}
         <div className="grid grid-cols-2 gap-3">
@@ -422,6 +447,8 @@ export default function JoinPage() {
             value={form.confirmEmail}
             onChange={e => set('confirmEmail', e.target.value)}
             autoComplete="off"
+            onPaste={e => e.preventDefault()}
+            onDrop={e => e.preventDefault()}
             className={INPUT}
             required
           />
@@ -436,8 +463,7 @@ export default function JoinPage() {
             type="tel"
             placeholder="(555) 000-0000"
             value={form.phone}
-            onChange={e => set('phone', e.target.value)}
-            onBlur={e => set('phone', formatPhone(e.target.value))}
+            onChange={e => set('phone', maskPhone(e.target.value))}
             className={INPUT}
             required
           />
@@ -675,10 +701,7 @@ export default function JoinPage() {
           </Field>
         )}
 
-        <div className="border-t border-neutral-800 pt-1" />
-
-        {/* Emergency contact */}
-        <p className="text-xs font-semibold text-neutral-500 uppercase tracking-wider -mb-2">emergency contact</p>
+        <SectionDivider label="emergency contact" />
         <div className="grid grid-cols-2 gap-3">
           <Field label="name" required>
             <input
@@ -695,24 +718,24 @@ export default function JoinPage() {
               type="tel"
               placeholder="(555) 000-0000"
               value={form.emergencyPhone}
-              onChange={e => set('emergencyPhone', e.target.value)}
-              onBlur={e => set('emergencyPhone', formatPhone(e.target.value))}
+              onChange={e => set('emergencyPhone', maskPhone(e.target.value))}
               className={INPUT}
               required
             />
           </Field>
         </div>
-        <Field label="relationship">
+        <Field label="relationship" required>
           <input
             type="text"
             placeholder="spouse, parent, friend…"
             value={form.emergencyRelationship}
             onChange={e => set('emergencyRelationship', e.target.value)}
             className={INPUT}
+            required
           />
         </Field>
 
-        <div className="border-t border-neutral-800 pt-1" />
+        <SectionDivider label="terms" />
 
         {/* Waiver */}
         <label className="flex items-start gap-3 cursor-pointer group">
@@ -744,26 +767,25 @@ export default function JoinPage() {
         </label>
 
         {error && (
-          <p className="text-xs text-rose-400 bg-rose-500/10 border border-rose-500/20 rounded-lg px-3 py-2">
-            {error}
-          </p>
+          <div className="flex items-start gap-2.5 bg-rose-500/10 border border-rose-500/20 rounded-lg px-3.5 py-3">
+            <span className="text-rose-400 mt-px shrink-0">⚠</span>
+            <p className="text-xs text-rose-400 leading-relaxed">{error}</p>
+          </div>
         )}
 
         <button
           type="submit"
           disabled={submitting || membershipPlans.length === 0 || (!!form.confirmEmail && form.email.trim().toLowerCase() !== form.confirmEmail.trim().toLowerCase())}
-          className="w-full py-3 rounded-xl text-sm font-semibold bg-white text-[#1c1c1c] hover:bg-neutral-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+          className="w-full py-3.5 rounded-xl text-sm font-semibold bg-white text-[#1c1c1c] hover:bg-neutral-100 disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-150 flex items-center justify-center gap-2 mt-1"
         >
           {submitting ? (
             <><Loader2 size={15} className="animate-spin" /> redirecting to checkout…</>
           ) : (
-            'continue to payment'
+            'continue to payment →'
           )}
         </button>
 
-        <p className="text-center text-[11px] text-neutral-600">
-          powered by <span className="text-neutral-500 font-medium">ironkey</span> · secured by Stripe
-        </p>
+        <p className="text-center text-[11px] text-neutral-700">powered by <strong>ironkey</strong> · secured by <strong>Stripe</strong></p>
 
       </form>
 

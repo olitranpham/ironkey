@@ -26,6 +26,9 @@ model Gym {
   seamApiKey             String?
   seamDeviceId           String?
 
+  // Branding
+  logoUrl String?
+
   // Zapier webhook URLs for outbound notifications
   zapierGuestWebhookUrl   String?
   zapierMemberWebhookUrl  String?
