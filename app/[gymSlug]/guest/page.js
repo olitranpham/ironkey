@@ -624,7 +624,7 @@ export default function GuestPage() {
                 className={INPUT} required
               />
               {form.confirmEmail && form.email.trim().toLowerCase() !== form.confirmEmail.trim().toLowerCase() && (
-                <p className="text-xs text-rose-400 mt-1">Email addresses don't match</p>
+                <p className="text-xs text-rose-400 mt-1">email addresses don't match</p>
               )}
             </Field>
 
