@@ -20,6 +20,7 @@ export async function GET(request, { params }) {
         seamConnectedAccountId: true,
         seamApiKey:            true,
         stripeAccountId:       true,
+        repGymPassEnabled:     true,
       },
     })
 
@@ -33,8 +34,9 @@ export async function GET(request, { params }) {
         name:     gym.name,
         slug:     gym.slug,
         timezone: gym.timezone,
-        hasSeam:   Boolean(gym.seamApiKey || gym.seamConnectedAccountId),
-        hasStripe: Boolean(gym.stripeAccountId),
+        hasSeam:          Boolean(gym.seamApiKey || gym.seamConnectedAccountId),
+        hasStripe:        Boolean(gym.stripeAccountId),
+        repGymPassEnabled: Boolean(gym.repGymPassEnabled),
       },
     })
   } catch (error) {

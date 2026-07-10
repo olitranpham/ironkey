@@ -15,17 +15,20 @@ export async function PATCH(request, { params }) {
     const gym = await prisma.gym.findUnique({ where: { slug: gymSlug }, select: { id: true } })
     if (!gym) return NextResponse.json({ error: 'Gym not found' }, { status: 404 })
 
-    // Verify the profile has passes or a waiver for this gym (auth boundary)
-    const profile = await prisma.guest.findFirst({
-      where: {
-        id: profileId,
-        OR: [
-          { passes:  { some: { gymId: gym.id } } },
-          { waivers: { some: { gymId: gym.id } } },
-        ],
-      },
-    })
+    // Fetch the profile first, then verify gym association
+    const profile = await prisma.guest.findUnique({ where: { id: profileId } })
     if (!profile) return NextResponse.json({ error: 'Profile not found' }, { status: 404 })
+
+    // Auth boundary: must have passes, waivers, or a rep gym pass check-in for this gym
+    const passCount = await prisma.guestVisit.count({ where: { guestProfileId: profileId, gymId: gym.id } })
+    if (passCount === 0) {
+      const repCheckinCount = profile.email
+        ? await prisma.repGymPassCheckin.count({ where: { userEmail: profile.email, gymId: gym.id } })
+        : 0
+      if (repCheckinCount === 0) {
+        return NextResponse.json({ error: 'Profile not found' }, { status: 404 })
+      }
+    }
 
     const data = {}
     if (body.name       !== undefined) data.name       = body.name

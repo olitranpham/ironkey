@@ -18,6 +18,7 @@ import {
   Menu,
   X,
   Package,
+  Handshake,
 } from 'lucide-react'
 
 const NAV_GROUPS = [
@@ -34,6 +35,7 @@ const NAV_GROUPS = [
       { label: 'members',      slug: 'members',      icon: Users },
       { label: 'guest passes', slug: 'guest-passes', icon: Ticket },
     ],
+    repGymPass: { label: 'partner check-ins', slug: 'partner-checkins', icon: Handshake },
   },
   {
     label: 'billing',
@@ -78,10 +80,11 @@ function PortalLayout({ gymSlug, children }) {
   const router   = useRouter()
   const pathname = usePathname()
 
-  const [collapsed,   setCollapsed]   = useState(false)
-  const [mobileOpen,  setMobileOpen]  = useState(false)
-  const [gymName,     setGymName]     = useState('')
-  const [hasSeam,     setHasSeam]     = useState(false)
+  const [collapsed,     setCollapsed]     = useState(false)
+  const [mobileOpen,    setMobileOpen]    = useState(false)
+  const [gymName,       setGymName]       = useState('')
+  const [hasSeam,       setHasSeam]       = useState(false)
+  const [repGymPass,    setRepGymPass]    = useState(false)
 
   // Set title synchronously before first paint — slug as immediate fallback,
   // then overwrite with real gym name from localStorage if available
@@ -114,6 +117,7 @@ function PortalLayout({ gymSlug, children }) {
         const name = gym.name.toLowerCase()
         setGymName(name)
         setHasSeam(Boolean(gym.hasSeam))
+        setRepGymPass(Boolean(gym.repGymPassEnabled))
         document.title = `${name} - staff portal`
         // Keep localStorage in sync with what the API says
         localStorage.setItem('ik_gym', JSON.stringify({ id: gym.id, name: gym.name, slug: gym.slug }))
@@ -191,8 +195,9 @@ function PortalLayout({ gymSlug, children }) {
         <nav className="flex-1 py-3 px-2 overflow-y-auto overflow-x-hidden">
           {NAV_GROUPS.map((group, gi) => {
             const items = [
-              ...(group.seam ? [group.seam] : []),
+              ...(group.seam && hasSeam ? [group.seam] : []),
               ...group.items,
+              ...(group.repGymPass && repGymPass ? [group.repGymPass] : []),
             ]
             return (
               <div key={group.label} className={gi > 0 ? 'mt-4' : ''}>
