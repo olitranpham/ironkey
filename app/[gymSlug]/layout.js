@@ -19,6 +19,8 @@ import {
   X,
   Package,
   Handshake,
+  Dumbbell,
+  Mail,
 } from 'lucide-react'
 
 const NAV_GROUPS = [
@@ -48,7 +50,9 @@ const NAV_GROUPS = [
   {
     label: 'operations',
     items: [
-      { label: 'inventory', slug: 'inventory', icon: Package },
+      { label: 'inventory',          slug: 'inventory',          icon: Package },
+      { label: 'personal training',  slug: 'personal-training',  icon: Dumbbell },
+      { label: 'email',              slug: 'email',              icon: Mail },
     ],
   },
 ]

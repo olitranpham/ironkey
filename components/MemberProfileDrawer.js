@@ -16,11 +16,12 @@ const STATUS_TEXT = {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 const EVENT_LABEL = {
-  joined:      'joined',
-  reactivated: 'reactivated',
-  frozen:      'frozen',
-  unfrozen:    'unfrozen',
-  canceled:    'canceled',
+  joined:                  'joined',
+  reactivated:             'reactivated',
+  frozen:                  'frozen',
+  unfrozen:                'unfrozen',
+  cancellation_scheduled:  'cancellation scheduled',
+  canceled:                'canceled',
 }
 
 function fmtStatus(status) {
@@ -232,6 +233,11 @@ function DrawerContent({ member, gymSlug, membershipBorder, onClose, onStatusCha
           <p className="text-white font-semibold text-base leading-tight">
             {member.firstName} {member.lastName}
           </p>
+          {member.cancelScheduled && (
+            <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20">
+              cancellation scheduled
+            </span>
+          )}
         </div>
 
         {/* Contact */}
@@ -501,13 +507,15 @@ function DrawerContent({ member, gymSlug, membershipBorder, onClose, onStatusCha
                   >
                     freeze membership
                   </button>
-                  <button
-                    onClick={() => onStatusChange(member.id, 'CANCELED')}
-                    disabled={updating}
-                    className="w-full py-2 rounded-lg text-sm font-medium bg-red-500/10 text-red-400 hover:bg-red-500/20 disabled:opacity-40 transition-colors"
-                  >
-                    cancel membership
-                  </button>
+                  {!member.cancelScheduled && (
+                    <button
+                      onClick={() => onStatusChange(member.id, 'CANCELED')}
+                      disabled={updating}
+                      className="w-full py-2 rounded-lg text-sm font-medium bg-red-500/10 text-red-400 hover:bg-red-500/20 disabled:opacity-40 transition-colors"
+                    >
+                      cancel membership
+                    </button>
+                  )}
                 </>
               )}
               {member.status === 'FROZEN' && (

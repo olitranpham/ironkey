@@ -47,6 +47,8 @@ model Gym {
   financialEntries     FinancialEntry[]
   inventoryItems       InventoryItem[]
   repGymPassCheckins   RepGymPassCheckin[]
+  personalTrainers     PersonalTrainer[]
+  ptSessions           PTSession[]
 }
 
 // ─── Member ───────────────────────────────────────────────────────────────────
@@ -94,11 +96,15 @@ model Member {
   flexCheckInCount     Int       @default(0)
   flexCheckInResetDate DateTime?
 
+  // Cancellation scheduled (cancel_at_period_end on Stripe — still ACTIVE until period ends)
+  cancelScheduled Boolean @default(false)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   guestVisits      GuestVisit[]
   membershipEvents MembershipEvent[]
+  ptSessions       PTSessionMember[]
 
   @@unique([gymId, email])
 }
@@ -297,4 +303,61 @@ model InventoryLog {
   createdAt DateTime @default(now())
 
   @@index([itemId])
+}
+
+// ─── PersonalTrainer ──────────────────────────────────────────────────────────
+
+model PersonalTrainer {
+  id    String @id @default(cuid())
+  gymId String
+  gym   Gym    @relation(fields: [gymId], references: [id], onDelete: Cascade)
+
+  name  String
+  email String?
+  phone String?
+  bio   String?
+  color String?   // hex color for calendar coding
+
+  sessions  PTSession[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([gymId])
+}
+
+// ─── PTSessionMember (explicit join table) ───────────────────────────────────
+
+model PTSessionMember {
+  sessionId String
+  memberId  String
+  session   PTSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  member    Member    @relation(fields: [memberId],  references: [id], onDelete: Cascade)
+
+  @@id([sessionId, memberId])
+  @@index([memberId])
+}
+
+// ─── PTSession ────────────────────────────────────────────────────────────────
+
+model PTSession {
+  id    String @id @default(cuid())
+  gymId String
+  gym   Gym    @relation(fields: [gymId], references: [id], onDelete: Cascade)
+
+  trainerId String
+  trainer   PersonalTrainer @relation(fields: [trainerId], references: [id], onDelete: Cascade)
+
+  members PTSessionMember[]
+
+  title           String?
+  date            DateTime
+  durationMinutes Int      @default(60)
+  notes           String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([gymId])
+  @@index([trainerId])
 }

@@ -457,9 +457,21 @@ export async function POST(request) {
     // Map Stripe status → member status
     // past_due is handled by the overdue-cancel cron — leave DB status unchanged
     if (sub.status === 'active') {
-      update.status = 'ACTIVE'
+      // Cancellation scheduled via cancel_at_period_end OR cancel_at (30-day notice path).
+      // In both cases the subscription stays "active" until it ends — keep member ACTIVE
+      // in DB and mark cancelScheduled so the UI can show the indicator.
+      if (sub.cancel_at_period_end || sub.cancel_at) {
+        console.log('[platform/webhook] subscription.updated — cancellation scheduled (cancel_at_period_end=%s cancel_at=%s), marking cancelScheduled for member %s', sub.cancel_at_period_end, sub.cancel_at, member.id)
+        update.cancelScheduled = true
+      } else if (member.status === 'CANCELED') {
+        console.log('[platform/webhook] subscription.updated — member %s already CANCELED in DB, skipping ACTIVE update', member.id)
+      } else {
+        update.status = 'ACTIVE'
+        update.cancelScheduled = false
+      }
     } else if (sub.status === 'canceled') {
       update.status = 'CANCELED'
+      update.cancelScheduled = false
     }
     // past_due / unpaid / trialing / paused — no change here
 
@@ -495,9 +507,10 @@ export async function POST(request) {
     }
 
     if (member.status !== 'CANCELED') {
+      const now = new Date()
       await prisma.member.update({
         where: { id: member.id },
-        data:  { status: 'CANCELED', dateCanceled: new Date(), updatedAt: new Date() },
+        data:  { status: 'CANCELED', cancelScheduled: false, dateCanceled: now, updatedAt: now },
       })
       await prisma.membershipEvent.create({
         data: { memberId: member.id, gymId: gym.id, type: 'canceled' },

@@ -34,9 +34,9 @@ const CONFIRM_COPY = {
   cancel: {
     title:   'cancel membership?',
     bullets: [
-      'a 30-day notice policy applies',
-      'the member retains access through their notice period',
-      'this action cannot be easily undone',
+      'the member stays active until their billing period ends',
+      'their door access is preserved until stripe confirms cancellation',
+      'a cancellation scheduled event will be logged today',
     ],
     cta:     'yes, cancel',
     ctaCls:  'bg-red-500/10 text-red-400 hover:bg-red-500/20',
@@ -404,6 +404,9 @@ export default function MembersPage() {
                           </div>
                           <div className="min-w-0">
                             <p className="text-white text-sm leading-tight">{m.firstName} {m.lastName}</p>
+                            {m.cancelScheduled && (
+                              <p className="text-[10px] text-amber-500/70 leading-tight mt-0.5">cancellation scheduled</p>
+                            )}
                           </div>
                         </div>
                       </td>
