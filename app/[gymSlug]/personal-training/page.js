@@ -130,7 +130,7 @@ function PTMemberMultiSelect({ members, selected, onChange }) {
       if (!query.trim()) return true
       return `${m.firstName} ${m.lastName}`.toLowerCase().includes(query.toLowerCase())
     })
-    .sort((a, b) => `${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`))
+    .sort((a, b) => `${a.lastName} ${a.firstName}`.localeCompare(`${b.lastName} ${b.firstName}`))
 
   useEffect(() => {
     function handle(e) {

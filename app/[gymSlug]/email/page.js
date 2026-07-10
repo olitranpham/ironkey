@@ -268,7 +268,7 @@ export default function EmailPage() {
               <div className="px-4 py-3">
                 {members.length > 0 && (
                   <div className="flex flex-wrap gap-1.5 mt-2.5 max-h-32 overflow-y-auto">
-                    {members.map(m => (
+                    {[...members].sort((a, b) => `${a.lastName} ${a.firstName}`.localeCompare(`${b.lastName} ${b.firstName}`)).map(m => (
                       <span key={m.id} className="text-[11px] bg-white/5 border border-neutral-800 rounded-full px-2.5 py-0.5 text-neutral-400">
                         {m.firstName} {m.lastName}
                       </span>
