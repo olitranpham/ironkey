@@ -440,11 +440,15 @@ export default function JoinPage() {
         {/* Header */}
         <div className="flex flex-col items-center text-center gap-3 pb-2">
           {gymLogo && (
-            <img src={gymLogo} alt={gymName} className="h-12 w-auto object-contain" />
+            <img src={gymLogo} alt={gymName} className="w-24 h-24 object-contain" />
           )}
-          <div>
+          <div className="flex flex-col items-center gap-2">
             {!gymLogo && <h1 className="text-xl font-bold text-white">{gymName}</h1>}
-            <p className="text-sm text-neutral-500 mt-0.5">membership registration</p>
+            <div className="flex items-center gap-3">
+              <span className="h-px w-8 bg-neutral-700" />
+              <p className="text-xl font-semibold tracking-widest text-neutral-400 uppercase">membership registration</p>
+              <span className="h-px w-8 bg-neutral-700" />
+            </div>
           </div>
         </div>
 
@@ -659,7 +663,7 @@ export default function JoinPage() {
 
         {/* Personal Training — oasis-boston only */}
         {gymSlug === 'oasis-boston' && ptPlans.length > 0 && (
-          <Field label="personal training">
+          <Field label="personal training (optional)">
             <div className="flex flex-col gap-1.5">
               <div className="relative">
                 <select
