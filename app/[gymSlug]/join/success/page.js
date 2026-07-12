@@ -2,7 +2,6 @@
 
 import { useParams } from 'next/navigation'
 import { useEffect, useState } from 'react'
-import { CheckCircle2 } from 'lucide-react'
 
 export default function JoinSuccessPage() {
   const { gymSlug } = useParams()
@@ -16,33 +15,75 @@ export default function JoinSuccessPage() {
   }, [gymSlug])
 
   return (
-    <div className="min-h-screen bg-[#292929] flex flex-col items-center justify-center px-4">
-      <div className="w-full max-w-sm bg-[#1c1c1c] border border-neutral-800 rounded-2xl p-8 flex flex-col items-center text-center gap-5 shadow-2xl">
+    <div
+      className="min-h-screen bg-[#292929] flex flex-col items-center justify-center px-4"
+      style={{ fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif" }}
+    >
+      <style>{`
+        @keyframes circleIn {
+          0%   { transform: scale(0);   opacity: 0; }
+          60%  { transform: scale(1.1); opacity: 1; }
+          100% { transform: scale(1);   opacity: 1; }
+        }
+        @keyframes fadeUp {
+          0%   { opacity: 0; transform: translateY(8px); }
+          100% { opacity: 1; transform: translateY(0); }
+        }
+        .check-anim {
+          animation: circleIn 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+        }
+        .content-anim {
+          animation: fadeUp 0.4s ease forwards;
+          animation-delay: 0.55s;
+          opacity: 0;
+        }
+        .item-anim-1 {
+          animation: fadeUp 0.35s ease forwards;
+          animation-delay: 0.75s;
+          opacity: 0;
+        }
+        .item-anim-2 {
+          animation: fadeUp 0.35s ease forwards;
+          animation-delay: 0.90s;
+          opacity: 0;
+        }
+        .contact-anim {
+          animation: fadeUp 0.35s ease forwards;
+          animation-delay: 1.05s;
+          opacity: 0;
+        }
+      `}</style>
 
-        <div className="w-14 h-14 rounded-full bg-emerald-500/15 flex items-center justify-center">
-          <CheckCircle2 size={28} className="text-emerald-400" />
+      <div className="w-full max-w-lg bg-[#1c1c1c] border border-neutral-800 rounded-2xl px-10 py-12 flex flex-col items-center text-center gap-8 shadow-2xl">
+
+        {/* Animated checkmark + heading */}
+        <div className="flex flex-col items-center gap-0">
+          <span className="check-anim" style={{ display: 'inline-block', fontSize: '88px', color: '#ffffff' }}>✓</span>
+          <div className="content-anim flex flex-col gap-2">
+            <h1 className="text-6xl font-bold text-white tracking-tight">you're in.</h1>
+            {gymName && (
+              <p className="text-xl text-neutral-400 font-medium">
+                welcome to {gymName}.
+              </p>
+            )}
+          </div>
         </div>
 
-        <div>
-          <h1 className="text-xl font-bold text-white">you're in!</h1>
-          <p className="text-sm text-neutral-400 mt-1">
-            welcome to {gymName || gymSlug}.
-          </p>
+        {/* Checklist */}
+        <div className="w-full flex flex-col gap-3">
+          <div className="item-anim-1 w-full bg-white/5 rounded-full px-5 py-3 flex items-center gap-3 text-left">
+            <span className="text-sm text-white shrink-0">—</span>
+            <span className="text-sm text-gray-400">your membership is now active</span>
+          </div>
+          <div className="item-anim-2 w-full bg-white/5 rounded-full px-5 py-3 flex items-center gap-3 text-left">
+            <span className="text-sm text-white shrink-0">—</span>
+            <span className="text-sm text-gray-400">your access code will be sent to your email shortly</span>
+          </div>
         </div>
 
-        <div className="w-full bg-neutral-900 rounded-xl p-4 text-left space-y-2">
-          <p className="text-xs text-neutral-400 flex items-start gap-2">
-            <span className="text-emerald-400 font-bold shrink-0">✓</span>
-            your membership is now active.
-          </p>
-          <p className="text-xs text-neutral-400 flex items-start gap-2">
-            <span className="text-emerald-400 font-bold shrink-0">✓</span>
-            your access code will be sent to your email shortly.
-          </p>
-        </div>
-
-        <p className="text-[11px] text-neutral-600">
-          questions? contact admin@ironkeyentry.com
+        {/* Contact */}
+        <p className="contact-anim text-xs text-neutral-600">
+          questions? contact <span className="text-neutral-500">admin@ironkeyentry.com</span>
         </p>
 
       </div>
