@@ -221,6 +221,23 @@ export default function DashboardPage() {
     }
   }
 
+  async function handleSaveField(memberId, fields) {
+    try {
+      const token = localStorage.getItem('ik_token')
+      const res = await fetch(`/api/${gymSlug}/members/${memberId}`, {
+        method:  'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body:    JSON.stringify(fields),
+      })
+      if (!res.ok) throw new Error('Failed')
+      const { member: updated } = await res.json()
+      setMembers(prev => prev.map(m => m.id === memberId ? { ...m, ...updated } : m))
+      setSelectedMember(prev => prev?.id === memberId ? { ...prev, ...updated } : prev)
+    } catch {
+      // non-fatal
+    }
+  }
+
   // ── Fetch ───────────────────────────────────────────────────────────────
 
   const load = useCallback(async () => {
@@ -344,6 +361,7 @@ export default function DashboardPage() {
         onClose={closePanel}
         onStatusChange={handleStatusChange}
         onSaveAccessCode={handleAccessCodeSave}
+        onSaveField={handleSaveField}
         onRemoveMember={() => { setRemoveError(null); setRemoveTarget(selectedMember) }}
         updating={updatingStatus}
       />

@@ -452,25 +452,29 @@ export default function GuestPassesPage() {
 
       </main>
 
-      {/* ── Overlay ───────────────────────────────────────────────────────── */}
-      <div
-        className={`fixed inset-0 bg-black/60 z-[100] transition-opacity duration-200 ${panelOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
-        onClick={closePanel}
-      />
-
       {/* ── Profile panel ─────────────────────────────────────────────────── */}
-      <div style={{ fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif" }} className={`fixed inset-y-0 right-0 w-full sm:w-[420px] bg-[#171717] border-l border-neutral-800 z-[110] flex flex-col shadow-2xl transition-transform duration-200 ${panelOpen ? 'translate-x-0' : 'translate-x-full'}`}>
-        {selectedProfile && (
-          <GuestProfilePanel
-            profile={selectedProfile}
-            passTypeBorder={passTypeBorder}
-            onClose={closePanel}
-            onSaveCode={saveAccessCode}
-            saving={savingCode}
-            onSavePassesLeft={(passId, passesLeft) => savePassesLeft(passId, passesLeft, selectedProfile.id)}
-            onSaveProfile={(fields) => saveProfileFields(selectedProfile.id, fields)}
-          />
-        )}
+      <div
+        style={{ fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif" }}
+        className={`fixed inset-0 z-[110] bg-black/60 flex items-center justify-center p-4 transition-opacity duration-200 ${panelOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+        onClick={closePanel}
+      >
+        <div
+          className="w-full max-w-[500px] flex flex-col bg-[#171717] rounded-2xl shadow-2xl overflow-hidden"
+          style={{ maxHeight: '85vh' }}
+          onClick={e => e.stopPropagation()}
+        >
+          {selectedProfile && (
+            <GuestProfilePanel
+              profile={selectedProfile}
+              passTypeBorder={passTypeBorder}
+              onClose={closePanel}
+              onSaveCode={saveAccessCode}
+              saving={savingCode}
+              onSavePassesLeft={(passId, passesLeft) => savePassesLeft(passId, passesLeft, selectedProfile.id)}
+              onSaveProfile={(fields) => saveProfileFields(selectedProfile.id, fields)}
+            />
+          )}
+        </div>
       </div>
 
     </div>

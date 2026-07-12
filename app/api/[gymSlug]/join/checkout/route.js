@@ -21,7 +21,8 @@ export async function POST(request, { params }) {
       firstName, lastName, email, phone, dob,
       address, address1, address2, city, state, zip,
       emergencyName, emergencyPhone, emergencyRelationship,
-      priceId, membershipType, addonPriceId, studentIdUploaded,
+      priceId, membershipType, addonPriceId,
+      studentIdUploadId, graduationSemester, graduationYear, hearAboutUs,
     } = body
 
     if (!firstName || !lastName || !email || !priceId) {
@@ -72,7 +73,10 @@ export async function POST(request, { params }) {
         emergencyRelationship: emergencyRelationship ?? '',
         membershipType:        membershipType        ?? '',
         addonPriceId:          addonPriceId          ?? '',
-        studentIdUploaded:     studentIdUploaded ? 'true' : 'false',
+        studentIdUploadId:     studentIdUploadId     ?? '',
+        graduationSemester:    graduationSemester    ?? '',
+        graduationYear:        graduationYear        ?? '',
+        hearAboutUs:           hearAboutUs           ?? '',
       },
     })
 

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import { Loader2, X } from 'lucide-react'
 function maskPhone(value) {
   const d = value.replace(/\D/g, '').slice(0, 10)
@@ -247,17 +247,25 @@ const SELECT = "w-full bg-[#242424] border border-neutral-700/60 rounded-lg px-3
 
 export default function JoinPage() {
   const { gymSlug } = useParams()
+  const router = useRouter()
 
   const [gymName,          setGymName]          = useState('')
   const [gymLogo,          setGymLogo]          = useState(null)
-  const [membershipPlans,  setMembershipPlans]  = useState([])
-  const [addonPlans,       setAddonPlans]       = useState([])
-  const [ptPlans,          setPtPlans]          = useState([])
+  const [membershipPlans,   setMembershipPlans]   = useState([])
+  const [addonPlans,        setAddonPlans]        = useState([])
+  const [ptPlans,           setPtPlans]           = useState([])
+  const [programmingPlans,  setProgrammingPlans]  = useState([])
   const [loading,          setLoading]          = useState(true)
   const [submitting,       setSubmitting]       = useState(false)
   const [error,            setError]            = useState(null)
-  const [waiverOpen,       setWaiverOpen]       = useState(false)
-  const [studentIdFile,    setStudentIdFile]    = useState(null)
+  const [waiverOpen,          setWaiverOpen]          = useState(false)
+  const [studentIdFile,       setStudentIdFile]       = useState(null)
+  const [graduationSemester,  setGraduationSemester]  = useState('')
+  const [graduationYear,      setGraduationYear]      = useState('')
+  const [hearAboutUs,         setHearAboutUs]         = useState('')
+
+  const currentYear    = new Date().getFullYear()
+  const graduationYears = Array.from({ length: 6 }, (_, i) => String(currentYear + i))
 
   const [form, setForm] = useState({
     firstName:             '',
@@ -285,16 +293,19 @@ export default function JoinPage() {
   useEffect(() => {
     fetch(`/api/${gymSlug}/join`)
       .then(r => r.json())
-      .then(({ gym, membershipPlans = [], addonPlans = [], ptPlans = [] }) => {
+      .then(({ gym, membershipPlans = [], addonPlans = [], ptPlans = [], programmingPlans = [] }) => {
         setGymName((gym?.name ?? gymSlug).replace(/-/g, ' '))
         setGymLogo(gym?.logoUrl ?? null)
         setMembershipPlans(membershipPlans)
         setAddonPlans(addonPlans)
         setPtPlans(ptPlans)
+        setProgrammingPlans(programmingPlans)
         if (membershipPlans.length) {
           let defaultPlan
           if (gymSlug === 'hydra-athletic-co') {
             defaultPlan = membershipPlans.find(p => p.name.toLowerCase().includes('pre-sale membership')) ?? membershipPlans[0]
+          } else if (gymSlug === 'triumph-barbell') {
+            defaultPlan = membershipPlans.find(p => p.name.toLowerCase().includes('general')) ?? membershipPlans[0]
           } else {
             defaultPlan = membershipPlans.find(p => p.name.toLowerCase().includes('general')) ?? membershipPlans[0]
           }
@@ -310,10 +321,14 @@ export default function JoinPage() {
   }
 
   function selectPlan(priceId) {
-    const plan = [...membershipPlans, ...ptPlans].find(p => p.priceId === priceId)
+    const plan = [...membershipPlans, ...ptPlans, ...programmingPlans].find(p => p.priceId === priceId)
     setForm(f => ({ ...f, priceId, membershipType: plan?.membershipType ?? '' }))
-    // Clear student ID if switching away from a student plan
-    if (!plan?.membershipType?.toLowerCase().includes('student')) setStudentIdFile(null)
+    // Clear student fields if switching away from a student plan
+    if (!plan?.membershipType?.toLowerCase().includes('student')) {
+      setStudentIdFile(null)
+      setGraduationSemester('')
+      setGraduationYear('')
+    }
   }
 
   async function handleSubmit(e) {
@@ -335,33 +350,65 @@ export default function JoinPage() {
     if (!form.emergencyName.trim() || !form.emergencyPhone.trim()) { setError('Emergency contact name and phone are required.'); return }
     if (!form.emergencyRelationship.trim()) { setError('Emergency contact relationship is required.'); return }
     if (!form.waiver)          { setError('You must agree to the membership terms.'); return }
-    if (isStudent && !studentIdFile) { setError('A student ID photo is required for student memberships.'); return }
+    if (isStudent && !studentIdFile)           { setError('A student ID photo is required for student memberships.'); return }
+    if (isStudent && !graduationSemester)      { setError('Please select a graduation semester.'); return }
+    if (isStudent && !graduationYear)          { setError('Please select a graduation year.'); return }
+
+    const isPtOrProgramming = isTriumph && (
+      ptPlans.some(p => p.priceId === form.priceId) ||
+      programmingPlans.some(p => p.priceId === form.priceId)
+    )
 
     setSubmitting(true)
     try {
-      const res = await fetch(`/api/${gymSlug}/join/checkout`, {
+      // Upload student ID before proceeding (student plans only)
+      let studentIdUploadId = ''
+      if (isStudent && studentIdFile) {
+        const fd = new FormData()
+        fd.append('file',  studentIdFile)
+        fd.append('email', form.email.trim().toLowerCase())
+        const uploadRes  = await fetch(`/api/${gymSlug}/join/student-id`, { method: 'POST', body: fd })
+        const uploadJson = await uploadRes.json()
+        if (!uploadRes.ok) throw new Error(uploadJson.error ?? 'Failed to upload student ID')
+        studentIdUploadId = uploadJson.uploadId
+      }
+
+      const checkoutPayload = {
+        firstName:             form.firstName.trim(),
+        lastName:              form.lastName.trim(),
+        email:                 form.email.trim(),
+        phone:                 form.phone.trim(),
+        dob:                   form.dob,
+        address:               [form.address1.trim(), form.address2.trim()].filter(Boolean).join(', '),
+        address1:              form.address1.trim(),
+        address2:              form.address2.trim(),
+        city:                  form.city.trim(),
+        state:                 form.state.trim(),
+        zip:                   form.zip.trim(),
+        emergencyName:         form.emergencyName.trim(),
+        emergencyPhone:        form.emergencyPhone.trim(),
+        emergencyRelationship: form.emergencyRelationship.trim(),
+        priceId:               form.priceId,
+        membershipType:        form.membershipType,
+        addonPriceId:          form.addonPriceId,
+        studentIdUploadId,
+        graduationSemester:    isStudent ? graduationSemester : '',
+        graduationYear:        isStudent ? graduationYear     : '',
+        hearAboutUs:           hearAboutUs || '',
+      }
+
+      // PT/programming plans: go to intake form first, then Stripe
+      if (isPtOrProgramming) {
+        sessionStorage.setItem('triumph_join_payload', JSON.stringify(checkoutPayload))
+        router.push('/triumph-barbell/join/pt-intake')
+        return
+      }
+
+      // All other plans: go directly to Stripe checkout
+      const res  = await fetch(`/api/${gymSlug}/join/checkout`, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({
-          firstName:             form.firstName.trim(),
-          lastName:              form.lastName.trim(),
-          email:                 form.email.trim(),
-          phone:                 form.phone.trim(),
-          dob:                   form.dob,
-          address:               [form.address1.trim(), form.address2.trim()].filter(Boolean).join(', '),
-          address1:              form.address1.trim(),
-          address2:              form.address2.trim(),
-          city:                  form.city.trim(),
-          state:                 form.state.trim(),
-          zip:                   form.zip.trim(),
-          emergencyName:         form.emergencyName.trim(),
-          emergencyPhone:        form.emergencyPhone.trim(),
-          emergencyRelationship: form.emergencyRelationship.trim(),
-          priceId:               form.priceId,
-          membershipType:        form.membershipType,
-          addonPriceId:          form.addonPriceId,
-          studentIdUploaded:     isStudent && Boolean(studentIdFile),
-        }),
+        body:    JSON.stringify(checkoutPayload),
       })
       const json = await res.json()
       if (!res.ok) throw new Error(json.error ?? 'Something went wrong')
@@ -533,8 +580,9 @@ export default function JoinPage() {
           />
         </Field>
 
-        {/* Membership type — hidden for Oasis PT plans */}
+        {/* Membership type — hidden for Oasis PT plans and Triumph PT/programming plans */}
         {!(gymSlug === 'oasis-boston' && ptPlans.some(p => p.priceId === form.priceId)) &&
+         !(gymSlug === 'triumph-barbell' && (ptPlans.some(p => p.priceId === form.priceId) || programmingPlans.some(p => p.priceId === form.priceId))) &&
          <Field label="membership type" required>
           {membershipPlans.length === 0 ? (
             <p className="text-xs text-neutral-600 px-1">No plans available — contact the gym directly.</p>
@@ -646,31 +694,152 @@ export default function JoinPage() {
           </Field>
         )}
 
-        {/* Student ID upload — triumph-barbell student plans only */}
+        {/* Student fields — shown for any student membership plan */}
         {isStudent && (
-          <Field label="student ID" required>
-            <div className="flex flex-col gap-2">
-              <label className="flex items-center justify-center gap-2 w-full border border-dashed border-neutral-600 rounded-lg px-3 py-4 cursor-pointer hover:border-neutral-400 transition-colors">
-                <svg className="w-4 h-4 text-neutral-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
-                </svg>
-                <span className="text-xs text-neutral-400">
-                  {studentIdFile ? studentIdFile.name : 'upload student ID photo'}
-                </span>
-                <input
-                  type="file"
-                  accept="image/*,.pdf"
-                  className="sr-only"
-                  onChange={e => setStudentIdFile(e.target.files?.[0] ?? null)}
-                />
-              </label>
-              <p className="text-[11px] text-neutral-600">photo or scan of a valid student ID — membership will be verified before activation</p>
+          <>
+            <Field label="upload student ID" required>
+              <div className="flex flex-col gap-2">
+                <label className="flex items-center justify-center gap-2 w-full border border-dashed border-neutral-600 rounded-lg px-3 py-4 cursor-pointer hover:border-neutral-400 transition-colors">
+                  <svg className="w-4 h-4 text-neutral-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+                  </svg>
+                  <span className="text-xs text-neutral-400">
+                    {studentIdFile ? studentIdFile.name : 'choose photo or PDF'}
+                  </span>
+                  <input
+                    type="file"
+                    accept="image/*,.pdf"
+                    className="sr-only"
+                    onChange={e => setStudentIdFile(e.target.files?.[0] ?? null)}
+                  />
+                </label>
+                <p className="text-[11px] text-neutral-600">photo or scan of a valid student ID — membership will be verified before activation</p>
+              </div>
+            </Field>
+
+            <Field label="expected graduation" required>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="relative">
+                  <select
+                    value={graduationSemester}
+                    onChange={e => setGraduationSemester(e.target.value)}
+                    className={SELECT}
+                  >
+                    <option value="">semester</option>
+                    <option value="Fall">Fall</option>
+                    <option value="Spring">Spring</option>
+                    <option value="Summer">Summer</option>
+                  </select>
+                  <div className="pointer-events-none absolute inset-y-0 right-3 flex items-center">
+                    <svg className="w-4 h-4 text-neutral-500" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.17l3.71-3.94a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                </div>
+                <div className="relative">
+                  <select
+                    value={graduationYear}
+                    onChange={e => setGraduationYear(e.target.value)}
+                    className={SELECT}
+                  >
+                    <option value="">year</option>
+                    {graduationYears.map(y => (
+                      <option key={y} value={y}>{y}</option>
+                    ))}
+                  </select>
+                  <div className="pointer-events-none absolute inset-y-0 right-3 flex items-center">
+                    <svg className="w-4 h-4 text-neutral-500" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.17l3.71-3.94a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                </div>
+              </div>
+            </Field>
+          </>
+        )}
+
+        {/* Personal Training — triumph-barbell only; hidden when a programming plan is selected */}
+        {gymSlug === 'triumph-barbell' && ptPlans.length > 0 && !programmingPlans.some(p => p.priceId === form.priceId) && (
+          <Field label="personal training (optional)">
+            <div className="flex flex-col gap-1.5">
+              <div className="relative">
+                <select
+                  value={ptPlans.some(p => p.priceId === form.priceId) ? form.priceId : ''}
+                  onChange={e => {
+                    if (e.target.value) {
+                      selectPlan(e.target.value)
+                    } else {
+                      setForm(f => ({ ...f, priceId: '', membershipType: '' }))
+                    }
+                  }}
+                  className={SELECT}
+                >
+                  <option value="">— none —</option>
+                  {ptPlans.map(p => {
+                    const breakdown = p.amount === 350 ? '1x/week' : p.amount === 610 ? '2x/week' : p.amount === 830 ? '3x/week' : null
+                    const label = breakdown
+                      ? `${breakdown} — ${Number(p.amount).toLocaleString('en-US', { style: 'currency', currency: 'USD' })}/month`
+                      : `${p.name} — ${fmt(p.amount, p.interval, p.intervalCount)}`
+                    return (
+                      <option key={p.priceId} value={p.priceId}>{label}</option>
+                    )
+                  })}
+                </select>
+                <div className="pointer-events-none absolute inset-y-0 right-3 flex items-center">
+                  <svg className="w-4 h-4 text-neutral-500" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.17l3.71-3.94a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
+                  </svg>
+                </div>
+              </div>
+              {ptPlans.some(p => p.priceId === form.priceId) && (
+                <p className="text-[11px] text-neutral-500 px-0.5">gym membership included.</p>
+              )}
             </div>
           </Field>
         )}
 
-        {/* Coaching / Programming Add-on */}
-        {addonPlans.length > 0 && (
+        {/* Programming — triumph-barbell only; hidden when a PT plan is selected */}
+        {gymSlug === 'triumph-barbell' && programmingPlans.length > 0 && !ptPlans.some(p => p.priceId === form.priceId) && (
+          <Field label="programming (optional)">
+            <div className="flex flex-col gap-1.5">
+              <div className="relative">
+                <select
+                  value={programmingPlans.some(p => p.priceId === form.priceId) ? form.priceId : ''}
+                  onChange={e => {
+                    if (e.target.value) {
+                      selectPlan(e.target.value)
+                    } else {
+                      setForm(f => ({ ...f, priceId: '', membershipType: '' }))
+                    }
+                  }}
+                  className={SELECT}
+                >
+                  <option value="">— none —</option>
+                  {programmingPlans.map(p => {
+                    const breakdown = p.amount === 150 ? 'programming only' : p.amount === 225 ? 'weekly check-ins' : p.amount === 300 ? 'daily check-ins' : null
+                    const label = breakdown
+                      ? `${breakdown} — ${Number(p.amount).toLocaleString('en-US', { style: 'currency', currency: 'USD' })}/month`
+                      : `${p.name} — ${fmt(p.amount, p.interval, p.intervalCount)}`
+                    return (
+                      <option key={p.priceId} value={p.priceId}>{label}</option>
+                    )
+                  })}
+                </select>
+                <div className="pointer-events-none absolute inset-y-0 right-3 flex items-center">
+                  <svg className="w-4 h-4 text-neutral-500" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.17l3.71-3.94a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
+                  </svg>
+                </div>
+              </div>
+              {programmingPlans.some(p => p.priceId === form.priceId) && (
+                <p className="text-[11px] text-neutral-500 px-0.5">gym membership included.</p>
+              )}
+            </div>
+          </Field>
+        )}
+
+        {/* Coaching / Programming Add-on — non-triumph gyms only */}
+        {!isTriumph && addonPlans.length > 0 && (
           <Field label="coaching / programming add-on (optional)">
             <div className="relative">
               <select
@@ -734,6 +903,33 @@ export default function JoinPage() {
             required
           />
         </Field>
+
+        {/* How did you hear about us — triumph-barbell only */}
+        {isTriumph && (
+          <Field label="how did you hear about us?">
+            <div className="relative">
+              <select
+                value={hearAboutUs}
+                onChange={e => setHearAboutUs(e.target.value)}
+                className={SELECT}
+              >
+                <option value="">— select one —</option>
+                <option value="google">google</option>
+                <option value="instagram">instagram</option>
+                <option value="facebook">facebook</option>
+                <option value="tiktok">tiktok</option>
+                <option value="a friend / word of mouth">a friend / word of mouth</option>
+                <option value="walked by">walked by</option>
+                <option value="other">other</option>
+              </select>
+              <div className="pointer-events-none absolute inset-y-0 right-3 flex items-center">
+                <svg className="w-4 h-4 text-neutral-500" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.17l3.71-3.94a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
+                </svg>
+              </div>
+            </div>
+          </Field>
+        )}
 
         <SectionDivider label="terms" />
 

@@ -49,6 +49,7 @@ model Gym {
   repGymPassCheckins   RepGymPassCheckin[]
   personalTrainers     PersonalTrainer[]
   ptSessions           PTSession[]
+  ptIntakes            PTIntake[]
 }
 
 // ─── Member ───────────────────────────────────────────────────────────────────
@@ -98,6 +99,14 @@ model Member {
 
   // Cancellation scheduled (cancel_at_period_end on Stripe — still ACTIVE until period ends)
   cancelScheduled Boolean @default(false)
+
+  // Student membership fields
+  graduationSemester String?
+  graduationYear     String?
+  studentIdImage     String? // base64 data URL of uploaded student ID photo
+
+  // Referral
+  hearAboutUs String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -178,6 +187,42 @@ enum PassType {
   TEN_PACK
   VALUE
   DELUXE
+}
+
+// ─── PTIntake ─────────────────────────────────────────────────────────────────
+// Stores PT intake form responses submitted after a PT/programming checkout.
+
+model PTIntake {
+  id        String   @id @default(cuid())
+  gymId     String
+  gym       Gym      @relation(fields: [gymId], references: [id], onDelete: Cascade)
+
+  name      String?
+  email     String
+  phone     String?
+  goals             String?
+  experience        String?
+  injuriesConditions String?
+  additionalInfo    String?
+  consultationTime  String?
+
+  createdAt DateTime @default(now())
+
+  @@index([gymId, email])
+}
+
+// ─── StudentIdUpload ──────────────────────────────────────────────────────────
+// Temporary holding table for student ID files uploaded during join form.
+// The webhook copies the data to the Member record and deletes this row.
+
+model StudentIdUpload {
+  id        String   @id @default(cuid())
+  gymId     String
+  email     String
+  fileData  String   // base64 data URL of the uploaded student ID photo
+  createdAt DateTime @default(now())
+
+  @@index([gymId, email])
 }
 
 // ─── GuestWaiver ──────────────────────────────────────────────────────────────

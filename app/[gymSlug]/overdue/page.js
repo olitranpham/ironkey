@@ -2,8 +2,9 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams } from 'next/navigation'
-import { AlertTriangle, X } from 'lucide-react'
+import { AlertTriangle, X, CreditCard, User } from 'lucide-react'
 import { getGymTheme } from '@/lib/gymThemes'
+import { DrawerSection, DrawerField } from '@/components/MemberProfileDrawer'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -240,22 +241,25 @@ export default function OverduePage() {
         </div>
       </main>
 
-      {/* ── Overlay ───────────────────────────────────────────────────────────── */}
-      <div
-        className={`fixed inset-0 bg-black/60 z-30 transition-opacity duration-200 ${panelOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
-        onClick={closePanel}
-      />
-
       {/* ── Overdue panel ─────────────────────────────────────────────────────── */}
-      <div className={`fixed inset-y-0 right-0 w-full sm:w-[360px] bg-[#171717] border-l border-neutral-800 z-40 flex flex-col shadow-2xl transition-transform duration-200 ${panelOpen ? 'translate-x-0' : 'translate-x-full'}`}>
-        {selectedRow && (
-          <OverduePanel
-            row={selectedRow}
-            membershipBorder={membershipBorder}
-            onClose={closePanel}
-            onAction={(action) => { setActionError(null); setConfirmModal({ action, row: selectedRow }) }}
-          />
-        )}
+      <div
+        className={`fixed inset-0 z-40 bg-black/60 flex items-center justify-center p-4 transition-opacity duration-200 ${panelOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+        onClick={closePanel}
+      >
+        <div
+          className="w-full max-w-[500px] flex flex-col bg-[#171717] rounded-2xl shadow-2xl overflow-hidden"
+          style={{ maxHeight: '85vh' }}
+          onClick={e => e.stopPropagation()}
+        >
+          {selectedRow && (
+            <OverduePanel
+              row={selectedRow}
+              membershipBorder={membershipBorder}
+              onClose={closePanel}
+              onAction={(action) => { setActionError(null); setConfirmModal({ action, row: selectedRow }) }}
+            />
+          )}
+        </div>
       </div>
 
       {/* ── Confirm modal ─────────────────────────────────────────────────────── */}
@@ -315,7 +319,7 @@ function OverduePanel({ row, membershipBorder, onClose, onAction }) {
   const initials = (row.firstName?.[0] ?? '') + (row.lastName?.[0] ?? '')
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col flex-1 min-h-0">
 
       {/* Header */}
       <div className="flex items-center justify-between px-5 h-14 shrink-0 border-b border-neutral-800">
@@ -332,54 +336,43 @@ function OverduePanel({ row, membershipBorder, onClose, onAction }) {
       <div className="flex-1 overflow-y-auto p-5 space-y-5" style={{ WebkitOverflowScrolling: 'touch' }}>
 
         {/* Avatar + name */}
-        <div className="flex flex-col items-center text-center gap-3 pt-1 pb-2">
-          <div className="w-[60px] h-[60px] rounded-full bg-white flex items-center justify-center shrink-0">
+        <div className="flex flex-col items-center text-center gap-2 pt-1 pb-2">
+          <div className={`w-[60px] h-[60px] rounded-full border-2 ${membershipBorder[row.membershipType] ?? 'border-white bg-white'} flex items-center justify-center shrink-0`}>
             <span className="text-black font-bold text-lg tracking-tight select-none">{initials || '?'}</span>
           </div>
           <div>
             <p className="text-white font-semibold text-base leading-tight">{row.firstName} {row.lastName}</p>
+            {row.email && <p className="text-xs text-neutral-500 mt-0.5">{row.email}</p>}
           </div>
         </div>
 
-        {/* Details */}
-        <div className="rounded-lg border border-neutral-800 divide-y divide-neutral-800 overflow-hidden">
+        {/* Member info */}
+        <DrawerSection icon={User} title="member">
+          {row.membershipType && <DrawerField label="plan" value={row.membershipType} />}
+          <DrawerField label="status">
+            <span className="text-xs text-red-400 font-medium">overdue</span>
+          </DrawerField>
+        </DrawerSection>
+
+        {/* Payment details */}
+        <DrawerSection icon={CreditCard} title="payment">
+          <DrawerField label="amount due">
+            <span className="text-xs text-red-400 tabular-nums font-medium">{fmtAmount(row.amountDue)}</span>
+          </DrawerField>
+          {row.failedAt && <DrawerField label="failed on" value={fmtDate(row.failedAt)} />}
           {row.failedAt && (
-            <div className="flex items-center justify-between px-3 py-2.5 bg-[#1c1c1c]">
-              <span className="text-xs text-neutral-500">days overdue</span>
+            <DrawerField label="days overdue">
               <OverdueBadge failedAt={row.failedAt} />
-            </div>
-          )}
-          <div className="flex items-center justify-between px-3 py-2.5 bg-[#1c1c1c]">
-            <span className="text-xs text-neutral-500">amount due</span>
-            <span className="text-xs text-red-400/80 tabular-nums font-medium">
-              {fmtAmount(row.amountDue)}
-            </span>
-          </div>
-          {row.failedAt && (
-            <div className="flex items-center justify-between px-3 py-2.5 bg-[#1c1c1c]">
-              <span className="text-xs text-neutral-500">failed</span>
-              <span className="text-xs text-white">{fmtDate(row.failedAt)}</span>
-            </div>
+            </DrawerField>
           )}
           {row.declineReason && (
-            <div className="flex items-start justify-between px-3 py-2.5 bg-[#1c1c1c] gap-4">
-              <span className="text-xs text-neutral-500 shrink-0">decline reason</span>
-              <span className="text-xs text-amber-400/70 text-right">{row.declineReason}</span>
-            </div>
+            <DrawerField label="decline reason">
+              <span className="text-xs text-amber-400/80 text-right max-w-[200px]">{row.declineReason}</span>
+            </DrawerField>
           )}
-          {row.stripeSubscriptionId && (
-            <div className="flex items-start justify-between px-3 py-2.5 bg-[#1c1c1c] gap-4">
-              <span className="text-xs text-neutral-500 shrink-0">subscription</span>
-              <span className="text-xs text-neutral-400 text-right break-all">{row.stripeSubscriptionId}</span>
-            </div>
-          )}
-          {row.stripeCustomerId && (
-            <div className="flex items-start justify-between px-3 py-2.5 bg-[#1c1c1c] gap-4">
-              <span className="text-xs text-neutral-500 shrink-0">customer</span>
-              <span className="text-xs text-neutral-400 text-right break-all">{row.stripeCustomerId}</span>
-            </div>
-          )}
-        </div>
+          {row.stripeSubscriptionId && <DrawerField label="subscription" value={row.stripeSubscriptionId} mono />}
+          {row.stripeCustomerId && <DrawerField label="customer" value={row.stripeCustomerId} mono />}
+        </DrawerSection>
 
       </div>
 

@@ -63,6 +63,7 @@ export async function GET(request, { params }) {
         flexCheckInCount:     true,
         flexCheckInResetDate: true,
         cancelScheduled:      true,
+        hearAboutUs:          true,
       },
     })
 

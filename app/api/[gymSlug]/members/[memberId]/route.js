@@ -12,6 +12,7 @@ const MEMBER_SELECT = {
   emergencyContactName: true, emergencyContactPhone: true, emergencyContactRelationship: true,
   dateFrozen: true, dateCanceled: true, createdAt: true,
   stripeCustomerId: true, stripeSubscriptionId: true,
+  hearAboutUs: true,
 }
 
 /**
@@ -59,7 +60,8 @@ export async function PATCH(request, { params }) {
     const gymId = gym.id
     const { status, accessCode, firstName, lastName, email, phone,
             dateOfBirth, address, emergencyContactName, emergencyContactPhone,
-            emergencyContactRelationship } = body
+            emergencyContactRelationship, membershipType,
+            stripeCustomerId, stripeSubscriptionId } = body
 
     console.log('[members/patch] memberId=%s gymId=%s body=%j', memberId, gymId, body)
 
@@ -112,6 +114,10 @@ export async function PATCH(request, { params }) {
     if (emergencyContactRelationship !== undefined) {
       data.emergencyContactRelationship = emergencyContactRelationship === '' ? null : String(emergencyContactRelationship).trim()
     }
+
+    if (membershipType       !== undefined) data.membershipType       = membershipType === ''       ? null : String(membershipType).trim()
+    if (stripeCustomerId     !== undefined) data.stripeCustomerId     = stripeCustomerId === ''     ? null : String(stripeCustomerId).trim()
+    if (stripeSubscriptionId !== undefined) data.stripeSubscriptionId = stripeSubscriptionId === '' ? null : String(stripeSubscriptionId).trim()
 
     const member = await prisma.member.update({
       where:  { id: memberId },

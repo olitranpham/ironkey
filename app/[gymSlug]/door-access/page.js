@@ -180,6 +180,22 @@ export default function DoorAccessPage() {
     }
   }
 
+  async function handleSaveField(memberId, fields) {
+    try {
+      const token = localStorage.getItem('ik_token')
+      const res   = await fetch(`/api/${gymSlug}/members/${memberId}`, {
+        method:  'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body:    JSON.stringify(fields),
+      })
+      if (!res.ok) throw new Error('Failed')
+      const { member: updated } = await res.json()
+      setSelectedMember(prev => prev?.id === memberId ? { ...prev, ...updated } : prev)
+    } catch {
+      // non-fatal
+    }
+  }
+
   const fetchCodes = useCallback(async () => {
     setLoading(true)
     setNoDevice(false)
@@ -575,6 +591,7 @@ export default function DoorAccessPage() {
         membershipBorder={membershipBorder}
         onClose={closePanel}
         onSaveAccessCode={handleSaveAccessCode}
+        onSaveField={handleSaveField}
         onDeleteCode={handleDeleteCode}
         simplified={true}
       />

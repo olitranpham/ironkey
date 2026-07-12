@@ -140,7 +140,7 @@ export function GuestProfilePanel({ profile, passTypeBorder, onClose, onSaveCode
   )
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col flex-1 min-h-0">
 
       {/* Header */}
       <div className="flex items-center justify-between px-5 h-14 shrink-0 border-b border-neutral-800">

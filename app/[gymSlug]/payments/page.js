@@ -2,8 +2,9 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams } from 'next/navigation'
-import { Search, RefreshCw, AlertTriangle, X, CreditCard, Phone } from 'lucide-react'
-import { getGymTheme } from '@/lib/gymThemes'
+import { Search, RefreshCw, AlertTriangle, X, Phone, User, KeyRound, ShieldAlert, History, CreditCard } from 'lucide-react'
+import { DrawerSection, DrawerField } from '@/components/MemberProfileDrawer'
+import { formatPhone } from '@/lib/phone'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -38,11 +39,7 @@ const CONFIRM_COPY = {
 
 export default function PaymentsPage() {
   const { gymSlug } = useParams()
-  const { membershipBorder } = getGymTheme(gymSlug)
-
   const [members,    setMembers]    = useState([])
-  const [priceMap,   setPriceMap]   = useState({})
-  const [priceIdMap, setPriceIdMap] = useState({})
   const [loading,    setLoading]    = useState(true)
   const [fetchErr,   setFetchErr]   = useState(null)
   const [search,    setSearch]    = useState('')
@@ -67,18 +64,12 @@ export default function PaymentsPage() {
       const token = localStorage.getItem('ik_token')
       const headers = { Authorization: `Bearer ${token}` }
 
-      const [membersRes, subsRes] = await Promise.all([
-        fetch(`/api/${gymSlug}/all`,                    { headers }),
-        fetch(`/api/${gymSlug}/stripe/subscriptions`,   { headers }),
-      ])
+      const membersRes = await fetch(`/api/${gymSlug}/all`, { headers })
 
       if (!membersRes.ok) throw new Error(`${membersRes.status}`)
       const { members } = await membersRes.json()
-      const subsJson    = subsRes.ok ? await subsRes.json() : {}
 
       setMembers(members)
-      setPriceMap(subsJson.subscriptions ?? {})
-      setPriceIdMap(subsJson.prices      ?? {})
       setFetchErr(null)
     } catch {
       setFetchErr('could not load members')
@@ -115,6 +106,21 @@ export default function PaymentsPage() {
     })
 
   // ── Actions ───────────────────────────────────────────────────────────────
+  async function handleSaveField(memberId, fields) {
+    try {
+      const token = localStorage.getItem('ik_token')
+      const res   = await fetch(`/api/${gymSlug}/members/${memberId}`, {
+        method:  'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body:    JSON.stringify(fields),
+      })
+      if (!res.ok) throw new Error('Failed')
+      const { member: updated } = await res.json()
+      setMembers(prev => prev.map(m => m.id === updated.id ? { ...m, ...updated } : m))
+      setSelectedMember(prev => prev?.id === updated.id ? { ...prev, ...updated } : prev)
+    } catch { /* non-fatal */ }
+  }
+
   async function confirmAction() {
     const { action, member } = confirmModal
     setActionLoading(true)
@@ -236,24 +242,27 @@ export default function PaymentsPage() {
         </div>
       </main>
 
-      {/* ── Overlay ───────────────────────────────────────────────────────── */}
-      <div
-        className={`fixed inset-0 bg-black/60 z-30 transition-opacity duration-200 ${panelOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
-        onClick={closePanel}
-      />
-
       {/* ── Payment detail panel ──────────────────────────────────────────── */}
-      <div className={`fixed inset-y-0 right-0 w-full sm:w-[360px] bg-[#171717] border-l border-neutral-800 z-40 flex flex-col shadow-2xl transition-transform duration-200 ${panelOpen ? 'translate-x-0' : 'translate-x-full'}`}>
-        {selectedMember && (
-          <PaymentPanel
-            member={selectedMember}
-            priceMap={priceMap}
-            priceIdMap={priceIdMap}
-            onClose={closePanel}
-            onAction={(action, member) => { setActionError(null); setConfirmModal({ action, member }) }}
-            actionLoading={actionLoading}
-          />
-        )}
+      <div
+        className={`fixed inset-0 z-40 bg-black/60 flex items-center justify-center p-4 transition-opacity duration-200 ${panelOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+        onClick={closePanel}
+      >
+        <div
+          className="w-full max-w-[500px] flex flex-col bg-[#171717] rounded-2xl shadow-2xl overflow-hidden"
+          style={{ maxHeight: '85vh' }}
+          onClick={e => e.stopPropagation()}
+        >
+          {selectedMember && (
+            <PaymentPanel
+              member={selectedMember}
+              gymSlug={gymSlug}
+              onClose={closePanel}
+              onSaveField={handleSaveField}
+              onAction={(action, member) => { setActionError(null); setConfirmModal({ action, member }) }}
+              actionLoading={actionLoading}
+            />
+          )}
+        </div>
       </div>
 
       {/* ── Confirm modal ──────────────────────────────────────────────────── */}
@@ -308,16 +317,107 @@ export default function PaymentsPage() {
 
 // ── Payment detail panel ──────────────────────────────────────────────────────
 
-function PaymentPanel({ member, priceMap, priceIdMap, onClose, onAction, actionLoading }) {
+const EVENT_LABEL = {
+  joined:                 'joined',
+  reactivated:            'reactivated',
+  frozen:                 'frozen',
+  unfrozen:               'unfrozen',
+  cancellation_scheduled: 'cancellation scheduled',
+  canceled:               'canceled',
+}
+
+function fmtEvDate(iso) {
+  if (!iso) return '—'
+  const d = new Date(iso)
+  if (isNaN(d.getTime())) return '—'
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' }).toLowerCase()
+}
+
+const SAVE_BTN = 'text-[10px] px-2 py-1 rounded bg-white/10 text-white hover:bg-white/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shrink-0'
+const INPUT    = 'bg-[#252525] border border-neutral-700 rounded px-2 py-1 text-xs text-white placeholder-neutral-600 focus:outline-none focus:border-neutral-500 truncate'
+
+function PaymentPanel({ member, gymSlug, onClose, onAction, onSaveField, actionLoading }) {
   const initials = (member.firstName?.[0] ?? '') + (member.lastName?.[0] ?? '')
-  const entry    = priceMap[member.stripeSubscriptionId] ?? priceIdMap[member.priceId]
+
+  // ── field state ──────────────────────────────────────────────────────────────
+  const [nameInput,           setNameInput]           = useState(`${member.firstName ?? ''} ${member.lastName ?? ''}`.trim())
+  const [emailInput,          setEmailInput]          = useState(member.email                            ?? '')
+  const [phoneInput,          setPhoneInput]          = useState(member.phone                            ?? '')
+  const [dobInput,            setDobInput]            = useState(member.dateOfBirth                      ?? '')
+  const [addressInput,        setAddressInput]        = useState(member.address                          ?? '')
+  const [ecNameInput,         setEcNameInput]         = useState(member.emergencyContactName             ?? '')
+  const [ecPhoneInput,        setEcPhoneInput]        = useState(member.emergencyContactPhone            ?? '')
+  const [ecRelInput,          setEcRelInput]          = useState(member.emergencyContactRelationship     ?? '')
+  const [membershipTypeInput, setMembershipTypeInput] = useState(member.membershipType                   ?? '')
+  const [subIdInput,          setSubIdInput]          = useState(member.stripeSubscriptionId             ?? '')
+  const [custIdInput,         setCustIdInput]         = useState(member.stripeCustomerId                 ?? '')
+
+  // ── saving state ─────────────────────────────────────────────────────────────
+  const [savingName,           setSavingName]           = useState(false)
+  const [savingEmail,          setSavingEmail]          = useState(false)
+  const [savingPhone,          setSavingPhone]          = useState(false)
+  const [savingDob,            setSavingDob]            = useState(false)
+  const [savingAddr,           setSavingAddr]           = useState(false)
+  const [savingEcName,         setSavingEcName]         = useState(false)
+  const [savingEcPhone,        setSavingEcPhone]        = useState(false)
+  const [savingEcRel,          setSavingEcRel]          = useState(false)
+  const [savingMembershipType, setSavingMembershipType] = useState(false)
+  const [savingSubId,          setSavingSubId]          = useState(false)
+  const [savingCustId,         setSavingCustId]         = useState(false)
+
+  // ── history ──────────────────────────────────────────────────────────────────
+  const [events, setEvents] = useState(null)
+
+  // Reset inputs when member changes
+  useEffect(() => {
+    setNameInput(`${member.firstName ?? ''} ${member.lastName ?? ''}`.trim())
+    setEmailInput(member.email                            ?? '')
+    setPhoneInput(member.phone                            ?? '')
+    setDobInput(member.dateOfBirth                        ?? '')
+    setAddressInput(member.address                        ?? '')
+    setEcNameInput(member.emergencyContactName            ?? '')
+    setEcPhoneInput(member.emergencyContactPhone          ?? '')
+    setEcRelInput(member.emergencyContactRelationship     ?? '')
+    setMembershipTypeInput(member.membershipType          ?? '')
+    setSubIdInput(member.stripeSubscriptionId             ?? '')
+    setCustIdInput(member.stripeCustomerId                ?? '')
+  }, [member.id]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!gymSlug || !member.id) return
+    setEvents(null)
+    const token = localStorage.getItem('ik_token')
+    fetch(`/api/${gymSlug}/members/${member.id}/events`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(r => r.json())
+      .then(d => setEvents(d.events ?? []))
+      .catch(() => setEvents([]))
+  }, [member.id, gymSlug])
+
+  // ── save helpers ─────────────────────────────────────────────────────────────
+  async function save(fields, setSaving) {
+    if (!onSaveField) return
+    setSaving(true)
+    await onSaveField(member.id, fields)
+    setSaving(false)
+  }
+
+  async function handleNameSave() {
+    const parts     = nameInput.trim().split(/\s+/)
+    const firstName = parts[0] ?? ''
+    const lastName  = parts.slice(1).join(' ')
+    await save({ firstName, lastName }, setSavingName)
+  }
+
+  const fullName = `${member.firstName ?? ''} ${member.lastName ?? ''}`.trim()
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col flex-1 min-h-0">
 
       {/* Header */}
       <div className="flex items-center justify-between px-5 h-14 shrink-0 border-b border-neutral-800">
-        <p className="text-sm font-semibold text-white">payment details</p>
+        <p className="text-sm font-semibold text-white">member profile</p>
         <button onClick={onClose} className="p-1.5 rounded-lg text-neutral-500 hover:text-white hover:bg-white/5 transition-colors">
           <X size={15} />
         </button>
@@ -331,21 +431,138 @@ function PaymentPanel({ member, priceMap, priceIdMap, onClose, onAction, actionL
             <span className="text-black font-bold text-lg tracking-tight select-none">{initials || '?'}</span>
           </div>
           <p className="text-white font-semibold text-base leading-tight">{member.firstName} {member.lastName}</p>
+          {member.cancelScheduled && (
+            <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20">
+              cancellation scheduled
+            </span>
+          )}
         </div>
 
         {/* Contact */}
-        <PSection icon={Phone} title="contact">
-          <PField label="email" value={member.email} />
-          <PField label="phone" value={member.phone} />
-        </PSection>
+        <DrawerSection icon={Phone} title="contact">
+          <DrawerField label="name">
+            <div className="flex items-center gap-2 ml-4">
+              <input type="text" value={nameInput} onChange={e => setNameInput(e.target.value)} className={`${INPUT} w-36`} />
+              <button onClick={handleNameSave} disabled={savingName || nameInput.trim() === fullName} className={SAVE_BTN}>
+                {savingName ? '…' : 'save'}
+              </button>
+            </div>
+          </DrawerField>
+          <DrawerField label="email">
+            <div className="flex items-center gap-2 ml-4">
+              <input type="email" value={emailInput} onChange={e => setEmailInput(e.target.value)} className={`${INPUT} w-36`} />
+              <button onClick={() => save({ email: emailInput.trim() }, setSavingEmail)} disabled={savingEmail || emailInput.trim().toLowerCase() === (member.email ?? '').toLowerCase()} className={SAVE_BTN}>
+                {savingEmail ? '…' : 'save'}
+              </button>
+            </div>
+          </DrawerField>
+          <DrawerField label="phone">
+            <div className="flex items-center gap-2 ml-4">
+              <input type="tel" value={phoneInput} onChange={e => setPhoneInput(e.target.value)} onBlur={e => setPhoneInput(formatPhone(e.target.value))} className={`${INPUT} w-36`} />
+              <button onClick={() => save({ phone: phoneInput.trim() }, setSavingPhone)} disabled={savingPhone || phoneInput.trim() === (member.phone ?? '')} className={SAVE_BTN}>
+                {savingPhone ? '…' : 'save'}
+              </button>
+            </div>
+          </DrawerField>
+        </DrawerSection>
+
+        {/* Personal info */}
+        <DrawerSection icon={User} title="personal info">
+          <DrawerField label="date of birth">
+            <div className="flex items-center gap-2 ml-4">
+              <input type="date" value={dobInput} onChange={e => setDobInput(e.target.value)} className={`${INPUT} w-36`} />
+              <button onClick={() => save({ dateOfBirth: dobInput.trim() }, setSavingDob)} disabled={savingDob || dobInput.trim() === (member.dateOfBirth ?? '')} className={SAVE_BTN}>
+                {savingDob ? '…' : 'save'}
+              </button>
+            </div>
+          </DrawerField>
+          <DrawerField label="address">
+            <div className="flex items-center gap-2 ml-4">
+              <input type="text" value={addressInput} onChange={e => setAddressInput(e.target.value)} placeholder="123 main st…" className={`${INPUT} w-44`} />
+              <button onClick={() => save({ address: addressInput.trim() }, setSavingAddr)} disabled={savingAddr || addressInput.trim() === (member.address ?? '')} className={SAVE_BTN}>
+                {savingAddr ? '…' : 'save'}
+              </button>
+            </div>
+          </DrawerField>
+        </DrawerSection>
+
+        {/* Emergency contact */}
+        <DrawerSection icon={ShieldAlert} title="emergency contact">
+          <DrawerField label="name">
+            <div className="flex items-center gap-2 ml-4">
+              <input type="text" value={ecNameInput} onChange={e => setEcNameInput(e.target.value)} placeholder="jane smith" className={`${INPUT} w-36`} />
+              <button onClick={() => save({ emergencyContactName: ecNameInput.trim() }, setSavingEcName)} disabled={savingEcName || ecNameInput.trim() === (member.emergencyContactName ?? '')} className={SAVE_BTN}>
+                {savingEcName ? '…' : 'save'}
+              </button>
+            </div>
+          </DrawerField>
+          <DrawerField label="phone">
+            <div className="flex items-center gap-2 ml-4">
+              <input type="tel" value={ecPhoneInput} onChange={e => setEcPhoneInput(e.target.value)} onBlur={e => setEcPhoneInput(formatPhone(e.target.value))} placeholder="(555) 000-0000" className={`${INPUT} w-36`} />
+              <button onClick={() => save({ emergencyContactPhone: ecPhoneInput.trim() }, setSavingEcPhone)} disabled={savingEcPhone || ecPhoneInput.trim() === (member.emergencyContactPhone ?? '')} className={SAVE_BTN}>
+                {savingEcPhone ? '…' : 'save'}
+              </button>
+            </div>
+          </DrawerField>
+          <DrawerField label="relationship">
+            <div className="flex items-center gap-2 ml-4">
+              <input type="text" value={ecRelInput} onChange={e => setEcRelInput(e.target.value)} placeholder="spouse, parent…" className={`${INPUT} w-36`} />
+              <button onClick={() => save({ emergencyContactRelationship: ecRelInput.trim() }, setSavingEcRel)} disabled={savingEcRel || ecRelInput.trim() === (member.emergencyContactRelationship ?? '')} className={SAVE_BTN}>
+                {savingEcRel ? '…' : 'save'}
+              </button>
+            </div>
+          </DrawerField>
+        </DrawerSection>
+
+        {/* Membership */}
+        <DrawerSection icon={KeyRound} title="membership">
+          <DrawerField label="type">
+            <div className="flex items-center gap-2 ml-4">
+              <input type="text" value={membershipTypeInput} onChange={e => setMembershipTypeInput(e.target.value)} className={`${INPUT} w-36`} />
+              <button onClick={() => save({ membershipType: membershipTypeInput.trim() }, setSavingMembershipType)} disabled={savingMembershipType || membershipTypeInput.trim() === (member.membershipType ?? '')} className={SAVE_BTN}>
+                {savingMembershipType ? '…' : 'save'}
+              </button>
+            </div>
+          </DrawerField>
+        </DrawerSection>
 
         {/* Billing */}
-        <PSection icon={CreditCard} title="billing">
-          <PField label="plan"         value={member.membershipType?.toLowerCase() || '—'} />
-          <PField label="amount"       value={entry ? `$${entry.amount}/${entry.interval}` : '—'} />
-          <PField label="subscription" value={member.stripeSubscriptionId} wrap />
-          <PField label="customer"     value={member.stripeCustomerId} wrap />
-        </PSection>
+        <DrawerSection icon={CreditCard} title="billing">
+          <DrawerField label="subscription">
+            <div className="flex items-center gap-2 ml-4">
+              <input type="text" value={subIdInput} onChange={e => setSubIdInput(e.target.value)} className={`${INPUT} w-36 font-mono text-[11px]`} />
+              <button onClick={() => save({ stripeSubscriptionId: subIdInput.trim() }, setSavingSubId)} disabled={savingSubId || subIdInput.trim() === (member.stripeSubscriptionId ?? '')} className={SAVE_BTN}>
+                {savingSubId ? '…' : 'save'}
+              </button>
+            </div>
+          </DrawerField>
+          <DrawerField label="customer">
+            <div className="flex items-center gap-2 ml-4">
+              <input type="text" value={custIdInput} onChange={e => setCustIdInput(e.target.value)} className={`${INPUT} w-36 font-mono text-[11px]`} />
+              <button onClick={() => save({ stripeCustomerId: custIdInput.trim() }, setSavingCustId)} disabled={savingCustId || custIdInput.trim() === (member.stripeCustomerId ?? '')} className={SAVE_BTN}>
+                {savingCustId ? '…' : 'save'}
+              </button>
+            </div>
+          </DrawerField>
+        </DrawerSection>
+
+        {/* History */}
+        <DrawerSection icon={History} title="history">
+          {events === null ? (
+            <div className="px-3 py-2.5 bg-[#1c1c1c]">
+              <span className="text-xs text-neutral-600">loading…</span>
+            </div>
+          ) : events.length === 0 ? (
+            <div className="px-3 py-2.5 bg-[#1c1c1c]">
+              <span className="text-xs text-neutral-600">no history recorded</span>
+            </div>
+          ) : events.map(ev => (
+            <div key={ev.id} className="flex items-center justify-between px-3 py-2.5 bg-[#1c1c1c]">
+              <span className="text-xs text-white">{EVENT_LABEL[ev.type] ?? ev.type}</span>
+              <span className="text-xs text-neutral-500 ml-4 shrink-0">{fmtEvDate(ev.date)}</span>
+            </div>
+          ))}
+        </DrawerSection>
 
       </div>
 
@@ -361,13 +578,15 @@ function PaymentPanel({ member, priceMap, priceIdMap, onClose, onAction, actionL
               >
                 freeze membership
               </button>
-              <button
-                onClick={() => onAction('cancel', member)}
-                disabled={actionLoading}
-                className="w-full py-2 rounded-lg text-sm font-medium bg-red-500/10 text-red-400 hover:bg-red-500/20 disabled:opacity-40 transition-colors"
-              >
-                cancel membership
-              </button>
+              {!member.cancelScheduled && (
+                <button
+                  onClick={() => onAction('cancel', member)}
+                  disabled={actionLoading}
+                  className="w-full py-2 rounded-lg text-sm font-medium bg-red-500/10 text-red-400 hover:bg-red-500/20 disabled:opacity-40 transition-colors"
+                >
+                  cancel membership
+                </button>
+              )}
             </>
           )}
           {member.status === 'FROZEN' && (
@@ -381,29 +600,6 @@ function PaymentPanel({ member, priceMap, priceIdMap, onClose, onAction, actionL
           )}
         </div>
       )}
-    </div>
-  )
-}
-
-function PSection({ icon: Icon, title, children }) {
-  return (
-    <div>
-      <div className="flex items-center gap-1.5 mb-2">
-        <Icon size={11} className="text-neutral-500" />
-        <p className="text-[11px] font-semibold tracking-widest text-neutral-500">{title.toUpperCase()}</p>
-      </div>
-      <div className="rounded-lg border border-neutral-800 divide-y divide-neutral-800 overflow-hidden">
-        {children}
-      </div>
-    </div>
-  )
-}
-
-function PField({ label, value, wrap }) {
-  return (
-    <div className="flex items-start justify-between px-3 py-2.5 bg-[#1c1c1c] gap-4">
-      <span className="text-xs text-zinc-400 shrink-0">{label}</span>
-      <span className={`text-xs text-white text-right ${wrap ? 'break-all' : 'truncate max-w-[240px]'}`}>{value || '—'}</span>
     </div>
   )
 }

@@ -18,9 +18,10 @@ export async function GET(request, { params }) {
     })
     if (!gym) return NextResponse.json({ error: 'Gym not found' }, { status: 404 })
 
-    let membershipPlans = []
-    let addonPlans      = []
-    let ptPlans         = []
+    let membershipPlans   = []
+    let addonPlans        = []
+    let ptPlans           = []
+    let programmingPlans  = []
 
     if (gym.stripeSecretKey) {
       const stripe = new Stripe(gym.stripeSecretKey, { apiVersion: '2024-06-20' })
@@ -54,12 +55,15 @@ export async function GET(request, { params }) {
           .map(toplan)
           .sort((a, b) => a.amount - b.amount)
 
-        // Coaching add-ons: Programming / Communication products
-        addonPlans = recurring
-          .filter(p => {
-            const n = (p.nickname ?? p.product?.name ?? '').toLowerCase()
-            return n.includes('programming') || n.includes('communication')
-          })
+        // Personal Training plans (gym membership included)
+        ptPlans = recurring
+          .filter(p => p.product?.id === 'prod_UrUgF0FkeB0IJx')
+          .map(toplan)
+          .sort((a, b) => a.amount - b.amount)
+
+        // Programming plans (gym membership included)
+        programmingPlans = recurring
+          .filter(p => p.product?.id === 'prod_UrtfMuPRgjfdsd')
           .map(toplan)
           .sort((a, b) => a.amount - b.amount)
       } else if (gymSlug === 'oasis-boston') {
@@ -103,7 +107,7 @@ export async function GET(request, { params }) {
       }
     }
 
-    return NextResponse.json({ gym: { name: gym.name, slug: gymSlug, logoUrl: gym.logoUrl ?? null }, membershipPlans, addonPlans, ptPlans })
+    return NextResponse.json({ gym: { name: gym.name, slug: gymSlug, logoUrl: gym.logoUrl ?? null }, membershipPlans, addonPlans, ptPlans, programmingPlans })
   } catch (error) {
     console.error('[join GET]', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

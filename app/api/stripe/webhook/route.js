@@ -278,21 +278,42 @@ export async function POST(request) {
     const membershipType = (meta.membershipType ?? '').toLowerCase()
     const subId          = session.subscription ?? null
 
+    const TRIUMPH_PT_PRODUCT_ID          = 'prod_UrUgF0FkeB0IJx'
+    const TRIUMPH_PROGRAMMING_PRODUCT_ID = 'prod_UrtfMuPRgjfdsd'
+
     let priceId = meta.priceId ?? null
+    let resolvedMembershipType = membershipType
     try {
       const expandOptions = gym.stripeSecretKey
         ? {}
         : { stripeAccount: connectedAccountId }
       const expanded = await accountStripe.checkout.sessions.retrieve(session.id, {
-        expand: ['line_items'],
+        expand: ['line_items.data.price.product'],
         ...expandOptions,
       })
-      const lineItemPrice = expanded.line_items?.data?.[0]?.price?.id
+      const lineItems   = expanded.line_items?.data ?? []
+      const lineItemPrice = lineItems[0]?.price?.id
       if (lineItemPrice) {
         priceId = lineItemPrice
         console.log('[platform/webhook] priceId from line_items:', priceId)
       } else {
         console.warn('[platform/webhook] no line item price found, falling back to metadata priceId:', priceId)
+      }
+
+      // For Triumph Barbell, override membershipType based on product IDs in the order
+      if (gymSlug === 'triumph-barbell') {
+        const productIds = lineItems.map(li => {
+          const prod = li.price?.product
+          return typeof prod === 'string' ? prod : prod?.id
+        }).filter(Boolean)
+        const hasPT          = productIds.includes(TRIUMPH_PT_PRODUCT_ID)
+        const hasProgramming = productIds.includes(TRIUMPH_PROGRAMMING_PRODUCT_ID)
+        if (hasPT && hasProgramming)   resolvedMembershipType = 'personal training + programming'
+        else if (hasPT)                resolvedMembershipType = 'personal training'
+        else if (hasProgramming)       resolvedMembershipType = 'programming'
+        if (hasPT || hasProgramming) {
+          console.log('[platform/webhook] triumph-barbell membership type overridden to:', resolvedMembershipType)
+        }
       }
     } catch (err) {
       console.error('[platform/webhook] failed to retrieve session line items:', err.message)
@@ -313,6 +334,23 @@ export async function POST(request) {
     ].filter(Boolean)
     const fullAddress = addressParts.length ? addressParts.join(', ') : (meta.address || null)
 
+    // Retrieve student ID image if an upload ID was provided
+    let studentIdImage = null
+    if (meta.studentIdUploadId) {
+      try {
+        const upload = await prisma.studentIdUpload.findUnique({
+          where: { id: meta.studentIdUploadId },
+        })
+        if (upload) {
+          studentIdImage = upload.fileData
+          await prisma.studentIdUpload.delete({ where: { id: upload.id } })
+          console.log('[platform/webhook] student ID image retrieved and upload record deleted:', meta.studentIdUploadId)
+        }
+      } catch (err) {
+        console.error('[platform/webhook] failed to retrieve student ID upload:', err.message)
+      }
+    }
+
     if (!member) {
       member = await prisma.member.create({
         data: {
@@ -322,7 +360,7 @@ export async function POST(request) {
           email:               email.toLowerCase(),
           phone:               phone || null,
           status:              'ACTIVE',
-          membershipType,
+          membershipType:      resolvedMembershipType,
           stripeSubscriptionId: subId,
           priceId,
           dateAccessed:        new Date(),
@@ -331,17 +369,26 @@ export async function POST(request) {
           emergencyContactName:         meta.emergencyName         || null,
           emergencyContactPhone:        meta.emergencyPhone        || null,
           emergencyContactRelationship: meta.emergencyRelationship || null,
+          graduationSemester:           meta.graduationSemester    || null,
+          graduationYear:               meta.graduationYear        || null,
+          studentIdImage:               studentIdImage,
+          hearAboutUs:                  meta.hearAboutUs           || null,
         },
       })
-      console.log('[platform/webhook] created member from checkout:', member.id, email)
+      console.log('[platform/webhook] created member from checkout:', member.id, email, '| hearAboutUs=%s', meta.hearAboutUs || '(none)')
     } else {
       member = await prisma.member.update({
         where: { id: member.id },
         data: {
           status:              'ACTIVE',
+          membershipType:      resolvedMembershipType || undefined,
           stripeSubscriptionId: subId ?? member.stripeSubscriptionId,
           priceId:             priceId ?? member.priceId,
           dateAccessed:        new Date(),
+          ...(meta.graduationSemester ? { graduationSemester: meta.graduationSemester } : {}),
+          ...(meta.graduationYear     ? { graduationYear:     meta.graduationYear }     : {}),
+          ...(studentIdImage          ? { studentIdImage }                               : {}),
+          ...(meta.hearAboutUs        ? { hearAboutUs: meta.hearAboutUs }               : {}),
         },
       })
       console.log('[platform/webhook] updated existing member from checkout:', member.id, email)
