@@ -217,7 +217,7 @@ function fmt(n, interval, intervalCount = 1, raw = false) {
   const amt   = Number(n).toLocaleString('en-US', { style: 'currency', currency: 'USD' })
   // Treat 4-week billing cycles as monthly for display purposes (unless raw=true)
   const isMonthly = !raw && (interval === 'month' || (interval === 'week' && intervalCount === 4))
-  const label = isMonthly ? '/month' : intervalCount > 1 ? ` every ${intervalCount} ${interval}s` : `/${interval}`
+  const label = isMonthly ? ' / month' : intervalCount > 1 ? ` every ${intervalCount} ${interval}s` : ` / ${interval}`
   return `${amt}${label}`
 }
 
@@ -446,7 +446,7 @@ export default function JoinPage() {
             {!gymLogo && <h1 className="text-xl font-bold text-white">{gymName}</h1>}
             <div className="flex items-center gap-3">
               <span className="h-px w-8 bg-neutral-700" />
-              <p className="text-xl font-semibold tracking-widest text-neutral-400 uppercase">membership registration</p>
+              <p className="text-base font-semibold tracking-widest text-neutral-400 uppercase whitespace-nowrap">membership registration</p>
               <span className="h-px w-8 bg-neutral-700" />
             </div>
           </div>
@@ -623,7 +623,7 @@ export default function JoinPage() {
                       if (n.includes('flex')) {
                         displayFmt = fmt(p.amount, p.interval, p.intervalCount)
                       } else if (n.includes('semiannual')) {
-                        displayFmt = `${Number(p.amount).toLocaleString('en-US', { style: 'currency', currency: 'USD' })} every 6 months`
+                        displayFmt = `${Number(p.amount).toLocaleString('en-US', { style: 'currency', currency: 'USD' })} / 6 months`
                       } else {
                         displayFmt = `${Number(p.amount * 2).toLocaleString('en-US', { style: 'currency', currency: 'USD' })} / 4 weeks`
                       }
@@ -681,7 +681,7 @@ export default function JoinPage() {
                   <option value="">— none —</option>
                   {ptPlans.map(p => (
                     <option key={p.priceId} value={p.priceId}>
-                      {p.name} — {Number(p.amount).toLocaleString('en-US', { style: 'currency', currency: 'USD' })} / 4 weeks
+                      {p.name.replace(/1x\/week/i, '1 session / week').replace(/2x\/week/i, '2 sessions / week').replace(/3x\/week/i, '3 sessions / week')} — {Number(p.amount).toLocaleString('en-US', { style: 'currency', currency: 'USD' })} / 4 weeks
                     </option>
                   ))}
                 </select>
@@ -780,9 +780,9 @@ export default function JoinPage() {
                 >
                   <option value="">— none —</option>
                   {ptPlans.map(p => {
-                    const breakdown = p.amount === 350 ? '1x/week' : p.amount === 610 ? '2x/week' : p.amount === 830 ? '3x/week' : null
+                    const breakdown = p.amount === 350 ? '1 session / week' : p.amount === 610 ? '2 sessions / week' : p.amount === 830 ? '3 sessions / week' : null
                     const label = breakdown
-                      ? `${breakdown} — ${Number(p.amount).toLocaleString('en-US', { style: 'currency', currency: 'USD' })}/month`
+                      ? `${breakdown} — ${Number(p.amount).toLocaleString('en-US', { style: 'currency', currency: 'USD' })} / month`
                       : `${p.name} — ${fmt(p.amount, p.interval, p.intervalCount)}`
                     return (
                       <option key={p.priceId} value={p.priceId}>{label}</option>
@@ -822,7 +822,7 @@ export default function JoinPage() {
                   {programmingPlans.map(p => {
                     const breakdown = p.amount === 150 ? 'programming only' : p.amount === 225 ? 'weekly check-ins' : p.amount === 300 ? 'daily check-ins' : null
                     const label = breakdown
-                      ? `${breakdown} — ${Number(p.amount).toLocaleString('en-US', { style: 'currency', currency: 'USD' })}/month`
+                      ? `${breakdown} — ${Number(p.amount).toLocaleString('en-US', { style: 'currency', currency: 'USD' })} / month`
                       : `${p.name} — ${fmt(p.amount, p.interval, p.intervalCount)}`
                     return (
                       <option key={p.priceId} value={p.priceId}>{label}</option>
