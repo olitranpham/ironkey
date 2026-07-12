@@ -280,6 +280,7 @@ export async function POST(request) {
 
     const TRIUMPH_PT_PRODUCT_ID          = 'prod_UrUgF0FkeB0IJx'
     const TRIUMPH_PROGRAMMING_PRODUCT_ID = 'prod_UrtfMuPRgjfdsd'
+    const HYDRA_COACHING_PRODUCT_IDS     = new Set(['prod_UibCDN1vBqO2DX', 'prod_UoBtsZTZOcp8it'])
 
     let priceId = meta.priceId ?? null
     let resolvedMembershipType = membershipType
@@ -300,12 +301,13 @@ export async function POST(request) {
         console.warn('[platform/webhook] no line item price found, falling back to metadata priceId:', priceId)
       }
 
+      const productIds = lineItems.map(li => {
+        const prod = li.price?.product
+        return typeof prod === 'string' ? prod : prod?.id
+      }).filter(Boolean)
+
       // For Triumph Barbell, override membershipType based on product IDs in the order
       if (gymSlug === 'triumph-barbell') {
-        const productIds = lineItems.map(li => {
-          const prod = li.price?.product
-          return typeof prod === 'string' ? prod : prod?.id
-        }).filter(Boolean)
         const hasPT          = productIds.includes(TRIUMPH_PT_PRODUCT_ID)
         const hasProgramming = productIds.includes(TRIUMPH_PROGRAMMING_PRODUCT_ID)
         if (hasPT && hasProgramming)   resolvedMembershipType = 'personal training + programming'
@@ -313,6 +315,15 @@ export async function POST(request) {
         else if (hasProgramming)       resolvedMembershipType = 'programming'
         if (hasPT || hasProgramming) {
           console.log('[platform/webhook] triumph-barbell membership type overridden to:', resolvedMembershipType)
+        }
+      }
+
+      // For Hydra Athletic Co., append '+ pt' when a coaching/programming add-on is in the order
+      if (gymSlug === 'hydra-athletic-co') {
+        const hasCoaching = productIds.some(id => HYDRA_COACHING_PRODUCT_IDS.has(id))
+        if (hasCoaching) {
+          resolvedMembershipType = membershipType ? `${membershipType} + pt` : 'pt'
+          console.log('[platform/webhook] hydra-athletic-co membership type with coaching:', resolvedMembershipType)
         }
       }
     } catch (err) {

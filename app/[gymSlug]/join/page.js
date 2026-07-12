@@ -289,6 +289,7 @@ export default function JoinPage() {
   })
 
   const isTriumph  = gymSlug === 'triumph-barbell'
+  const isHydra    = gymSlug === 'hydra-athletic-co'
   const isStudent  = form.membershipType.toLowerCase().includes('student')
   useEffect(() => {
     fetch(`/api/${gymSlug}/join`)
@@ -354,10 +355,9 @@ export default function JoinPage() {
     if (isStudent && !graduationSemester)      { setError('Please select a graduation semester.'); return }
     if (isStudent && !graduationYear)          { setError('Please select a graduation year.'); return }
 
-    const isPtOrProgramming = isTriumph && (
-      ptPlans.some(p => p.priceId === form.priceId) ||
-      programmingPlans.some(p => p.priceId === form.priceId)
-    )
+    const isPtOrProgramming =
+      (isTriumph && (ptPlans.some(p => p.priceId === form.priceId) || programmingPlans.some(p => p.priceId === form.priceId))) ||
+      (isHydra   && (ptPlans.some(p => p.priceId === form.priceId) || addonPlans.some(p => p.priceId === form.addonPriceId)))
 
     setSubmitting(true)
     try {
@@ -397,10 +397,12 @@ export default function JoinPage() {
         hearAboutUs:           hearAboutUs || '',
       }
 
-      // PT/programming plans: go to intake form first, then Stripe
+      // PT/programming/coaching plans: go to intake form first, then Stripe
       if (isPtOrProgramming) {
-        sessionStorage.setItem('triumph_join_payload', JSON.stringify(checkoutPayload))
-        router.push('/triumph-barbell/join/pt-intake')
+        const storageKey = isHydra ? 'hydra_join_payload'             : 'triumph_join_payload'
+        const intakePath = isHydra ? '/hydra-athletic-co/join/pt-intake' : '/triumph-barbell/join/pt-intake'
+        sessionStorage.setItem(storageKey, JSON.stringify(checkoutPayload))
+        router.push(intakePath)
         return
       }
 
@@ -582,9 +584,10 @@ export default function JoinPage() {
           />
         </Field>
 
-        {/* Membership type — hidden for Oasis PT plans and Triumph PT/programming plans */}
-        {!(gymSlug === 'oasis-boston' && ptPlans.some(p => p.priceId === form.priceId)) &&
-         !(gymSlug === 'triumph-barbell' && (ptPlans.some(p => p.priceId === form.priceId) || programmingPlans.some(p => p.priceId === form.priceId))) &&
+        {/* Membership type — hidden for Oasis PT plans, Triumph PT/programming plans, and Hydra PT plans */}
+        {!(gymSlug === 'oasis-boston'      && ptPlans.some(p => p.priceId === form.priceId)) &&
+         !(gymSlug === 'triumph-barbell'   && (ptPlans.some(p => p.priceId === form.priceId) || programmingPlans.some(p => p.priceId === form.priceId))) &&
+         !(gymSlug === 'hydra-athletic-co' && ptPlans.some(p => p.priceId === form.priceId)) &&
          <Field label="membership type" required>
           {membershipPlans.length === 0 ? (
             <p className="text-xs text-neutral-600 px-1">No plans available — contact the gym directly.</p>
