@@ -347,12 +347,10 @@ function DrawerContent({ member, gymSlug, membershipBorder, onClose, onStatusCha
             </div>
           </DrawerField>
 
-          {/* How did you hear about us — read-only, only shown when present */}
-          {member.hearAboutUs && (
-            <DrawerField label="how did you hear about us?">
-              <span className="text-xs text-white ml-4">{member.hearAboutUs}</span>
-            </DrawerField>
-          )}
+          {/* How did you hear about us — read-only */}
+          <DrawerField label="how did you hear about us?">
+            <span className="text-xs text-white ml-4">{member.hearAboutUs || '—'}</span>
+          </DrawerField>
         </DrawerSection>
 
         {/* Emergency Contact */}
