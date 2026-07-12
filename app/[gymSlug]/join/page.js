@@ -438,16 +438,14 @@ export default function JoinPage() {
       >
 
         {/* Header */}
-        <div className="flex flex-col items-center text-center gap-3 pb-2">
+        <div className="flex flex-col items-center text-center gap-3 pb-0">
           {gymLogo && (
             <img src={gymLogo} alt={gymName} className="w-24 h-24 object-contain" />
           )}
-          <div className="flex flex-col items-center gap-2">
+          <div className="flex flex-col items-center gap-2 w-full">
             {!gymLogo && <h1 className="text-xl font-bold text-white">{gymName}</h1>}
-            <div className="flex items-center gap-3">
-              <span className="h-px w-8 bg-neutral-700" />
-              <p className="text-base font-semibold tracking-widest text-neutral-400 uppercase whitespace-nowrap">membership registration</p>
-              <span className="h-px w-8 bg-neutral-700" />
+            <div className="bg-white/10 rounded-md px-6 py-2 w-full">
+              <p className="text-base font-semibold tracking-widest text-white whitespace-nowrap">membership registration</p>
             </div>
           </div>
         </div>
@@ -874,7 +872,7 @@ export default function JoinPage() {
           </Field>
         )}
 
-        <SectionDivider label="emergency contact" />
+        <SectionDivider label="emergency contact info" />
         <div className="grid grid-cols-2 gap-3">
           <Field label="name" required>
             <input
