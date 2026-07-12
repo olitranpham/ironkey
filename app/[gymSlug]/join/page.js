@@ -621,7 +621,7 @@ export default function JoinPage() {
                       } else if (n.includes('semiannual')) {
                         displayFmt = `${Number(p.amount).toLocaleString('en-US', { style: 'currency', currency: 'USD' })} every 6 months`
                       } else {
-                        displayFmt = `${Number(p.amount * 2).toLocaleString('en-US', { style: 'currency', currency: 'USD' })} every 4 weeks`
+                        displayFmt = `${Number(p.amount * 2).toLocaleString('en-US', { style: 'currency', currency: 'USD' })} / 4 weeks`
                       }
                     } else if (gymSlug === 'hydra-athletic-co' && p.name.toLowerCase().includes('pre-sale membership')) {
                       displayFmt = '$50.00 / 4 weeks'
