@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 
+const SEAM_API        = 'https://connect.getseam.com'
 const MAX_FLEX_CHECKINS = 5
 
 function startOfMonth(date) {
@@ -15,6 +16,49 @@ function resolveCount(member) {
     currentCount: needsReset ? 0 : member.flexCheckInCount,
     needsReset,
     monthStart,
+  }
+}
+
+// ── Seam helpers ──────────────────────────────────────────────────────────────
+
+async function deleteSeamCodeByPin(apiKey, deviceId, pin) {
+  try {
+    const seamHeaders = { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' }
+    const listRes  = await fetch(`${SEAM_API}/access_codes/list`, {
+      method: 'POST', headers: seamHeaders,
+      body:   JSON.stringify({ device_id: deviceId }),
+    })
+    const listJson = listRes.ok ? await listRes.json() : { access_codes: [] }
+    const oldCode  = listJson.access_codes?.find(c => String(c.code).trim() === String(pin).trim())
+    if (oldCode) {
+      await fetch(`${SEAM_API}/access_codes/delete`, {
+        method: 'POST', headers: seamHeaders,
+        body:   JSON.stringify({ access_code_id: oldCode.access_code_id }),
+      })
+      console.log('[flex-checkin] deleted Seam code id=%s pin=%s', oldCode.access_code_id, pin)
+    } else {
+      console.log('[flex-checkin] no existing Seam code found for pin=%s', pin)
+    }
+  } catch (err) {
+    console.error('[flex-checkin] Seam delete error (non-fatal):', err.message)
+  }
+}
+
+async function createSeam24hrCode(apiKey, deviceId, pin, memberName) {
+  try {
+    const seamHeaders = { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' }
+    const startsAt    = new Date().toISOString()
+    const endsAt      = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+    const payload     = { device_id: deviceId, name: memberName, code: String(pin).trim(), starts_at: startsAt, ends_at: endsAt }
+    console.log('[flex-checkin] creating 24-hr Seam code — %j', payload)
+    const res  = await fetch(`${SEAM_API}/access_codes/create`, {
+      method: 'POST', headers: seamHeaders,
+      body:   JSON.stringify(payload),
+    })
+    const json = await res.json()
+    console.log('[flex-checkin] Seam create response status=%d body=%j', res.status, json)
+  } catch (err) {
+    console.error('[flex-checkin] Seam create error (non-fatal):', err.message)
   }
 }
 
@@ -82,6 +126,7 @@ export async function GET(request, { params }) {
 /**
  * POST /api/[gymSlug]/flex-checkin
  * Public — records a flex check-in for a member. Resets the monthly count if needed.
+ * Activates a 24-hr Seam code on check-in; removes it on the 5th (final) check-in.
  * Body: { email }
  */
 export async function POST(request, { params }) {
@@ -96,7 +141,7 @@ export async function POST(request, { params }) {
 
     const gym = await prisma.gym.findUnique({
       where:  { slug: gymSlug },
-      select: { id: true, zapierGuestWebhookUrl: true },
+      select: { id: true, seamApiKey: true, seamDeviceId: true, zapierGuestWebhookUrl: true },
     })
     if (!gym) return NextResponse.json({ error: 'Gym not found' }, { status: 404 })
 
@@ -126,7 +171,8 @@ export async function POST(request, { params }) {
       )
     }
 
-    const newCount = currentCount + 1
+    const newCount        = currentCount + 1
+    const checkInsRemaining = MAX_FLEX_CHECKINS - newCount
 
     await prisma.member.update({
       where: { id: member.id },
@@ -136,26 +182,41 @@ export async function POST(request, { params }) {
       },
     })
 
-    // Fire Zapier webhook (non-blocking)
+    // ── Seam code management ──────────────────────────────────────────────────
+    const pin        = member.accessCode ? String(member.accessCode).trim() : null
+    const memberName = `${member.firstName} ${member.lastName}`.trim()
+    const hasSeam    = gym.seamApiKey && gym.seamDeviceId && pin
+
+    if (hasSeam) {
+      // Always delete the existing code first (clears any previous 24-hr window)
+      await deleteSeamCodeByPin(gym.seamApiKey, gym.seamDeviceId, pin)
+
+      if (checkInsRemaining > 0) {
+        // Check-ins remaining — create a fresh 24-hr code
+        await createSeam24hrCode(gym.seamApiKey, gym.seamDeviceId, pin, memberName)
+      } else {
+        // 5th (final) check-in — delete only, no recreation; access expires immediately
+        console.log('[flex-checkin] final check-in for month — Seam code deleted, not recreated (email=%s)', email)
+      }
+    }
+
+    // ── Fire Zapier webhook (non-blocking) ────────────────────────────────────
     if (gym.zapierGuestWebhookUrl) {
       fetch(gym.zapierGuestWebhookUrl, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({
           type:              'flex_checkin',
-          name:              `${member.firstName} ${member.lastName}`,
+          name:              memberName,
           email:             member.email,
           accessCode:        member.accessCode ?? null,
           checkInsUsed:      newCount,
-          checkInsRemaining: MAX_FLEX_CHECKINS - newCount,
+          checkInsRemaining,
         }),
       }).catch(err => console.error('[flex-checkin webhook]', err))
     }
 
-    return NextResponse.json({
-      checkInsUsed:      newCount,
-      checkInsRemaining: MAX_FLEX_CHECKINS - newCount,
-    })
+    return NextResponse.json({ checkInsUsed: newCount, checkInsRemaining })
   } catch (error) {
     console.error('[flex-checkin POST]', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
