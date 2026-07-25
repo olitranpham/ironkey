@@ -433,26 +433,21 @@ export default function JoinPage() {
   return (
     <div className="min-h-screen bg-[#292929] flex flex-col items-center py-12 px-4">
 
+      {/* Header */}
+      <div className="flex flex-col items-center text-center gap-3 mb-8">
+        {gymLogo && (
+          <img src={gymLogo} alt={gymName} className="w-24 h-24 object-contain" />
+        )}
+        {!gymLogo && <h1 className="text-xl font-bold text-white">{gymName}</h1>}
+      </div>
+
       {/* Form card */}
       <form
         onSubmit={handleSubmit}
-        className="w-full max-w-md bg-[#1c1c1c] border border-white/10 rounded-2xl p-7 flex flex-col gap-5 shadow-2xl"
+        className="w-full max-w-2xl bg-[#1c1c1c] border border-white/10 rounded-2xl p-7 flex flex-col gap-5 shadow-2xl"
       >
 
-        {/* Header */}
-        <div className="flex flex-col items-center text-center gap-3 pb-0">
-          {gymLogo && (
-            <img src={gymLogo} alt={gymName} className="w-24 h-24 object-contain" />
-          )}
-          <div className="flex flex-col items-center gap-2 w-full">
-            {!gymLogo && <h1 className="text-xl font-bold text-white">{gymName}</h1>}
-            <div className="bg-white/10 rounded-md px-6 py-2 w-full">
-              <p className="text-base font-semibold tracking-widest text-white whitespace-nowrap">membership registration</p>
-            </div>
-          </div>
-        </div>
-
-        <SectionDivider label="member info" />
+        <SectionDivider label="membership registration" />
 
         {/* Name */}
         <div className="grid grid-cols-2 gap-3">

@@ -245,6 +245,7 @@ export default function GuestPage() {
   const { gymSlug } = useParams()
 
   const [gymName,    setGymName]    = useState('')
+  const [gymLogo,    setGymLogo]    = useState(null)
   const [plans,      setPlans]      = useState([])
   const [pageLoading, setPageLoading] = useState(true)
 
@@ -278,6 +279,7 @@ export default function GuestPage() {
       .then(r => r.json())
       .then(({ gym, plans }) => {
         setGymName((gym?.name ?? gymSlug).replace(/-/g, ' '))
+        setGymLogo(gym?.logoUrl ?? null)
         const p = plans ?? []
         console.log('[guest/page] plans from API:', JSON.stringify(p))
         setPlans(p)
@@ -515,12 +517,14 @@ export default function GuestPage() {
     <div className="min-h-screen bg-[#292929] flex flex-col items-center py-12 px-4">
 
       {/* Header */}
-      <div className="text-center mb-8">
-        <h1 className="text-2xl font-bold text-white">{gymName}</h1>
-        <p className="text-neutral-500 text-sm mt-1">guest pass registration</p>
+      <div className="flex flex-col items-center text-center gap-3 mb-8">
+        {gymLogo && (
+          <img src={gymLogo} alt={gymName} className="w-24 h-24 object-contain" />
+        )}
+        {!gymLogo && <h1 className="text-xl font-bold text-white">{gymName}</h1>}
       </div>
 
-      <div className="w-full max-w-md">
+      <div className="w-full max-w-2xl">
 
         {/* ── Back button ─────────────────────────────────────────────────── */}
         {step !== 'intent' && step !== 'checkin-done' && step !== 'flex-done' && (
@@ -584,7 +588,7 @@ export default function GuestPage() {
             onSubmit={handleNewGuestSubmit}
             className="bg-[#1c1c1c] border border-neutral-800 rounded-2xl p-6 flex flex-col gap-5 shadow-2xl"
           >
-            <SectionDivider label="member info" />
+            <SectionDivider label="guest pass registration" />
 
             {/* Name */}
             <div className="grid grid-cols-2 gap-3">

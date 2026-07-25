@@ -54,7 +54,7 @@ export default function JoinSuccessPage() {
         }
       `}</style>
 
-      <div className="w-full max-w-lg bg-[#1c1c1c] border border-neutral-800 rounded-2xl px-10 py-12 flex flex-col items-center text-center gap-8 shadow-2xl">
+      <div className="w-full max-w-2xl bg-[#1c1c1c] border border-neutral-800 rounded-2xl px-10 py-12 flex flex-col items-center text-center gap-8 shadow-2xl">
 
         {/* Animated checkmark + heading */}
         <div className="flex flex-col items-center gap-0">
