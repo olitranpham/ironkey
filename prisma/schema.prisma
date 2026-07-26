@@ -328,6 +328,10 @@ model InventoryItem {
   unitCost   Float?
   notes      String?
 
+  // Concessions — set to sell this item through the public ordering page
+  price           Float?
+  stripeProductId String?
+
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 

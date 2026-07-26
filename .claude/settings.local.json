@@ -66,7 +66,9 @@
       "Bash(git checkout:*)",
       "Bash(railway variables:*)",
       "Bash(npx:*)",
-      "Bash(npm uninstall:*)"
+      "Bash(npm uninstall:*)",
+      "Bash(lsof -iTCP -sTCP:LISTEN -P)",
+      "Bash(ps -p 74986 -o pid,command=)"
     ]
   }
 }
