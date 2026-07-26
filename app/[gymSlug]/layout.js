@@ -91,6 +91,7 @@ function PortalLayout({ gymSlug, children }) {
   const [collapsed,     setCollapsed]     = useState(false)
   const [mobileOpen,    setMobileOpen]    = useState(false)
   const [gymName,       setGymName]       = useState('')
+  const [gymLogo,       setGymLogo]       = useState(null)
   const [hasSeam,       setHasSeam]       = useState(false)
   const [repGymPass,    setRepGymPass]    = useState(false)
 
@@ -124,6 +125,7 @@ function PortalLayout({ gymSlug, children }) {
         if (!gym) return
         const name = gym.name.toLowerCase()
         setGymName(name)
+        setGymLogo(gym.logoUrl ?? null)
         setHasSeam(Boolean(gym.hasSeam))
         setRepGymPass(Boolean(gym.repGymPassEnabled))
         document.title = `${name} - staff portal`
@@ -163,11 +165,19 @@ function PortalLayout({ gymSlug, children }) {
         {/* Header: badge + gym name + collapse toggle */}
         <div className="flex items-center border-b border-neutral-800 h-14 px-3 gap-2.5">
           {!collapsed && (
-            <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-white shrink-0">
-              <span className="text-[#1c1c1c] font-black text-[11px] tracking-tighter select-none">
-                {gymInitials(gymName) || '??'}
-              </span>
-            </div>
+            gymLogo ? (
+              <img
+                src={gymLogo}
+                alt={gymName}
+                className="h-10 w-10 object-contain shrink-0"
+              />
+            ) : (
+              <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-white shrink-0">
+                <span className="text-[#1c1c1c] font-black text-[11px] tracking-tighter select-none">
+                  {gymInitials(gymName) || '??'}
+                </span>
+              </div>
+            )
           )}
 
           {!collapsed && (
