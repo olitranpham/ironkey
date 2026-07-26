@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useParams } from 'next/navigation'
 import { Loader2, Minus, Plus, ShoppingBag } from 'lucide-react'
 
 function fmt(n) {
@@ -18,6 +19,8 @@ function SectionDivider({ label }) {
 }
 
 export default function ConcessionsPage() {
+  const { gymSlug } = useParams()
+
   const [gymName,    setGymName]    = useState('')
   const [gymLogo,    setGymLogo]    = useState(null)
   const [items,      setItems]      = useState([])
@@ -27,16 +30,18 @@ export default function ConcessionsPage() {
   const [error,      setError]      = useState(null)
 
   useEffect(() => {
-    fetch('/api/hydra-athletic-co/concessions/items')
+    fetch(`/api/${gymSlug}/concessions/items`)
       .then(r => r.json())
       .then(({ gym, items = [] }) => {
-        setGymName(gym?.name ?? 'hydra athletic co')
+        const name = (gym?.name ?? gymSlug).replace(/-/g, ' ')
+        setGymName(name)
         setGymLogo(gym?.logoUrl ?? null)
         setItems(items)
+        document.title = `concessions — ${name}`
       })
       .catch(() => setError('Could not load the menu.'))
       .finally(() => setLoading(false))
-  }, [])
+  }, [gymSlug])
 
   function setQty(id, qty) {
     setQuantities(q => ({ ...q, [id]: Math.max(0, qty) }))
@@ -54,7 +59,7 @@ export default function ConcessionsPage() {
 
     setSubmitting(true)
     try {
-      const res  = await fetch('/api/hydra-athletic-co/concessions/checkout', {
+      const res  = await fetch(`/api/${gymSlug}/concessions/checkout`, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({ items: selected }),
@@ -97,17 +102,22 @@ export default function ConcessionsPage() {
         )}
 
         {items.map(item => {
-          const qty        = quantities[item.id] ?? 0
-          const outOfStock = item.quantity <= 0
+          const qty         = quantities[item.id] ?? 0
+          const unavailable = !item.stripeProductId || item.price == null
+          const outOfStock  = !unavailable && item.quantity <= 0
           return (
             <div
               key={item.id}
-              className="flex items-center justify-between gap-3 bg-[#242424] border border-neutral-700/60 rounded-xl px-4 py-3"
+              className={`flex items-center justify-between gap-3 border rounded-xl px-4 py-3 transition-opacity ${
+                unavailable
+                  ? 'bg-[#242424]/40 border-neutral-800 opacity-50'
+                  : 'bg-[#242424] border-neutral-700/60'
+              }`}
             >
               <div className="min-w-0">
-                <p className="text-sm font-semibold text-white truncate">{item.name}</p>
+                <p className={`text-sm font-semibold truncate ${unavailable ? 'text-neutral-400' : 'text-white'}`}>{item.name}</p>
                 <p className="text-xs text-neutral-500 mt-0.5">
-                  {outOfStock ? 'out of stock' : fmt(item.price)}
+                  {unavailable ? 'unavailable' : outOfStock ? 'out of stock' : fmt(item.price)}
                 </p>
               </div>
 
@@ -115,7 +125,7 @@ export default function ConcessionsPage() {
                 <button
                   type="button"
                   onClick={() => setQty(item.id, qty - 1)}
-                  disabled={qty <= 0}
+                  disabled={unavailable || qty <= 0}
                   className="w-8 h-8 rounded-full border border-neutral-600 text-white flex items-center justify-center hover:border-neutral-400 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                 >
                   <Minus size={14} />
@@ -124,7 +134,7 @@ export default function ConcessionsPage() {
                 <button
                   type="button"
                   onClick={() => setQty(item.id, qty + 1)}
-                  disabled={outOfStock || qty >= item.quantity}
+                  disabled={unavailable || outOfStock || qty >= item.quantity}
                   className="w-8 h-8 rounded-full border border-neutral-600 text-white flex items-center justify-center hover:border-neutral-400 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                 >
                   <Plus size={14} />

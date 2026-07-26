@@ -3,14 +3,15 @@ import Stripe from 'stripe'
 import prisma from '@/lib/prisma'
 
 /**
- * POST /api/hydra-athletic-co/concessions/checkout
+ * POST /api/[gymSlug]/concessions/checkout
  * Public — creates a Stripe Checkout session (one-time payment) for a
  * concessions order.
  *
  * Body: { items: [{ stripeProductId, quantity }] }
  */
-export async function POST(request) {
+export async function POST(request, { params }) {
   try {
+    const { gymSlug } = await params
     const body = await request.json()
     const selections = Array.isArray(body.items) ? body.items : []
     const clean = selections
@@ -20,7 +21,7 @@ export async function POST(request) {
     if (!clean.length) return NextResponse.json({ error: 'No items selected' }, { status: 400 })
 
     const gym = await prisma.gym.findUnique({
-      where:  { slug: 'hydra-athletic-co' },
+      where:  { slug: gymSlug },
       select: { id: true, stripeSecretKey: true },
     })
     if (!gym)                return NextResponse.json({ error: 'Gym not found' },         { status: 404 })
@@ -54,13 +55,15 @@ export async function POST(request) {
       ?? `https://${request.headers.get('host')}`
 
     const session = await stripe.checkout.sessions.create({
-      mode:        'payment',
+      mode:                  'payment',
       line_items,
-      success_url: `${origin}/hydra-athletic-co/concessions/success`,
-      cancel_url:  `${origin}/hydra-athletic-co/concessions`,
+      allow_promotion_codes: true,
+      success_url: `${origin}/${gymSlug}/concessions/success`,
+      cancel_url:  `${origin}/${gymSlug}/concessions`,
       metadata: {
         source: 'concessions',
         gymId:  gym.id,
+        gymSlug,
       },
     })
 

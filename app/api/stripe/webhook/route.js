@@ -270,6 +270,54 @@ export async function POST(request) {
       return NextResponse.json({ received: true })
     }
 
+    // ── Concessions purchase — decrement inventory stock ────────────────────
+    if (meta.source === 'concessions') {
+      try {
+        const expandOptions = gym.stripeSecretKey
+          ? {}
+          : { stripeAccount: connectedAccountId }
+        const lineItems = await accountStripe.checkout.sessions.listLineItems(session.id, {
+          expand: ['data.price.product'],
+          ...expandOptions,
+        })
+
+        for (const li of lineItems.data ?? []) {
+          const productId    = typeof li.price?.product === 'string' ? li.price.product : li.price?.product?.id
+          const purchasedQty = li.quantity ?? 0
+          if (!productId || !purchasedQty) continue
+
+          const item = await prisma.inventoryItem.findFirst({
+            where: { gymId: gym.id, stripeProductId: productId },
+          })
+          if (!item) {
+            console.warn('[platform/webhook] concessions — no InventoryItem found for product:', productId, '| gym:', gymSlug)
+            continue
+          }
+
+          const newQuantity = Math.max(0, item.quantity - purchasedQty)
+          await prisma.$transaction([
+            prisma.inventoryItem.update({
+              where: { id: item.id },
+              data:  { quantity: newQuantity },
+            }),
+            prisma.inventoryLog.create({
+              data: {
+                gymId:  gym.id,
+                itemId: item.id,
+                change: -purchasedQty,
+                reason: 'concessions_sale',
+              },
+            }),
+          ])
+          console.log(`[inventory] decremented ${item.name} by ${purchasedQty} — new stock: ${newQuantity}`)
+        }
+      } catch (err) {
+        console.error('[platform/webhook] concessions inventory decrement error:', err.message)
+      }
+
+      return NextResponse.json({ received: true })
+    }
+
     // ── Member signup via join form ─────────────────────────────────────────
     const firstName      = meta.firstName      ?? ''
     const lastName       = meta.lastName       ?? ''

@@ -37,6 +37,7 @@ function ItemModal({ gymSlug, item, onSave, onClose }) {
     quantity:   item?.quantity   ?? 0,
     lowStockAt: item?.lowStockAt ?? 5,
     unitCost:   item?.unitCost   ?? '',
+    price:      item?.price      ?? '',
     notes:      item?.notes      ?? '',
   })
   const [saving, setSaving] = useState(false)
@@ -63,6 +64,7 @@ function ItemModal({ gymSlug, item, onSave, onClose }) {
           quantity:   parseInt(form.quantity) || 0,
           lowStockAt: parseInt(form.lowStockAt) || 5,
           unitCost:   form.unitCost !== '' ? parseFloat(form.unitCost) : null,
+          price:      form.price !== '' ? parseFloat(form.price) : null,
           notes:      form.notes.trim() || null,
         }),
       })
@@ -142,6 +144,25 @@ function ItemModal({ gymSlug, item, onSave, onClose }) {
               placeholder="0.00"
               value={form.unitCost}
               onChange={e => set('unitCost', e.target.value)}
+              className="w-full bg-neutral-900 border border-neutral-700 rounded-lg pl-6 pr-3 py-2 text-xs text-white placeholder-neutral-600 focus:outline-none focus:border-neutral-500"
+            />
+          </div>
+        </div>
+
+        {/* Sale price */}
+        <div className="flex flex-col gap-1.5">
+          <label className="text-[11px] text-neutral-500">
+            sale price <span className="text-neutral-700">(optional — enables selling on the concessions page)</span>
+          </label>
+          <div className="relative">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500 text-xs">$</span>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              placeholder="0.00"
+              value={form.price}
+              onChange={e => set('price', e.target.value)}
               className="w-full bg-neutral-900 border border-neutral-700 rounded-lg pl-6 pr-3 py-2 text-xs text-white placeholder-neutral-600 focus:outline-none focus:border-neutral-500"
             />
           </div>

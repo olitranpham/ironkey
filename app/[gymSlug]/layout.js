@@ -73,7 +73,11 @@ export default function GymLayout({ children }) {
   const pathname = usePathname()
   const gymSlug  = params.gymSlug
 
-  if (pathname.startsWith(`/${gymSlug}/join`) || pathname === `/${gymSlug}/guest` || pathname.startsWith(`/${gymSlug}/guest/`)) {
+  if (
+    pathname.startsWith(`/${gymSlug}/join`) ||
+    pathname === `/${gymSlug}/guest` || pathname.startsWith(`/${gymSlug}/guest/`) ||
+    pathname === `/${gymSlug}/concessions` || pathname.startsWith(`/${gymSlug}/concessions/`)
+  ) {
     return <div className="min-h-screen bg-[#292929]">{children}</div>
   }
 

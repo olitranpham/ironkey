@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import Stripe from 'stripe'
 import prisma from '@/lib/prisma'
 
 function itemStatus(quantity, lowStockAt) {
@@ -34,14 +35,30 @@ export async function POST(request, { params }) {
   try {
     const { gymSlug } = await params
     const body = await request.json()
-    const { name, category, quantity, lowStockAt, unitCost, notes } = body
+    const { name, category, quantity, lowStockAt, unitCost, notes, price } = body
 
     if (!name?.trim() || !category) {
       return NextResponse.json({ error: 'name and category are required' }, { status: 400 })
     }
 
-    const gym = await prisma.gym.findUnique({ where: { slug: gymSlug }, select: { id: true } })
+    const gym = await prisma.gym.findUnique({ where: { slug: gymSlug }, select: { id: true, stripeSecretKey: true } })
     if (!gym) return NextResponse.json({ error: 'Gym not found' }, { status: 404 })
+
+    const itemPrice = price !== undefined && price !== null && price !== '' ? parseFloat(price) : null
+
+    // Auto-create a matching Stripe product + price so the item can be sold
+    // through the public concessions page, as long as the gym has Stripe set up.
+    let stripeProductId = null
+    if (itemPrice != null && gym.stripeSecretKey) {
+      const stripe  = new Stripe(gym.stripeSecretKey, { apiVersion: '2024-06-20' })
+      const product = await stripe.products.create({ name: name.trim() })
+      await stripe.prices.create({
+        product:     product.id,
+        unit_amount: Math.round(itemPrice * 100),
+        currency:    'usd',
+      })
+      stripeProductId = product.id
+    }
 
     const item = await prisma.inventoryItem.create({
       data: {
@@ -52,6 +69,8 @@ export async function POST(request, { params }) {
         lowStockAt: Math.max(0, parseInt(lowStockAt ?? 5)),
         unitCost:   unitCost ? parseFloat(unitCost) : null,
         notes:      notes?.trim() || null,
+        price:      itemPrice,
+        stripeProductId,
       },
     })
 

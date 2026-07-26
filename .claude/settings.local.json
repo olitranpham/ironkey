@@ -68,7 +68,10 @@
       "Bash(npx:*)",
       "Bash(npm uninstall:*)",
       "Bash(lsof -iTCP -sTCP:LISTEN -P)",
-      "Bash(ps -p 74986 -o pid,command=)"
+      "Bash(ps -p 74986 -o pid,command=)",
+      "Bash(ps -p 74985 -o pid,command=)",
+      "Bash(lsof *)",
+      "Bash(ps *)"
     ]
   }
 }
