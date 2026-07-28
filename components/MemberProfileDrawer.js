@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { X, Phone, KeyRound, History, User, ShieldAlert } from 'lucide-react'
+import { X, Phone, KeyRound, History, User, ShieldAlert, DoorOpen } from 'lucide-react'
 import { formatPhone } from '@/lib/phone'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -33,6 +33,15 @@ function fmtDate(iso) {
   const d = new Date(iso)
   if (isNaN(d.getTime())) return '—'
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' }).toLowerCase()
+}
+
+function fmtDateTime(iso) {
+  if (!iso) return null
+  const d = new Date(iso)
+  if (isNaN(d.getTime())) return null
+  const date = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).toLowerCase()
+  const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).toLowerCase().replace(' ', '')
+  return `${date} at ${time}`
 }
 
 // ── Shared sub-components ─────────────────────────────────────────────────────
@@ -72,6 +81,7 @@ function DrawerContent({ member, gymSlug, membershipBorder, onClose, onStatusCha
   const [savingCode,   setSavingCode]   = useState(false)
   const [deletingCode, setDeletingCode] = useState(false)
   const [events,       setEvents]       = useState(null)  // null = loading, [] = loaded empty
+  const [visits,       setVisits]       = useState(null)  // null = loading, [] = loaded empty
 
   const [nameInput,    setNameInput]    = useState(`${member.firstName ?? ''} ${member.lastName ?? ''}`.trim())
   const [savingName,   setSavingName]   = useState(false)
@@ -130,6 +140,30 @@ function DrawerContent({ member, gymSlug, membershipBorder, onClose, onStatusCha
       .catch(err => {
         console.error('[MemberProfileDrawer] events fetch threw memberId=%s', member.id, err)
         setEvents([])
+      })
+  }, [member.id, gymSlug, simplified])
+
+  // Fetch door-entry visit history whenever the member changes (skip in simplified mode)
+  useEffect(() => {
+    if (simplified || !gymSlug || !member.id) return
+    setVisits(null)
+    const token = localStorage.getItem('ik_token')
+    fetch(`/api/${gymSlug}/members/${member.id}/visits`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(async r => {
+        if (!r.ok) {
+          console.error('[MemberProfileDrawer] visits fetch failed status=%d memberId=%s', r.status, member.id)
+          return { visits: [] }
+        }
+        return r.json()
+      })
+      .then(({ visits }) => {
+        setVisits(visits ?? [])
+      })
+      .catch(err => {
+        console.error('[MemberProfileDrawer] visits fetch threw memberId=%s', member.id, err)
+        setVisits([])
       })
   }, [member.id, gymSlug, simplified])
 
@@ -451,6 +485,16 @@ function DrawerContent({ member, gymSlug, membershipBorder, onClose, onStatusCha
             </div>
           </DrawerField>
 
+          {/* Last visited — most recent door entry for this member's access code */}
+          {!simplified && (
+            <DrawerField label="last visited">
+              <span className="text-xs text-white ml-4">
+                {visits === null
+                  ? 'loading…'
+                  : (visits.length === 0 ? null : fmtDateTime(visits[0].createdAt)) ?? 'never'}
+              </span>
+            </DrawerField>
+          )}
 
           {/* Flex check-ins — oasis-boston only */}
           {gymSlug === 'oasis-boston' && member.membershipType?.toLowerCase().includes('flex') && (
@@ -482,6 +526,24 @@ function DrawerContent({ member, gymSlug, membershipBorder, onClose, onStatusCha
             <div key={ev.id} className="flex items-center justify-between px-3 py-2.5 bg-[#1c1c1c]">
               <span className="text-xs text-white">{EVENT_LABEL[ev.type] ?? ev.type}</span>
               <span className="text-xs text-neutral-500 ml-4 shrink-0">{fmtDate(ev.date)}</span>
+            </div>
+          ))}
+        </DrawerSection>}
+
+        {/* Visit history — every door entry for this member's access code, hidden in simplified mode */}
+        {!simplified && <DrawerSection icon={DoorOpen} title="visits">
+          {visits === null ? (
+            <div className="px-3 py-2.5 bg-[#1c1c1c]">
+              <span className="text-xs text-neutral-600">loading…</span>
+            </div>
+          ) : visits.length === 0 ? (
+            <div className="px-3 py-2.5 bg-[#1c1c1c]">
+              <span className="text-xs text-neutral-600">no visits recorded</span>
+            </div>
+          ) : visits.map(v => (
+            <div key={v.id} className="flex items-center justify-between px-3 py-2.5 bg-[#1c1c1c]">
+              <span className="text-xs text-white">entered</span>
+              <span className="text-xs text-neutral-500 ml-4 shrink-0">{fmtDateTime(v.createdAt) ?? '—'}</span>
             </div>
           ))}
         </DrawerSection>}
