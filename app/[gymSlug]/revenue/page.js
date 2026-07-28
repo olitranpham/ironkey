@@ -268,7 +268,7 @@ export default function RevenuePage() {
       if (e.type === 'income') entryMap[key].income   += e.amount
       else                     entryMap[key].expenses += e.amount
     }
-    return monthly.map(m => ({
+    const mapped = monthly.map(m => ({
       name:        shortMonth(m.month, showYear),
       memberships: m.memberships ?? 0,
       guestPasses: m.guestPasses ?? 0,
@@ -276,6 +276,9 @@ export default function RevenuePage() {
       income:      entryMap[m.month]?.income   ?? 0,
       expenses:    -(entryMap[m.month]?.expenses ?? 0),  // negative → below axis
     }))
+    console.log('[revenue/page] raw data.monthly:', JSON.stringify(monthly))
+    console.log('[revenue/page] chartData passed to <BarChart>:', JSON.stringify(mapped))
+    return mapped
   })()
 
   // ── Handlers ──────────────────────────────────────────────────────────────

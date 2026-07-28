@@ -23,6 +23,20 @@ function isOkEvent(type) {
   return !['lock.access_denied', 'access_code.failed', 'device.tampered', 'device.disconnected'].includes(type)
 }
 
+// Only real door activity belongs on the dashboard — Seam also fires a stream
+// of housekeeping events (code created/deleted/changed/scheduled/removed from
+// device, etc.) that aren't things a member or guest did at the door.
+// lock.locked/lock.unlocked without an access_code_id are auto-lock state
+// changes with no person attached — noise, not activity — so those are only
+// kept when a code (and therefore a potential name) is attached to the event.
+function isRealDoorActivity(ev) {
+  if (ev.event_type === 'lock.access_denied') return true
+  if (ev.event_type === 'lock.unlocked' || ev.event_type === 'lock.locked') {
+    return Boolean(ev.access_code_id)
+  }
+  return false
+}
+
 /**
  * GET /api/[gymSlug]/seam/events
  *
@@ -113,34 +127,53 @@ export async function GET(request, { params }) {
       }
     }
 
-    // ── Look up member names by PIN against DB ──────────────────────────────
+    // ── Look up member AND guest names by PIN against DB ────────────────────
+    // Access codes are issued to both members (Member.accessCode) and guests
+    // (Guest.accessCode) — previously only members were checked, so any event
+    // triggered by a guest's code fell through to "unknown".
     const pins = [...new Set(Object.values(codePinById))]
-    let memberNameByPin = {}
+    let nameByPin = {}
 
     if (pins.length > 0) {
-      const matchedMembers = await prisma.member.findMany({
-        where:  { gymId: gym.id, accessCode: { in: pins } },
-        select: { accessCode: true, firstName: true, lastName: true },
-      })
+      const [matchedMembers, matchedGuests] = await Promise.all([
+        prisma.member.findMany({
+          where:  { gymId: gym.id, accessCode: { in: pins } },
+          select: { accessCode: true, firstName: true, lastName: true },
+        }),
+        prisma.guest.findMany({
+          where:  { accessCode: { in: pins }, waivers: { some: { gymId: gym.id } } },
+          select: { accessCode: true, name: true },
+        }),
+      ])
       for (const m of matchedMembers) {
         // Normalize key so it matches the pin strings built from Seam codes
         const key = String(m.accessCode ?? '').trim()
-        if (key) memberNameByPin[key] = `${m.firstName} ${m.lastName}`.trim()
+        if (key) nameByPin[key] = `${m.firstName} ${m.lastName}`.trim()
+      }
+      for (const g of matchedGuests) {
+        const key = String(g.accessCode ?? '').trim()
+        if (key && !nameByPin[key]) nameByPin[key] = g.name
       }
     }
 
     // ── Normalise events for the dashboard ──────────────────────────────────
-    const normalized = events.slice(0, 50).map((ev) => {
-      const pin  = codePinById[ev.access_code_id]   // already trimmed string
-      const name = (pin && memberNameByPin[pin]) || (ev.access_code_id ? 'unknown' : null)
-      return {
-        id:        ev.event_id,
-        name:      name || '—',
-        event:     eventLabel(ev.event_type, Boolean(ev.access_code_id)),
-        createdAt: ev.created_at,
-        ok:        isOkEvent(ev.event_type),
-      }
-    })
+    // Filter to real door activity first, then slice — otherwise a burst of
+    // Seam housekeeping events (code created/changed/scheduled/removed, etc.)
+    // could crowd out actual entries/locks/unlocks within the last 50 events.
+    const normalized = events
+      .filter(isRealDoorActivity)
+      .slice(0, 50)
+      .map((ev) => {
+        const pin  = codePinById[ev.access_code_id]   // already trimmed string
+        const name = (pin && nameByPin[pin]) || (ev.access_code_id ? 'unknown' : null)
+        return {
+          id:        ev.event_id,
+          name:      name || '—',
+          event:     eventLabel(ev.event_type, Boolean(ev.access_code_id)),
+          createdAt: ev.created_at,
+          ok:        isOkEvent(ev.event_type),
+        }
+      })
 
     return NextResponse.json({ events: normalized })
   } catch (error) {

@@ -209,6 +209,11 @@ export async function GET(request, { params }) {
       const guestPasses  = guestPassCents   / 100
       const concessions  = concessionsCents / 100
 
+      console.log(
+        '[stripe/revenue] %s %s — memberships=%s guestPasses=%s concessions=%s',
+        gymSlug, key, memberships.toFixed(2), guestPasses.toFixed(2), concessions.toFixed(2),
+      )
+
       return {
         month: key,
         memberships,
