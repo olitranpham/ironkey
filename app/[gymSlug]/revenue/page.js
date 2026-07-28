@@ -12,6 +12,14 @@ import { Plus, Trash2, Pencil } from 'lucide-react'
 const INCOME_CATEGORIES  = ['merchandise', 'concessions', 'events', 'other']
 const EXPENSE_CATEGORIES = ['rent', 'equipment', 'supplies', 'marketing', 'other']
 
+// ── Revenue category colors (validated categorical palette, dark surface) ─────
+
+const CATEGORY_COLORS = {
+  memberships: '#4A87C7',  // muted blue
+  guestPasses: '#CC7A42',  // muted orange
+  concessions: '#3DAB80',  // muted green
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function fmt(n) {
@@ -261,10 +269,12 @@ export default function RevenuePage() {
       else                     entryMap[key].expenses += e.amount
     }
     return monthly.map(m => ({
-      name:     shortMonth(m.month, showYear),
-      stripe:   m.amount,
-      income:   entryMap[m.month]?.income   ?? 0,
-      expenses: -(entryMap[m.month]?.expenses ?? 0),  // negative → below axis
+      name:        shortMonth(m.month, showYear),
+      memberships: m.memberships ?? 0,
+      guestPasses: m.guestPasses ?? 0,
+      concessions: m.concessions ?? 0,
+      income:      entryMap[m.month]?.income   ?? 0,
+      expenses:    -(entryMap[m.month]?.expenses ?? 0),  // negative → below axis
     }))
   })()
 
@@ -315,9 +325,10 @@ export default function RevenuePage() {
             <div className="bg-white/[0.03] border border-white/5 rounded-xl p-5">
               <div className="flex items-center justify-between mb-5">
                 <p className="text-xs font-semibold text-neutral-400">monthly revenue</p>
-                <div className="flex items-center gap-4 text-[11px] text-neutral-500">
-                  <span className="flex items-center gap-1.5"><span className="w-2.5 h-0.5 rounded inline-block" style={{ background: '#3a3a3a' }} />stripe</span>
-                  <span className="flex items-center gap-1.5"><span className="w-2.5 h-0.5 rounded inline-block" style={{ background: '#2a2a2a' }} />income</span>
+                <div className="flex items-center gap-4 text-[11px] text-neutral-500 flex-wrap">
+                  <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ background: CATEGORY_COLORS.memberships }} />memberships</span>
+                  <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ background: CATEGORY_COLORS.guestPasses }} />guest passes</span>
+                  <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ background: CATEGORY_COLORS.concessions }} />concessions</span>
                   {hasExpenses && <span className="flex items-center gap-1.5"><span className="w-2.5 h-0.5 rounded inline-block" style={{ background: '#1e1e1e' }} />expenses</span>}
                 </div>
               </div>
@@ -335,8 +346,10 @@ export default function RevenuePage() {
                     <YAxis tick={{ fill: '#737373', fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={v => `$${(v / 1000).toFixed(0)}k`} width={40} />
                     <ReferenceLine y={0} stroke="#404040" />
                     <Tooltip content={<ChartTooltip />} cursor={{ fill: 'rgba(255,255,255,0.04)' }} />
-                    <Bar dataKey="stripe"   name="stripe"  stackId="pos" fill="#3a3a3a" radius={[0, 0, 0, 0]} />
-                    <Bar dataKey="income"   name="income"  stackId="pos" fill="#2a2a2a" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="memberships" name="memberships" stackId="pos" fill={CATEGORY_COLORS.memberships} stroke="#1c1c1c" strokeWidth={2} radius={[0, 0, 0, 0]} />
+                    <Bar dataKey="guestPasses" name="guest passes" stackId="pos" fill={CATEGORY_COLORS.guestPasses} stroke="#1c1c1c" strokeWidth={2} radius={[0, 0, 0, 0]} />
+                    <Bar dataKey="concessions" name="concessions" stackId="pos" fill={CATEGORY_COLORS.concessions} stroke="#1c1c1c" strokeWidth={2} radius={[0, 0, 0, 0]} />
+                    <Bar dataKey="income"   name="income"  stackId="pos" fill="#2a2a2a" stroke="#1c1c1c" strokeWidth={2} radius={[4, 4, 0, 0]} />
                     <Bar dataKey="expenses" name="expense" fill="#1e1e1e" radius={[4, 4, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>

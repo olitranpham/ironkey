@@ -12,6 +12,15 @@ function monthStart(year, month) {
   return Math.floor(new Date(year, month, 1).getTime() / 1000)
 }
 
+// Fallback keyword match for one-time payments whose Checkout Session predates
+// (or is otherwise missing) the metadata.source tagging — mirrors the keyword
+// list used to identify guest-pass products in /api/[gymSlug]/guest.
+const GUEST_PASS_KEYWORDS = ['day pass', 'single', '3-pack', 'three-pack', '5-pack', 'five-pack', '10-pack', 'ten-pack']
+function isGuestPassName(name = '') {
+  const n = name.toLowerCase()
+  return GUEST_PASS_KEYWORDS.some(kw => n.includes(kw))
+}
+
 // ── Stripe call with one retry on 429 ─────────────────────────────────────────
 
 async function stripeWithRetry(fn) {
@@ -56,7 +65,7 @@ export async function GET(request, { params }) {
     const thisMonth = now.getMonth()  // 0-indexed
 
     // ── Parallel: earliest FinancialEntry + always-needed Stripe calls ────────
-    const [firstEntry, subsResult, recentResult] = await Promise.all([
+    const [firstEntry, subsResult, recentResult, inventoryItems] = await Promise.all([
       prisma.financialEntry.findFirst({
         where:   { gymId: gym.id },
         orderBy: { date: 'asc' },
@@ -64,7 +73,14 @@ export async function GET(request, { params }) {
       }),
       stripeWithRetry(() => stripe.subscriptions.list({ status: 'active', limit: 100 })),
       stripeWithRetry(() => stripe.charges.list({ limit: 50, expand: ['data.customer'] })),
+      prisma.inventoryItem.findMany({
+        where:  { gymId: gym.id, stripeProductId: { not: null } },
+        select: { stripeProductId: true },
+      }),
     ])
+
+    // Product IDs that identify a one-time payment as a concessions purchase
+    const concessionsProductIds = new Set(inventoryItems.map(i => i.stripeProductId))
 
     // ── MRR ───────────────────────────────────────────────────────────────────
     let mrrCents = 0
@@ -127,20 +143,80 @@ export async function GET(request, { params }) {
       if (monthRanges.length >= 60) break
     }
 
-    // ── Per-month Stripe charge totals ────────────────────────────────────────
+    // ── Per-month Stripe totals, broken down into memberships / guest passes /
+    // concessions ──────────────────────────────────────────────────────────────
+    // Memberships come from recurring subscription billing — those charges are
+    // tied to an invoice (true for both the initial signup and every renewal).
+    // One-time payments (guest passes, concessions) go through a Checkout
+    // Session in `mode: 'payment'`, so those are categorized via the session's
+    // `metadata.source` (set at creation by the guest/concessions checkout
+    // routes), falling back to product-based matching when metadata is missing.
     const monthResults = await Promise.all(
       monthRanges.map(({ start, end }) =>
-        stripeWithRetry(() => stripe.charges.list({ limit: 100, created: { gte: start, lt: end } }))
+        Promise.all([
+          stripeWithRetry(() => stripe.charges.list({ limit: 100, created: { gte: start, lt: end } })),
+          stripeWithRetry(() => stripe.checkout.sessions.list({ limit: 100, created: { gte: start, lt: end } })),
+        ])
       )
     )
 
-    const monthly = monthRanges.map(({ key }, i) => {
-      const charges = monthResults[i]?.data ?? []
-      const cents   = charges
-        .filter(c => c.status === 'succeeded' && !c.refunded)
+    async function categorizeOneTimeSession(session) {
+      const source = session.metadata?.source
+      if (source === 'concessions') return 'concessions'
+      if (source === 'guest_pass')  return 'guestPasses'
+
+      // Fallback — inspect the session's line item product(s) directly
+      try {
+        const lineItems = await stripeWithRetry(() =>
+          stripe.checkout.sessions.listLineItems(session.id, { expand: ['data.price.product'] })
+        )
+        for (const li of lineItems.data ?? []) {
+          const prod   = li.price?.product
+          const prodId = typeof prod === 'string' ? prod : prod?.id
+          const name   = typeof prod === 'string' ? '' : (prod?.name ?? '')
+          if (prodId && concessionsProductIds.has(prodId)) return 'concessions'
+          if (isGuestPassName(name) || isGuestPassName(li.description ?? '')) return 'guestPasses'
+        }
+      } catch (err) {
+        console.error('[stripe/revenue] failed to classify session', session.id, err.message)
+      }
+      return 'guestPasses'  // default for legacy one-time payments
+    }
+
+    const monthly = await Promise.all(monthRanges.map(async ({ key }, i) => {
+      const [chargesResult, sessionsResult] = monthResults[i]
+      const charges  = chargesResult?.data  ?? []
+      const sessions = sessionsResult?.data ?? []
+
+      // Memberships — recurring subscription charges (tied to an invoice)
+      const membershipCents = charges
+        .filter(c => c.status === 'succeeded' && !c.refunded && c.invoice)
         .reduce((sum, c) => sum + c.amount, 0)
-      return { month: key, amount: cents / 100 }
-    })
+
+      // One-time payments — paid Checkout Sessions in payment mode
+      const oneTimeSessions = sessions.filter(s => s.mode === 'payment' && s.payment_status === 'paid')
+      const categories = await Promise.all(oneTimeSessions.map(categorizeOneTimeSession))
+
+      let guestPassCents   = 0
+      let concessionsCents = 0
+      oneTimeSessions.forEach((session, idx) => {
+        const amt = session.amount_total ?? 0
+        if (categories[idx] === 'concessions') concessionsCents += amt
+        else                                   guestPassCents  += amt
+      })
+
+      const memberships = membershipCents  / 100
+      const guestPasses  = guestPassCents   / 100
+      const concessions  = concessionsCents / 100
+
+      return {
+        month: key,
+        memberships,
+        guestPasses,
+        concessions,
+        amount: memberships + guestPasses + concessions,
+      }
+    }))
 
     // When the start is a fallback (no FinancialEntries), trim leading months
     // with $0 Stripe revenue so the chart begins at the first real charge.
