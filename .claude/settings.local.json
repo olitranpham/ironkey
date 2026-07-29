@@ -71,7 +71,8 @@
       "Bash(ps -p 74986 -o pid,command=)",
       "Bash(ps -p 74985 -o pid,command=)",
       "Bash(lsof *)",
-      "Bash(ps *)"
+      "Bash(ps *)",
+      "Bash(python3 *)"
     ]
   }
 }

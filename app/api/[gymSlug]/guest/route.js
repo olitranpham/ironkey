@@ -18,6 +18,16 @@ function inferPassType(name = '') {
   return { passType: 'SINGLE', passesLeft: 1 }
 }
 
+// Bucket an exact pass count (from products-page metadata) into the closest
+// PassType enum value — the enum only has SINGLE/3/5/10-pack buckets, so a
+// count like 15 still reads as a "pack"; passesLeft carries the real number.
+function passTypeForCount(n) {
+  if (n >= 10) return 'TEN_PACK'
+  if (n >= 5)  return 'FIVE_PACK'
+  if (n >= 3)  return 'THREE_PACK'
+  return 'SINGLE'
+}
+
 /**
  * GET /api/[gymSlug]/guest
  * Public — returns gym name + available one-time guest pass plans.
@@ -45,17 +55,26 @@ export async function GET(request, { params }) {
       }
 
       plans = prices.data
-        .filter(p => !p.recurring && p.unit_amount != null)   // one-time only, not subscriptions
+        .filter(p => !p.recurring && p.unit_amount != null && p.product?.active)   // one-time only, not subscriptions, product not disabled
         .filter(p => {
           if (gymSlug === 'oasis-boston') return p.product?.id in OASIS_PRODUCT_MAP
           const name = p.nickname ?? p.product?.name ?? ''
-          return isGuestPassPrice(name)
+          // Products created via the staff "products" page are tagged with
+          // this metadata, so they always qualify regardless of name.
+          return p.product?.metadata?.ironkey_kind === 'guest_pass' || isGuestPassPrice(name)
         })
         .map(p => {
           const name = p.nickname ?? p.product?.name ?? 'Guest Pass'
-          const { passType, passesLeft } = gymSlug === 'oasis-boston' && OASIS_PRODUCT_MAP[p.product?.id]
-            ? OASIS_PRODUCT_MAP[p.product.id]
-            : inferPassType(name)
+          let passType, passesLeft
+          if (gymSlug === 'oasis-boston' && OASIS_PRODUCT_MAP[p.product?.id]) {
+            ({ passType, passesLeft } = OASIS_PRODUCT_MAP[p.product.id])
+          } else if (p.product?.metadata?.passes) {
+            // Trust the exact count set on the products page over name-guessing
+            passesLeft = parseInt(p.product.metadata.passes, 10)
+            passType   = passTypeForCount(passesLeft)
+          } else {
+            ({ passType, passesLeft } = inferPassType(name))
+          }
           return {
             priceId:    p.id,
             name,

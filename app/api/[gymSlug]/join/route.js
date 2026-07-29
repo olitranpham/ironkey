@@ -43,14 +43,22 @@ export async function GET(request, { params }) {
         }
       }
 
-      const recurring = prices.data.filter(p => p.recurring && p.unit_amount != null)
+      // Exclude prices whose parent product has been disabled from the
+      // products page — an inactive product should never show as an option.
+      const recurring = prices.data.filter(p => p.recurring && p.unit_amount != null && p.product?.active)
+
+      // Products created via the staff "products" page are tagged with this
+      // metadata so they always qualify as a membership plan here, regardless
+      // of name — new plans shouldn't need a code change to show up on join.
+      const isTaggedMembership = p => p.product?.metadata?.ironkey_kind === 'membership'
 
       if (gymSlug === 'triumph-barbell') {
-        // Membership plans: only General and Student products
+        // Membership plans: General and Student products, or anything tagged
+        // as a membership plan by the products page
         membershipPlans = recurring
           .filter(p => {
             const n = (p.nickname ?? p.product?.name ?? '').toLowerCase()
-            return n.includes('general') || n.includes('student')
+            return n.includes('general') || n.includes('student') || isTaggedMembership(p)
           })
           .map(toplan)
           .sort((a, b) => a.amount - b.amount)
@@ -75,7 +83,7 @@ export async function GET(request, { params }) {
           'prod_T4wCwq1jBQDqhy', // Flex Membership
         ])
         membershipPlans = recurring
-          .filter(p => OASIS_PRODUCT_IDS.has(p.product?.id))
+          .filter(p => OASIS_PRODUCT_IDS.has(p.product?.id) || isTaggedMembership(p))
           .map(toplan)
           .sort((a, b) => a.amount - b.amount)
 
@@ -85,11 +93,15 @@ export async function GET(request, { params }) {
           .map(toplan)
           .sort((a, b) => a.amount - b.amount)
       } else if (gymSlug === 'hydra-athletic-co') {
-        // Membership plans: only Pre-Sale Membership
+        // Membership plans: Pre-Sale, Standard, and Student/Military/Police/EMT
+        // memberships, or anything tagged as a membership plan by the products page
         membershipPlans = recurring
           .filter(p => {
             const n = (p.nickname ?? p.product?.name ?? '').toLowerCase()
             return n.includes('pre-sale membership')
+                || n.includes('standard membership')
+                || n.includes('student/military/police/emt membership')
+                || isTaggedMembership(p)
           })
           .map(toplan)
           .sort((a, b) => a.amount - b.amount)

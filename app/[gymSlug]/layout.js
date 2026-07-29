@@ -21,6 +21,7 @@ import {
   Handshake,
   Dumbbell,
   Mail,
+  Tag,
 } from 'lucide-react'
 
 const NAV_GROUPS = [
@@ -44,6 +45,7 @@ const NAV_GROUPS = [
     items: [
       { label: 'payments', slug: 'payments', icon: CreditCard },
       { label: 'revenue',  slug: 'revenue',  icon: TrendingUp },
+      { label: 'products', slug: 'products', icon: Tag },
       { label: 'overdue',  slug: 'overdue',  icon: AlertTriangle, warn: true },
     ],
   },
