@@ -26,6 +26,8 @@ export async function GET(request, { params }) {
       select: {
         id:              true,
         name:            true,
+        category:        true,
+        sectionLabel:    true,
         price:           true,
         quantity:        true,
         stripeProductId: true,

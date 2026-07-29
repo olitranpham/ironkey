@@ -18,6 +18,20 @@ function SectionDivider({ label }) {
   )
 }
 
+// Groups items by their staff-set sectionLabel (e.g. "drinks", "snacks"),
+// sorted alphabetically — items with no label fall under "other", always last.
+function groupBySection(items) {
+  const map = new Map()
+  for (const item of items) {
+    const section = item.sectionLabel?.trim().toLowerCase() || 'other'
+    if (!map.has(section)) map.set(section, [])
+    map.get(section).push(item)
+  }
+  const named = [...map.keys()].filter(k => k !== 'other').sort()
+  const order = [...named, ...(map.has('other') ? ['other'] : [])]
+  return order.map(section => ({ section, items: map.get(section) }))
+}
+
 export default function ConcessionsPage() {
   const { gymSlug } = useParams()
 
@@ -93,60 +107,67 @@ export default function ConcessionsPage() {
         {!gymLogo && <h1 className="text-xl font-bold text-white">{gymName}</h1>}
       </div>
 
-      <div className="w-full max-w-2xl bg-[#1c1c1c] border border-white/10 rounded-2xl p-6 flex flex-col gap-3 shadow-2xl">
-
-        <SectionDivider label="concessions" />
+      <div className="w-full max-w-2xl flex flex-col gap-4">
 
         {items.length === 0 && (
-          <p className="text-sm text-neutral-500 text-center py-6">nothing available right now — check back soon.</p>
+          <div className="bg-[#1c1c1c] border border-white/10 rounded-xl p-4 shadow-2xl">
+            <p className="text-sm text-neutral-500 text-center py-6">nothing available right now — check back soon.</p>
+          </div>
         )}
 
-        {items.map(item => {
-          const qty         = quantities[item.id] ?? 0
-          const unavailable = !item.stripeProductId || item.price == null
-          const outOfStock  = !unavailable && item.quantity <= 0
-          return (
-            <div
-              key={item.id}
-              className={`flex items-center justify-between gap-3 border rounded-xl px-4 py-3 transition-opacity ${
-                unavailable
-                  ? 'bg-[#242424]/40 border-neutral-800 opacity-50'
-                  : 'bg-[#242424] border-neutral-700/60'
-              }`}
-            >
-              <div className="min-w-0">
-                <p className={`text-sm font-semibold truncate ${unavailable ? 'text-neutral-400' : 'text-white'}`}>{item.name}</p>
-                <p className="text-xs text-neutral-500 mt-0.5">
-                  {unavailable ? 'unavailable' : outOfStock ? 'out of stock' : fmt(item.price)}
-                </p>
-              </div>
+        <div className="flex flex-col gap-4">
+        {groupBySection(items).map(group => (
+          <div key={group.section} className="bg-[#1c1c1c] border border-white/10 rounded-xl p-4 flex flex-col gap-3 shadow-2xl">
+            <SectionDivider label={group.section} />
+            {group.items.map(item => {
+              const qty         = quantities[item.id] ?? 0
+              const unavailable = !item.stripeProductId || item.price == null
+              const outOfStock  = !unavailable && item.quantity <= 0
+              return (
+                <div
+                  key={item.id}
+                  className={`flex items-center justify-between gap-3 border rounded-xl px-4 py-3 transition-opacity ${
+                    unavailable
+                      ? 'bg-[#242424]/40 border-neutral-800 opacity-50'
+                      : 'bg-[#242424] border-neutral-700/60'
+                  }`}
+                >
+                  <div className="min-w-0">
+                    <p className={`text-sm font-semibold truncate ${unavailable ? 'text-neutral-400' : 'text-white'}`}>{item.name}</p>
+                    <p className="text-xs text-neutral-500 mt-0.5">
+                      {unavailable ? 'unavailable' : outOfStock ? 'out of stock' : fmt(item.price)}
+                    </p>
+                  </div>
 
-              <div className="flex items-center gap-3 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => setQty(item.id, qty - 1)}
-                  disabled={unavailable || qty <= 0}
-                  className="w-8 h-8 rounded-full border border-neutral-600 text-white flex items-center justify-center hover:border-neutral-400 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                >
-                  <Minus size={14} />
-                </button>
-                <span className="w-5 text-center text-sm text-white tabular-nums">{qty}</span>
-                <button
-                  type="button"
-                  onClick={() => setQty(item.id, qty + 1)}
-                  disabled={unavailable || outOfStock || qty >= item.quantity}
-                  className="w-8 h-8 rounded-full border border-neutral-600 text-white flex items-center justify-center hover:border-neutral-400 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                >
-                  <Plus size={14} />
-                </button>
-              </div>
-            </div>
-          )
-        })}
+                  <div className="flex items-center gap-3 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setQty(item.id, qty - 1)}
+                      disabled={unavailable || qty <= 0}
+                      className="w-8 h-8 rounded-full border border-neutral-600 text-white flex items-center justify-center hover:border-neutral-400 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                    >
+                      <Minus size={14} />
+                    </button>
+                    <span className="w-5 text-center text-sm text-white tabular-nums">{qty}</span>
+                    <button
+                      type="button"
+                      onClick={() => setQty(item.id, qty + 1)}
+                      disabled={unavailable || outOfStock || qty >= item.quantity}
+                      className="w-8 h-8 rounded-full border border-neutral-600 text-white flex items-center justify-center hover:border-neutral-400 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                    >
+                      <Plus size={14} />
+                    </button>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        ))}
+        </div>
 
         {items.length > 0 && (
-          <>
-            <div className="flex items-center justify-between border-t border-white/10 pt-4 mt-1">
+          <div className="bg-[#1c1c1c] border border-white/10 rounded-xl p-4 flex flex-col gap-3 shadow-2xl">
+            <div className="flex items-center justify-between">
               <span className="text-sm text-neutral-400">total</span>
               <span className="text-lg font-bold text-white">{fmt(total)}</span>
             </div>
@@ -169,7 +190,7 @@ export default function ConcessionsPage() {
                 <><ShoppingBag size={15} /> checkout</>
               )}
             </button>
-          </>
+          </div>
         )}
 
         <p className="text-center text-[11px] text-neutral-700 mt-1">powered by <strong>ironkey</strong> · secured by <strong>Stripe</strong></p>

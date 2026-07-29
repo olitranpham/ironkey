@@ -36,9 +36,10 @@ function ItemModal({ gymSlug, item, onSave, onClose }) {
     category:   item?.category   ?? CATEGORIES[0],
     quantity:   item?.quantity   ?? 0,
     lowStockAt: item?.lowStockAt ?? 5,
-    unitCost:   item?.unitCost   ?? '',
-    price:      item?.price      ?? '',
-    notes:      item?.notes      ?? '',
+    unitCost:     item?.unitCost     ?? '',
+    price:        item?.price        ?? '',
+    sectionLabel: item?.sectionLabel ?? '',
+    notes:        item?.notes        ?? '',
   })
   const [saving, setSaving] = useState(false)
   const [err,    setErr]    = useState(null)
@@ -63,9 +64,10 @@ function ItemModal({ gymSlug, item, onSave, onClose }) {
           category:   form.category,
           quantity:   parseInt(form.quantity) || 0,
           lowStockAt: parseInt(form.lowStockAt) || 5,
-          unitCost:   form.unitCost !== '' ? parseFloat(form.unitCost) : null,
-          price:      form.price !== '' ? parseFloat(form.price) : null,
-          notes:      form.notes.trim() || null,
+          unitCost:     form.unitCost !== '' ? parseFloat(form.unitCost) : null,
+          price:        form.price !== '' ? parseFloat(form.price) : null,
+          sectionLabel: form.sectionLabel.trim() || null,
+          notes:        form.notes.trim() || null,
         }),
       })
       const json = await res.json()
@@ -166,6 +168,20 @@ function ItemModal({ gymSlug, item, onSave, onClose }) {
               className="w-full bg-neutral-900 border border-neutral-700 rounded-lg pl-6 pr-3 py-2 text-xs text-white placeholder-neutral-600 focus:outline-none focus:border-neutral-500"
             />
           </div>
+        </div>
+
+        {/* Section (concessions page grouping) */}
+        <div className="flex flex-col gap-1.5">
+          <label className="text-[11px] text-neutral-500">
+            section <span className="text-neutral-700">(optional — groups items on the concessions page, e.g. "drinks", "snacks")</span>
+          </label>
+          <input
+            type="text"
+            placeholder="e.g. drinks"
+            value={form.sectionLabel}
+            onChange={e => set('sectionLabel', e.target.value)}
+            className="bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-2 text-xs text-white placeholder-neutral-600 focus:outline-none focus:border-neutral-500"
+          />
         </div>
 
         {/* Notes */}
@@ -559,6 +575,7 @@ export default function InventoryPage() {
 
             {/* ── Table ─────────────────────────────────────────────────────── */}
             <div className="bg-white/[0.03] border border-white/5 rounded-xl overflow-hidden">
+              <div className="max-h-[calc(100vh-200px)] overflow-y-auto">
               <table className="w-full text-sm">
                 <tbody>
                   {loading ? (
@@ -649,6 +666,7 @@ export default function InventoryPage() {
                   )}
                 </tbody>
               </table>
+              </div>
             </div>
           </>
         )}

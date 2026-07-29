@@ -35,7 +35,7 @@ export async function POST(request, { params }) {
   try {
     const { gymSlug } = await params
     const body = await request.json()
-    const { name, category, quantity, lowStockAt, unitCost, notes, price } = body
+    const { name, category, quantity, lowStockAt, unitCost, notes, price, sectionLabel } = body
 
     if (!name?.trim() || !category) {
       return NextResponse.json({ error: 'name and category are required' }, { status: 400 })
@@ -69,8 +69,9 @@ export async function POST(request, { params }) {
         lowStockAt: Math.max(0, parseInt(lowStockAt ?? 5)),
         unitCost:   unitCost ? parseFloat(unitCost) : null,
         notes:      notes?.trim() || null,
-        price:      itemPrice,
+        price:        itemPrice,
         stripeProductId,
+        sectionLabel: sectionLabel?.trim() || null,
       },
     })
 

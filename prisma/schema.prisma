@@ -331,6 +331,7 @@ model InventoryItem {
   // Concessions — set to sell this item through the public ordering page
   price           Float?
   stripeProductId String?
+  sectionLabel    String?  // freeform grouping label for the concessions page, e.g. "drinks", "snacks"
 
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt

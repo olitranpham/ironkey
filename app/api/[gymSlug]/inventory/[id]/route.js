@@ -56,16 +56,17 @@ export async function PATCH(request, { params }) {
     }
 
     // ── Full item update ──────────────────────────────────────────────────────
-    const { name, category, quantity, lowStockAt, unitCost, notes } = body
+    const { name, category, quantity, lowStockAt, unitCost, notes, sectionLabel } = body
     const updated = await prisma.inventoryItem.update({
       where: { id },
       data: {
-        ...(name       !== undefined ? { name: name.trim() }                     : {}),
-        ...(category   !== undefined ? { category }                              : {}),
-        ...(quantity   !== undefined ? { quantity:   Math.max(0, parseInt(quantity)) }   : {}),
-        ...(lowStockAt !== undefined ? { lowStockAt: Math.max(0, parseInt(lowStockAt)) } : {}),
-        ...(unitCost   !== undefined ? { unitCost: unitCost ? parseFloat(unitCost) : null } : {}),
-        ...(notes      !== undefined ? { notes: notes?.trim() || null }          : {}),
+        ...(name         !== undefined ? { name: name.trim() }                     : {}),
+        ...(category     !== undefined ? { category }                              : {}),
+        ...(quantity     !== undefined ? { quantity:   Math.max(0, parseInt(quantity)) }   : {}),
+        ...(lowStockAt   !== undefined ? { lowStockAt: Math.max(0, parseInt(lowStockAt)) } : {}),
+        ...(unitCost     !== undefined ? { unitCost: unitCost ? parseFloat(unitCost) : null } : {}),
+        ...(notes        !== undefined ? { notes: notes?.trim() || null }          : {}),
+        ...(sectionLabel !== undefined ? { sectionLabel: sectionLabel?.trim() || null } : {}),
       },
     })
 
