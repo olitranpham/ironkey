@@ -3,10 +3,11 @@ import Stripe from 'stripe'
 import prisma from '@/lib/prisma'
 
 /**
- * Given the current period end (Unix timestamp) and the subscription object,
- * return a Unix timestamp representing the end of the next billing period.
- * Used when current_period_end is less than 30 days away and we need to push
- * the cancel_at date out by one full billing interval.
+ * Given a billing period end (Unix timestamp) and the subscription object,
+ * return a Unix timestamp representing the end of the following billing
+ * period (one interval later). Called in a loop below to advance by full
+ * billing periods — never a partial one — until reaching or passing the
+ * 30-day cancellation notice minimum.
  */
 function nextBillingPeriodEnd(currentPeriodEndSecs, sub) {
   const d         = new Date(currentPeriodEndSecs * 1000)
@@ -60,10 +61,34 @@ export async function POST(request) {
           stripeParams = { cancel_at_period_end: true }
           console.log('[cancel] current_period_end >= 30d — using cancel_at_period_end:true | period_end:', sub.current_period_end)
         } else {
-          // Period end is < 30 days away — push to the next billing period end
-          const nextEnd = nextBillingPeriodEnd(sub.current_period_end, sub)
-          stripeParams  = { cancel_at: nextEnd }
-          console.log('[cancel] current_period_end < 30d — using cancel_at:', nextEnd, '| current_period_end:', sub.current_period_end)
+          const recurring   = sub.items?.data?.[0]?.price?.recurring ?? {}
+          const isLongCycle = recurring.interval === 'month' || recurring.interval === 'year'
+
+          if (isLongCycle) {
+            // Monthly-or-longer billing (monthly, every 6 months, yearly) —
+            // a single push is always enough since the period length is
+            // already ~30 days or more. Looping here caused repeated date
+            // arithmetic (setMonth/setFullYear) to drift off the
+            // subscription's real billing anchor, landing cancel_at
+            // slightly off Stripe's true period boundary and triggering a
+            // prorated charge instead of a clean cancellation.
+            const nextEnd = nextBillingPeriodEnd(sub.current_period_end, sub)
+            stripeParams  = { cancel_at: nextEnd }
+            console.log('[cancel] current_period_end < 30d, long cycle — single push — using cancel_at:', nextEnd, '| current_period_end:', sub.current_period_end)
+          } else {
+            // Shorter-than-monthly billing (weekly, every 4 weeks/28 days) —
+            // one period isn't always enough to clear the 30-day minimum
+            // (e.g. a 28-day cycle ending today only reaches 28 days out),
+            // so keep advancing full periods until it does.
+            let nextEnd = sub.current_period_end
+            let periodsAdvanced = 0
+            while (nextEnd < thirtyDaysFromNow) {
+              nextEnd = nextBillingPeriodEnd(nextEnd, sub)
+              periodsAdvanced += 1
+            }
+            stripeParams = { cancel_at: nextEnd }
+            console.log('[cancel] current_period_end < 30d, short cycle — advanced %d period(s) — using cancel_at:', periodsAdvanced, nextEnd, '| current_period_end:', sub.current_period_end)
+          }
         }
 
         const result = await stripeClient.subscriptions.update(subId, stripeParams)
