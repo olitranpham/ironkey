@@ -25,8 +25,7 @@ export default function ConcessionsSuccessPage() {
           <img src={gymLogo} alt={gymName} className="w-24 h-24 object-contain" />
         )}
         <div>
-          <h1 className="text-3xl font-bold text-white">order placed!</h1>
-          <p className="text-neutral-400 mt-2">enjoy.</p>
+          <h1 className="text-3xl font-bold text-white">thank you for your purchase!</h1>
         </div>
       </div>
 

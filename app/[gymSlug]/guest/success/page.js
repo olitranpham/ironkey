@@ -10,6 +10,7 @@ export default function GuestSuccessPage() {
   const sessionId       = searchParams.get('session_id')
 
   const [gymName,    setGymName]    = useState('')
+  const [gymLogo,    setGymLogo]    = useState(null)
   const [accessCode, setAccessCode] = useState(null)
   const [passesLeft, setPassesLeft] = useState(null)
   const [passType,   setPassType]   = useState(null)
@@ -18,7 +19,10 @@ export default function GuestSuccessPage() {
   useEffect(() => {
     fetch(`/api/${gymSlug}/guest`)
       .then(r => r.json())
-      .then(({ gym }) => setGymName(gym?.name ?? gymSlug))
+      .then(({ gym }) => {
+        setGymName(gym?.name ?? gymSlug)
+        setGymLogo(gym?.logoUrl ?? null)
+      })
       .catch(() => {})
   }, [gymSlug])
 
@@ -63,18 +67,17 @@ export default function GuestSuccessPage() {
 
   return (
     <div className="min-h-screen bg-[#292929] flex flex-col items-center justify-center px-4">
-      <div className="w-full max-w-sm bg-[#1c1c1c] border border-neutral-800 rounded-2xl p-8 flex flex-col items-center text-center gap-5 shadow-2xl">
+      <div className="w-full max-w-md bg-[#1c1c1c] border border-neutral-800 rounded-2xl p-8 flex flex-col items-center text-center gap-5 shadow-2xl">
 
-        <div className="w-14 h-14 rounded-full bg-emerald-500/15 flex items-center justify-center">
-          <CheckCircle2 size={28} className="text-emerald-400" />
-        </div>
+        {gymLogo ? (
+          <img src={gymLogo} alt={gymName} className="w-14 h-14 object-contain" />
+        ) : (
+          <div className="w-14 h-14 rounded-full bg-emerald-500/15 flex items-center justify-center">
+            <CheckCircle2 size={28} className="text-emerald-400" />
+          </div>
+        )}
 
-        <div>
-          <h1 className="text-xl font-bold text-white">you're all set!</h1>
-          <p className="text-sm text-neutral-400 mt-1">
-            welcome to {gymName || gymSlug}.
-          </p>
-        </div>
+        <h1 className="text-xl font-bold text-white">welcome to {gymName || gymSlug}!</h1>
 
         {loading ? (
           <div className="w-full bg-neutral-900 rounded-xl p-4 flex items-center justify-center gap-2">
@@ -96,29 +99,29 @@ export default function GuestSuccessPage() {
             <div className="border-t border-neutral-800 pt-3 space-y-2">
               {isReturning ? (
                 <p className="text-xs text-neutral-400 flex items-start gap-2">
-                  <span className="text-emerald-400 font-bold shrink-0">✓</span>
+                  <span className="text-neutral-500 shrink-0">•</span>
                   your door code <span className="font-mono text-white">{accessCode}</span> is already active — you can use it to enter right now. your passes remaining have been updated.
                 </p>
               ) : (
                 <p className="text-xs text-neutral-400 flex items-start gap-2">
-                  <span className="text-emerald-400 font-bold shrink-0">✓</span>
-                  your door code is active. use it at the entrance.
+                  <span className="text-neutral-500 shrink-0">•</span>
+                  your access code is active and can be used at the entrance.
                 </p>
               )}
               <p className="text-xs text-neutral-400 flex items-start gap-2">
-                <span className="text-emerald-400 font-bold shrink-0">✓</span>
-                your access code will also be sent to your email shortly.
+                <span className="text-neutral-500 shrink-0">•</span>
+                a copy of your code and additional information will be sent to your email shortly.
               </p>
             </div>
           </div>
         ) : (
           <div className="w-full bg-neutral-900 rounded-xl p-4 text-left space-y-2">
             <p className="text-xs text-neutral-400 flex items-start gap-2">
-              <span className="text-emerald-400 font-bold shrink-0">✓</span>
+              <span className="text-neutral-500 shrink-0">•</span>
               your guest pass is now active.
             </p>
             <p className="text-xs text-neutral-400 flex items-start gap-2">
-              <span className="text-emerald-400 font-bold shrink-0">✓</span>
+              <span className="text-neutral-500 shrink-0">•</span>
               your access code will be sent to your email shortly.
             </p>
           </div>
