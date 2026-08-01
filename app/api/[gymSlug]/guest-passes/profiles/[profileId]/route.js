@@ -64,17 +64,27 @@ export async function PATCH(request, { params }) {
 
 /**
  * DELETE /api/[gymSlug]/guest-passes/profiles/[profileId]
- * Removes a guest's presence at this gym: deletes this gym's
- * RepGymPassCheckin records for them and removes their Seam access code (if
- * any). The shared Guest record itself is only deleted outright if it has
- * no GuestWaiver/GuestVisit ties anywhere — Guest is a cross-gym model (the
+ * DELETE /api/[gymSlug]/guest-passes/profiles/[profileId]?full=true
+ *
+ * Default (no query param) — used by the partner check-ins page: removes a
+ * guest's presence at this gym only. Deletes this gym's RepGymPassCheckin
+ * records for them and removes their Seam access code (if any). The shared
+ * Guest record itself is only deleted outright if it has no
+ * GuestWaiver/GuestVisit ties anywhere — Guest is a cross-gym model (the
  * same guest can have visited multiple partner gyms), so we never want to
  * silently destroy another gym's customer history, and Postgres would
  * reject the delete anyway while a GuestWaiver still references it.
+ *
+ * full=true — used by the guest-passes page's "remove member" action: a hard
+ * delete of the guest everywhere. Removes their Seam code, all of their
+ * GuestPass (GuestVisit) records and GuestWaiver records across every gym,
+ * then the GuestProfile (Guest) record itself.
  */
 export async function DELETE(request, { params }) {
   try {
     const { gymSlug, profileId } = await params
+    const { searchParams } = new URL(request.url)
+    const full = searchParams.get('full') === 'true'
 
     const gym = await prisma.gym.findUnique({
       where:  { slug: gymSlug },
@@ -84,6 +94,32 @@ export async function DELETE(request, { params }) {
 
     const profile = await prisma.guest.findUnique({ where: { id: profileId } })
     if (!profile) return NextResponse.json({ error: 'Profile not found' }, { status: 404 })
+
+    if (full) {
+      // Auth boundary: profile must have a guest pass at this gym to be
+      // removable from this gym's guest-passes page.
+      const gymPassCount = await prisma.guestVisit.count({ where: { guestProfileId: profileId, gymId: gym.id } })
+      if (gymPassCount === 0) {
+        return NextResponse.json({ error: 'Profile not found' }, { status: 404 })
+      }
+
+      const apiKey   = gym.seamApiKey   ?? process.env.SEAM_API_KEY
+      const deviceId = gym.seamDeviceId ?? process.env.SEAM_DEVICE_ID
+      if (profile.accessCode && apiKey) {
+        const { ok } = await deleteSeamCodeByPin(apiKey, profile.accessCode, deviceId, '[guest-profile DELETE full]')
+        console.log('[guest-profile DELETE full] Seam delete — pin=%s ok=%s profileId=%s', profile.accessCode, ok, profileId)
+      } else {
+        console.log('[guest-profile DELETE full] skipping Seam — accessCode=%s apiKey=%s', profile.accessCode ?? 'none', apiKey ? '(set)' : 'MISSING')
+      }
+
+      // GuestWaiver has no cascade on Guest — must clear it before the Guest delete.
+      await prisma.guestWaiver.deleteMany({ where: { guestProfileId: profileId } })
+      const { count: passesDeleted } = await prisma.guestVisit.deleteMany({ where: { guestProfileId: profileId } })
+      await prisma.guest.delete({ where: { id: profileId } })
+
+      console.log('[guest-profile DELETE full] deleted profileId=%s passesDeleted=%d', profileId, passesDeleted)
+      return NextResponse.json({ ok: true, profileDeleted: true, passesDeleted })
+    }
 
     // Auth boundary: same as PATCH — must have a rep gym pass check-in or a
     // guest visit for this gym to be acted on from here.

@@ -60,7 +60,7 @@ export function GSection({ icon: Icon, title, children }) {
 
 // ── GuestProfilePanel ─────────────────────────────────────────────────────────
 
-export function GuestProfilePanel({ profile, passTypeBorder, onClose, onSaveCode, saving, onSavePassesLeft, onSaveProfile, source, onDelete }) {
+export function GuestProfilePanel({ profile, passTypeBorder, onClose, onSaveCode, saving, onSavePassesLeft, onSaveProfile, source, onDelete, onRemoveGuest, removingGuest }) {
   const [codeInput,    setCodeInput]    = useState(profile.accessCode ?? '')
   const [passEdits,    setPassEdits]    = useState({})
   const [savingPassId, setSavingPassId] = useState(null)
@@ -357,6 +357,18 @@ export function GuestProfilePanel({ profile, passTypeBorder, onClose, onSaveCode
             className="w-full py-2 rounded-lg text-sm font-medium bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors"
           >
             remove
+          </button>
+        </div>
+      )}
+
+      {onRemoveGuest && !isUnlinked && (
+        <div className="shrink-0 px-5 py-4 border-t border-neutral-800">
+          <button
+            onClick={onRemoveGuest}
+            disabled={removingGuest}
+            className="w-full py-2 rounded-lg text-sm font-medium bg-neutral-500/10 text-neutral-400 hover:bg-neutral-500/20 disabled:opacity-40 transition-colors"
+          >
+            remove member
           </button>
         </div>
       )}

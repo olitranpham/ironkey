@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams } from 'next/navigation'
-import { Search, RefreshCw, TrendingUp } from 'lucide-react'
+import { Search, RefreshCw, TrendingUp, AlertTriangle } from 'lucide-react'
 import { getGymTheme } from '@/lib/gymThemes'
 import { GuestProfilePanel, fmtDate } from '@/components/GuestProfilePanel'
 import {
@@ -164,6 +164,9 @@ export default function GuestPassesPage() {
   const [selectedProfile, setSelectedProfile] = useState(null)
   const [panelOpen,       setPanelOpen]       = useState(false)
   const [savingCode,      setSavingCode]      = useState(false)
+  const [confirmRemove,   setConfirmRemove]   = useState(null)
+  const [removing,        setRemoving]        = useState(false)
+  const [removeError,     setRemoveError]     = useState(null)
   const closeTimer = useRef(null)
 
   useEffect(() => {
@@ -270,6 +273,27 @@ export default function GuestPassesPage() {
     } catch (err) {
       console.error('[savePassesLeft]', err.message)
       throw err
+    }
+  }
+
+  async function confirmRemoveProfile() {
+    if (!confirmRemove) return
+    setRemoving(true)
+    setRemoveError(null)
+    try {
+      const token = localStorage.getItem('ik_token')
+      const res   = await fetch(`/api/${gymSlug}/guest-passes/profiles/${confirmRemove.id}?full=true`, {
+        method:  'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!res.ok) throw new Error('Request failed')
+      setConfirmRemove(null)
+      closePanel()
+      await fetchPasses()
+    } catch {
+      setRemoveError('could not remove — please try again')
+    } finally {
+      setRemoving(false)
     }
   }
 
@@ -472,10 +496,60 @@ export default function GuestPassesPage() {
               saving={savingCode}
               onSavePassesLeft={(passId, passesLeft) => savePassesLeft(passId, passesLeft, selectedProfile.id)}
               onSaveProfile={(fields) => saveProfileFields(selectedProfile.id, fields)}
+              onRemoveGuest={() => { setRemoveError(null); setConfirmRemove(selectedProfile) }}
+              removingGuest={removing}
             />
           )}
         </div>
       </div>
+
+      {/* ── Remove member confirmation ────────────────────────────────────── */}
+      {confirmRemove && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/70" onClick={!removing ? () => setConfirmRemove(null) : undefined} />
+          <div className="relative bg-[#1c1c1c] border border-neutral-800 rounded-xl w-full max-w-sm p-6 shadow-2xl">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-9 h-9 rounded-lg bg-neutral-800 flex items-center justify-center shrink-0">
+                <AlertTriangle size={16} className="text-neutral-400" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-white">remove member?</p>
+                <p className="text-xs text-neutral-500">{confirmRemove.name}</p>
+              </div>
+            </div>
+            <ul className="space-y-1.5 mb-5">
+              {[
+                'their guest pass history will be permanently deleted',
+                'their profile record will be permanently deleted',
+                'their door access code will be removed from the lock, if one was issued',
+                'this action cannot be undone',
+              ].map((b, i) => (
+                <li key={i} className="flex items-start gap-2 text-xs text-neutral-400">
+                  <span className="mt-1.5 w-1 h-1 rounded-full bg-neutral-600 shrink-0" />
+                  {b}
+                </li>
+              ))}
+            </ul>
+            {removeError && <p className="text-xs text-red-400 mb-3">{removeError}</p>}
+            <div className="flex gap-2">
+              <button
+                onClick={() => setConfirmRemove(null)}
+                disabled={removing}
+                className="flex-1 py-2 rounded-lg text-xs font-medium text-neutral-400 border border-neutral-700 hover:text-white hover:border-neutral-600 disabled:opacity-40 transition-colors"
+              >
+                cancel
+              </button>
+              <button
+                onClick={confirmRemoveProfile}
+                disabled={removing}
+                className="flex-1 py-2 rounded-lg text-xs font-medium bg-red-500/10 text-red-400 hover:bg-red-500/20 disabled:opacity-40 transition-colors"
+              >
+                {removing ? 'please wait…' : 'yes, remove'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   )
