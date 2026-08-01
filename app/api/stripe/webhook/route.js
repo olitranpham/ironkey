@@ -176,10 +176,11 @@ export async function POST(request) {
 
       // ── Program time-bound Seam access code for guest (24-hour window) ────────
       let alreadyActive = false
-      if (gym.seamApiKey) {
+      const guestSeamApiKey = gym.seamApiKey ?? process.env.SEAM_API_KEY
+      if (guestSeamApiKey) {
         const deviceId    = gym.seamDeviceId ?? process.env.SEAM_DEVICE_ID
         const seamHeaders = {
-          Authorization:  `Bearer ${gym.seamApiKey}`,
+          Authorization:  `Bearer ${guestSeamApiKey}`,
           'Content-Type': 'application/json',
         }
         const nowMs       = Date.now()
@@ -477,10 +478,11 @@ export async function POST(request) {
         .catch(e => console.error('[platform/webhook] Zapier member webhook error:', e.message))
     }
 
-    if (gym.seamApiKey) {
+    const memberSeamApiKey = gym.seamApiKey ?? process.env.SEAM_API_KEY
+    if (memberSeamApiKey) {
       const deviceId    = gym.seamDeviceId ?? process.env.SEAM_DEVICE_ID
       const seamHeaders = {
-        Authorization:  `Bearer ${gym.seamApiKey}`,
+        Authorization:  `Bearer ${memberSeamApiKey}`,
         'Content-Type': 'application/json',
       }
       try {
@@ -608,8 +610,9 @@ export async function POST(request) {
 
     console.log('[platform/webhook] subscription deleted for member:', member.id, '| accessCode:', member.accessCode)
 
-    if (member.accessCode && gym.seamApiKey) {
-      await deleteSeamCodeByPin(gym.seamApiKey, member.accessCode, gym.seamDeviceId, '[platform/webhook]')
+    const cancelSeamApiKey = gym.seamApiKey ?? process.env.SEAM_API_KEY
+    if (member.accessCode && cancelSeamApiKey) {
+      await deleteSeamCodeByPin(cancelSeamApiKey, member.accessCode, gym.seamDeviceId, '[platform/webhook]')
     }
 
     if (member.status !== 'CANCELED') {
