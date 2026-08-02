@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation'
 import { Search, RefreshCw, AlertTriangle, Download } from 'lucide-react'
 import { getGymTheme } from '@/lib/gymThemes'
 import MemberProfileDrawer from '@/components/MemberProfileDrawer'
+import { CATEGORY_OPTIONS, classifyMembershipType, classifyMembershipTypeAll } from '@/lib/membershipCategory'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -95,8 +96,9 @@ export default function MembersPage() {
   const [members,   setMembers]   = useState([])
   const [loading,   setLoading]   = useState(true)
   const [fetchErr,  setFetchErr]  = useState(null)
-  const [search,    setSearch]    = useState('')
-  const [activeTab, setActiveTab] = useState('active')
+  const [search,     setSearch]     = useState('')
+  const [activeTab,  setActiveTab]  = useState('active')
+  const [typeFilter, setTypeFilter] = useState('')
 
   // Slide-out panel
   const [selectedMember, setSelectedMember] = useState(null)
@@ -295,12 +297,29 @@ export default function MembersPage() {
 
   const tabCount = members.filter(m => matchesTab(m, activeTab)).length
 
+  // Membership types actually present for this gym, so the filter never shows
+  // options that don't apply here — pulled from the gym's real member records.
+  // PT/programming variants (e.g. "1 session/week", "weekly communication")
+  // collapse into two category options instead of one entry per tier.
+  const regularTypes = [...new Set(
+    members.map(m => m.membershipType).filter(t => t && !classifyMembershipType(t))
+  )]
+  const presentCategories = CATEGORY_OPTIONS.filter(cat =>
+    members.some(m => classifyMembershipTypeAll(m.membershipType).includes(cat))
+  )
+  const membershipTypes = [...regularTypes, ...presentCategories].sort()
+
   const visible = members
     .filter(m => {
       const q = search.trim().toLowerCase()
       const matchSearch = !q ||
         `${m.firstName} ${m.lastName} ${m.email} ${m.phone ?? ''}`.toLowerCase().includes(q)
-      return matchesTab(m, activeTab) && matchSearch
+      const matchType = !typeFilter || (
+        CATEGORY_OPTIONS.includes(typeFilter)
+          ? classifyMembershipTypeAll(m.membershipType).includes(typeFilter)
+          : m.membershipType === typeFilter
+      )
+      return matchesTab(m, activeTab) && matchSearch && matchType
     })
     .sort((a, b) => {
       if (activeTab === 'frozen')   return new Date(b.dateFrozen   ?? 0) - new Date(a.dateFrozen   ?? 0)
@@ -335,16 +354,31 @@ export default function MembersPage() {
       {/* Main */}
       <main className="md:flex-1 flex flex-col p-5 gap-4 md:overflow-hidden md:min-h-0">
 
-        {/* Search bar */}
-        <div className="shrink-0 relative w-full sm:w-80">
-          <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500 pointer-events-none" />
-          <input
-            type="text"
-            placeholder="search name, email, phone…"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            className="w-full bg-neutral-700/50 border border-neutral-600/50 rounded-lg pl-9 pr-3 py-2 text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-neutral-500 focus:ring-1 focus:ring-neutral-500 transition-colors"
-          />
+        {/* Search + type filter */}
+        <div className="shrink-0 flex items-center gap-2 flex-wrap">
+          <div className="relative w-full sm:w-80">
+            <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500 pointer-events-none" />
+            <input
+              type="text"
+              placeholder="search name, email, phone…"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              className="w-full bg-neutral-700/50 border border-neutral-600/50 rounded-lg pl-9 pr-3 py-2 text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-neutral-500 focus:ring-1 focus:ring-neutral-500 transition-colors"
+            />
+          </div>
+          {membershipTypes.length > 0 && (
+            <select
+              value={typeFilter}
+              onChange={e => setTypeFilter(e.target.value)}
+              className="bg-neutral-700/50 border border-neutral-600/50 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-neutral-500 focus:ring-1 focus:ring-neutral-500 transition-colors appearance-none pr-7 cursor-pointer"
+              style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23737373' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 8px center' }}
+            >
+              <option value="">all types</option>
+              {membershipTypes.map(t => (
+                <option key={t} value={t}>{t}</option>
+              ))}
+            </select>
+          )}
         </div>
 
         {/* Table card */}

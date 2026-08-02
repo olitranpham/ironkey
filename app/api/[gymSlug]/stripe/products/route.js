@@ -77,17 +77,28 @@ export async function GET(request, { params }) {
     if (!gym.stripeSecretKey) return NextResponse.json({ error: 'Stripe not configured' }, { status: 400 })
 
     const stripe = new Stripe(gym.stripeSecretKey, { apiVersion: '2024-06-20' })
-    const prices = await stripe.prices.list({ active: true, expand: ['data.product'], limit: 100 })
+
+    // Active prices (the normal case) plus inactive prices the staff
+    // explicitly toggled off from this page (tagged via ironkey_toggle_disabled
+    // in the PATCH route) — those stay visible here, grayed out, re-enable
+    // available. Inactive prices WITHOUT the tag were superseded by the
+    // edit-price flow or archived/deleted permanently and never resurface.
+    const [activeRes, inactiveRes] = await Promise.all([
+      stripe.prices.list({ active: true,  expand: ['data.product'], limit: 100 }),
+      stripe.prices.list({ active: false, expand: ['data.product'], limit: 100 }),
+    ])
+    const toggleDisabled = inactiveRes.data.filter(p => p.metadata?.ironkey_toggle_disabled === 'true')
+    const prices = { data: [...activeRes.data, ...toggleDisabled], has_more: activeRes.has_more || inactiveRes.has_more }
 
     console.log(
-      '[stripe/products GET] %s — raw prices.data.length=%d has_more=%s',
-      gymSlug, prices.data.length, prices.has_more,
+      '[stripe/products GET] %s — active=%d toggle-disabled=%d has_more=%s',
+      gymSlug, activeRes.data.length, toggleDisabled.length, prices.has_more,
     )
     console.log(
       '[stripe/products GET] %s — raw prices:',
       gymSlug,
       JSON.stringify(prices.data.map(p => ({
-        priceId: p.id, nickname: p.nickname, recurring: Boolean(p.recurring),
+        priceId: p.id, nickname: p.nickname, recurring: Boolean(p.recurring), active: p.active,
         productName: typeof p.product === 'object' ? p.product?.name : p.product,
         productActive: typeof p.product === 'object' ? p.product?.active : undefined,
       }))),
@@ -106,7 +117,7 @@ export async function GET(request, { params }) {
           priceId:     price.id,
           name:        product.name,
           priceLabel:  price.nickname ?? null,
-          active:      product.active,
+          active:      price.active,
           amount:      price.unit_amount / 100,
           interval:    intervalLabel(price),
           intervalKey: `${price.recurring.interval}:${price.recurring.interval_count ?? 1}`,
@@ -122,7 +133,7 @@ export async function GET(request, { params }) {
           priceId:    price.id,
           name:       product.name,
           priceLabel: price.nickname ?? null,
-          active:     product.active,
+          active:     price.active,
           amount:     price.unit_amount / 100,
           passes:     product.metadata?.passes ? parseInt(product.metadata.passes, 10) : inferPasses(product.name),
         })

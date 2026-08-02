@@ -5,6 +5,8 @@ import prisma from '@/lib/prisma'
 /**
  * PATCH /api/[gymSlug]/stripe/products/[productId]
  * Body: {
+ *   priceId?:        string,   // scopes the `active` toggle to this specific
+ *                               // price instead of the whole product — see below
  *   active?:         boolean,
  *   passes?:         number,
  *   name?:           string,
@@ -17,14 +19,21 @@ import prisma from '@/lib/prisma'
  *   },
  * }
  *
- * - active: toggles the product active/inactive. A disabled product stays
- *   visible in the products list (grayed out) and can be re-enabled.
+ * - priceId + active: toggles just that ONE price active/inactive. A product
+ *   can have several prices (e.g. Oasis's "Personal Training" product has 6 —
+ *   three "$X/4 weeks" tiers plus three "X session(s)/week" tiers), so this
+ *   must never touch the shared product — doing so would flip every sibling
+ *   price's visibility at once. Tags the price's own metadata
+ *   (ironkey_toggle_disabled) so the GET route can tell "staff toggled this
+ *   off" (stays visible in the list, grayed out, re-enable available) apart
+ *   from a price that was superseded by the edit-price flow below (archived
+ *   for good, never shown again).
  * - passes: updates the number of guest passes stored in metadata.
  * - name: renames the product.
  * - archivePriceId: also archives the given price (active: false on the
  *   Price object itself) with no replacement — the delete/trash action.
- *   The products GET route treats any product with an archived price as
- *   gone for good, since a price with existing subscriptions/checkout
+ *   The products GET route treats any archived price with no toggle-disabled
+ *   tag as gone for good, since a price with existing subscriptions/checkout
  *   history can't be truly deleted from Stripe.
  * - priceUpdate: the edit-price flow. Stripe prices are immutable once
  *   created (amount/recurring terms can't change), so an amount or interval
@@ -45,8 +54,16 @@ export async function PATCH(request, { params }) {
 
     const stripe = new Stripe(gym.stripeSecretKey, { apiVersion: '2024-06-20' })
 
+    // ── Price-level active toggle ─────────────────────────────────────────
+    if (typeof body.active === 'boolean' && body.priceId) {
+      const price = await stripe.prices.update(body.priceId, {
+        active:   body.active,
+        metadata: { ironkey_toggle_disabled: body.active ? '' : 'true' },
+      })
+      return NextResponse.json({ product: { id: productId, priceId: price.id, active: price.active } })
+    }
+
     const update = {}
-    if (typeof body.active === 'boolean') update.active = body.active
     if (typeof body.name === 'string' && body.name.trim()) update.name = body.name.trim()
     if (body.passes !== undefined) {
       update.metadata = { passes: String(Math.max(1, parseInt(body.passes, 10) || 1)) }
@@ -83,10 +100,10 @@ export async function PATCH(request, { params }) {
     // has already moved off of it (avoids a moment where the product points
     // at an archived price).
     if (body.priceUpdate) {
-      await stripe.prices.update(body.priceUpdate.oldPriceId, { active: false })
+      await stripe.prices.update(body.priceUpdate.oldPriceId, { active: false, metadata: { ironkey_toggle_disabled: '' } })
     }
     if (body.archivePriceId) {
-      await stripe.prices.update(body.archivePriceId, { active: false })
+      await stripe.prices.update(body.archivePriceId, { active: false, metadata: { ironkey_toggle_disabled: '' } })
     }
 
     return NextResponse.json({

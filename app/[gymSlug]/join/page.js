@@ -630,7 +630,7 @@ export default function JoinPage() {
                     }
                     return (
                       <option key={p.priceId} value={p.priceId}>
-                        {p.name} — {displayFmt}
+                        {p.name.toLowerCase()} — {displayFmt}
                       </option>
                     )
                   })}
@@ -677,7 +677,7 @@ export default function JoinPage() {
                   <option value="">— none —</option>
                   {ptPlans.map(p => (
                     <option key={p.priceId} value={p.priceId}>
-                      {p.name.replace(/1x\/week/i, '1 session / week').replace(/2x\/week/i, '2 sessions / week').replace(/3x\/week/i, '3 sessions / week')} — {Number(p.amount).toLocaleString('en-US', { style: 'currency', currency: 'USD' })} / 4 weeks
+                      {p.name.replace(/(\d+\s*sessions?)\s*\/\s*week/i, '$1 / week')} — {Number(p.amount).toLocaleString('en-US', { style: 'currency', currency: 'USD' })} / 4 weeks
                     </option>
                   ))}
                 </select>
@@ -725,9 +725,9 @@ export default function JoinPage() {
                     className={SELECT}
                   >
                     <option value="">semester</option>
-                    <option value="Fall">Fall</option>
-                    <option value="Spring">Spring</option>
-                    <option value="Summer">Summer</option>
+                    <option value="Fall">fall</option>
+                    <option value="Spring">spring</option>
+                    <option value="Summer">summer</option>
                   </select>
                   <div className="pointer-events-none absolute inset-y-0 right-3 flex items-center">
                     <svg className="w-4 h-4 text-neutral-500" viewBox="0 0 20 20" fill="currentColor">
@@ -839,14 +839,14 @@ export default function JoinPage() {
 
         {/* Coaching / Programming Add-on — non-triumph gyms only */}
         {!isTriumph && addonPlans.length > 0 && (
-          <Field label="coaching / programming add-on (optional)">
+          <Field label={gymSlug === 'hydra-athletic-co' ? 'programming (optional)' : 'coaching / programming add-on (optional)'}>
             <div className="relative">
               <select
                 value={form.addonPriceId}
                 onChange={e => set('addonPriceId', e.target.value)}
                 className={SELECT}
               >
-                <option value="">None</option>
+                <option value="">— none —</option>
                 {addonPlans.map(p => {
                   const isHydra4Week = gymSlug === 'hydra-athletic-co' &&
                     (p.interval === 'month' || (p.interval === 'week' && p.intervalCount === 4))
@@ -855,7 +855,7 @@ export default function JoinPage() {
                     : fmt(p.amount, p.interval, p.intervalCount)
                   return (
                     <option key={p.priceId} value={p.priceId}>
-                      {p.name} — {addonFmt}
+                      {gymSlug === 'hydra-athletic-co' ? p.name.toLowerCase() : p.name} — {addonFmt}
                     </option>
                   )
                 })}

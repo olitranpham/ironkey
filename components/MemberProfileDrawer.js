@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { X, Phone, KeyRound, History, User, ShieldAlert, DoorOpen } from 'lucide-react'
 import { formatPhone } from '@/lib/phone'
+import { formatMembershipTypeDisplay } from '@/lib/membershipCategory'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -495,7 +496,7 @@ function DrawerContent({ member, gymSlug, membershipBorder, onClose, onStatusCha
 
         {/* Membership */}
         <DrawerSection icon={KeyRound} title="membership">
-          <DrawerField label="type" value={member.membershipType?.toLowerCase() || '—'} />
+          <DrawerField label="type" value={formatMembershipTypeDisplay(member.membershipType) || '—'} />
 
           {/* Hydra's bundled Student/Military/EMT plan — category picker first */}
           {isHydraBundledPlan && (

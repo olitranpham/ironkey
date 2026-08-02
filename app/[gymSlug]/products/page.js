@@ -21,6 +21,20 @@ function fmt(n) {
   return Number(n).toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 })
 }
 
+// Display-only — adds spaces around the slash in Oasis PT price nicknames
+// ("1 session/week" → "1 session / week") without touching the stored value.
+function displayLabel(label) {
+  if (!label) return label
+  return label.replace(/(\d+\s*sessions?)\s*\/\s*week/i, '$1 / week')
+}
+
+// Display-only — lowercases Hydra's "Coaching/Programs" product name (and its
+// "(NON-MEMBERS)" variant) without touching the stored Stripe product name.
+function displayProductName(gymSlug, name) {
+  if (gymSlug === 'hydra-athletic-co' && /^coaching\/programs/i.test(name)) return name.toLowerCase()
+  return name
+}
+
 function token() {
   return localStorage.getItem('ik_token')
 }
@@ -305,18 +319,21 @@ export default function ProductsPage() {
     }
   }
 
-  async function toggleActive(kind, productId, nextActive) {
-    setTogglingId(productId)
+  async function toggleActive(kind, product, nextActive) {
+    // Scoped to this one price — a product can have several prices (e.g.
+    // Oasis's "Personal Training" product has 6 tiers), so toggling must
+    // never touch the shared product or it'd flip every sibling at once.
+    setTogglingId(product.priceId)
     try {
-      const res = await fetch(`/api/${gymSlug}/stripe/products/${productId}`, {
+      const res = await fetch(`/api/${gymSlug}/stripe/products/${product.id}`, {
         method:  'PATCH',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` },
-        body:    JSON.stringify({ active: nextActive }),
+        body:    JSON.stringify({ priceId: product.priceId, active: nextActive }),
       })
       if (!res.ok) throw new Error((await res.json()).error ?? res.status)
       // Disabling keeps the row visible (grayed out, re-enable available) —
       // only a permanent delete removes it from the list.
-      const update = list => list.map(p => p.id === productId ? { ...p, active: nextActive } : p)
+      const update = list => list.map(p => p.priceId === product.priceId ? { ...p, active: nextActive } : p)
       if (kind === 'membership') setMembershipPlans(update)
       else                       setGuestPasses(update)
     } catch (e) {
@@ -458,8 +475,8 @@ export default function ProductsPage() {
                       membershipPlans.map((p, i) => (
                         <tr key={p.priceId} className={`group hover:bg-white/5 transition-colors ${!p.active ? 'opacity-50' : ''} ${i % 2 === 0 ? 'bg-white/[0.02]' : ''}`}>
                           <td className="px-5 py-3">
-                            <span className="text-sm text-white">{p.name}</span>
-                            {p.priceLabel && <span className="block text-[11px] text-neutral-500 mt-0.5">{p.priceLabel}</span>}
+                            <span className="text-sm text-white">{displayProductName(gymSlug, p.name)}</span>
+                            {p.priceLabel && <span className="block text-[11px] text-neutral-500 mt-0.5">{displayLabel(p.priceLabel)}</span>}
                             {!p.active && <span className="ml-2 text-[10px] text-neutral-500">inactive</span>}
                           </td>
                           <td className="px-5 py-3"><span className="text-xs text-neutral-300 tabular-nums">{fmt(p.amount)}</span></td>
@@ -468,8 +485,8 @@ export default function ProductsPage() {
                             <div className="flex items-center justify-end gap-3">
                               <Toggle
                                 on={p.active}
-                                disabled={togglingId === p.id}
-                                onClick={() => toggleActive('membership', p.id, !p.active)}
+                                disabled={togglingId === p.priceId}
+                                onClick={() => toggleActive('membership', p, !p.active)}
                               />
                               <button
                                 onClick={() => setEditPlan(p)}
@@ -526,7 +543,7 @@ export default function ProductsPage() {
                       <tr key={p.priceId} className={`group hover:bg-white/5 transition-colors ${!p.active ? 'opacity-50' : ''} ${i % 2 === 0 ? 'bg-white/[0.02]' : ''}`}>
                         <td className="px-5 py-3">
                           <span className="text-sm text-white">{p.name}</span>
-                          {p.priceLabel && <span className="block text-[11px] text-neutral-500 mt-0.5">{p.priceLabel}</span>}
+                          {p.priceLabel && <span className="block text-[11px] text-neutral-500 mt-0.5">{displayLabel(p.priceLabel)}</span>}
                           {!p.active && <span className="ml-2 text-[10px] text-neutral-500">inactive</span>}
                         </td>
                         <td className="px-5 py-3"><span className="text-xs text-neutral-300 tabular-nums">{fmt(p.amount)}</span></td>
@@ -537,8 +554,8 @@ export default function ProductsPage() {
                           <div className="flex items-center justify-end gap-3">
                             <Toggle
                               on={p.active}
-                              disabled={togglingId === p.id}
-                              onClick={() => toggleActive('guestPass', p.id, !p.active)}
+                              disabled={togglingId === p.priceId}
+                              onClick={() => toggleActive('guestPass', p, !p.active)}
                             />
                             <button
                               onClick={() => setEditPass(p)}
