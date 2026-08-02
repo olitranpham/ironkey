@@ -76,7 +76,9 @@
       "Bash(kill 77684 77695 77696)",
       "Bash(claude doctor *)",
       "Bash(pkill -f \"next lint\")",
-      "Bash(git *)"
+      "Bash(git *)",
+      "Bash(railway whoami *)",
+      "Bash(env)"
     ]
   }
 }
