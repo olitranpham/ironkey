@@ -101,13 +101,10 @@ model Member {
   cancelScheduled Boolean @default(false)
 
   // Student membership fields
-  graduationSemester String?
-  graduationYear     String?
-  studentIdImage     String? // base64 data URL of uploaded student ID photo
+  studentIdImage String? // base64 data URL of uploaded student ID photo
 
-  // Student graduation tracking — editable post-signup from the member profile
-  // (distinct from graduationSemester/graduationYear above, which are captured
-  // once at signup time via the join flow's student ID upload step)
+  // Student graduation tracking — captured at signup via the join flow, and
+  // editable afterward from the member profile drawer
   gradSemester    String? // "Fall" | "Spring" | "Summer"
   gradYear        Int?
   studentCategory String? // "Student" | "Military" | "EMT" — Hydra's bundled plan only

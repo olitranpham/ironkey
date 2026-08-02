@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { deleteSeamCodeByPin } from '@/lib/seam'
+import { normalizeGradSemester } from '@/lib/gradSemester'
 
 const SEAM_API = 'https://connect.getseam.com'
 const VALID_STATUSES         = ['ACTIVE', 'FROZEN', 'CANCELED']
-const VALID_GRAD_SEMESTERS   = ['Fall', 'Spring', 'Summer']
 const VALID_STUDENT_CATEGORIES = ['Student', 'Military', 'EMT']
 
 const MEMBER_SELECT = {
@@ -127,11 +127,7 @@ export async function PATCH(request, { params }) {
       if (gradSemester === '' || gradSemester === null) {
         data.gradSemester = null
       } else {
-        // Normalize casing so "fall"/"FALL"/"Fall" all resolve to the
-        // canonical form the profile dropdown's <option> values expect.
-        const canonical = VALID_GRAD_SEMESTERS.find(
-          v => v.toLowerCase() === String(gradSemester).trim().toLowerCase()
-        )
+        const canonical = normalizeGradSemester(gradSemester)
         if (!canonical) {
           return NextResponse.json({ error: 'Invalid gradSemester' }, { status: 400 })
         }

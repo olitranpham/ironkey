@@ -3,6 +3,7 @@ import Stripe from 'stripe'
 import prisma from '@/lib/prisma'
 import { deleteSeamCodeByPin } from '@/lib/seam'
 import { formatPhone } from '@/lib/phone'
+import { normalizeGradSemester } from '@/lib/gradSemester'
 
 const SEAM_API = 'https://connect.getseam.com'
 
@@ -411,6 +412,11 @@ export async function POST(request) {
       }
     }
 
+    // Stripe metadata values are always strings — normalize casing and coerce
+    // the year to Int to match the Member schema.
+    const parsedGradSemester = normalizeGradSemester(meta.gradSemester)
+    const parsedGradYear     = meta.gradYear ? parseInt(meta.gradYear, 10) : null
+
     if (!member) {
       member = await prisma.member.create({
         data: {
@@ -429,8 +435,8 @@ export async function POST(request) {
           emergencyContactName:         meta.emergencyName         || null,
           emergencyContactPhone:        meta.emergencyPhone        || null,
           emergencyContactRelationship: meta.emergencyRelationship || null,
-          graduationSemester:           meta.graduationSemester    || null,
-          graduationYear:               meta.graduationYear        || null,
+          gradSemester:                 parsedGradSemester,
+          gradYear:                     Number.isNaN(parsedGradYear) ? null : parsedGradYear,
           studentIdImage:               studentIdImage,
           hearAboutUs:                  meta.hearAboutUs           || null,
         },
@@ -445,8 +451,8 @@ export async function POST(request) {
           stripeSubscriptionId: subId ?? member.stripeSubscriptionId,
           priceId:             priceId ?? member.priceId,
           dateAccessed:        new Date(),
-          ...(meta.graduationSemester ? { graduationSemester: meta.graduationSemester } : {}),
-          ...(meta.graduationYear     ? { graduationYear:     meta.graduationYear }     : {}),
+          ...(parsedGradSemester ? { gradSemester: parsedGradSemester } : {}),
+          ...(parsedGradYear && !Number.isNaN(parsedGradYear) ? { gradYear: parsedGradYear } : {}),
           ...(studentIdImage          ? { studentIdImage }                               : {}),
           ...(meta.hearAboutUs        ? { hearAboutUs: meta.hearAboutUs }               : {}),
         },

@@ -78,7 +78,8 @@
       "Bash(pkill -f \"next lint\")",
       "Bash(git *)",
       "Bash(railway whoami *)",
-      "Bash(env)"
+      "Bash(env)",
+      "Bash(echo \"exit: $?\")"
     ]
   }
 }

@@ -260,12 +260,12 @@ export default function JoinPage() {
   const [error,            setError]            = useState(null)
   const [waiverOpen,          setWaiverOpen]          = useState(false)
   const [studentIdFile,       setStudentIdFile]       = useState(null)
-  const [graduationSemester,  setGraduationSemester]  = useState('')
-  const [graduationYear,      setGraduationYear]      = useState('')
+  const [gradSemester,        setGradSemester]        = useState('')
+  const [gradYear,            setGradYear]            = useState('')
   const [hearAboutUs,         setHearAboutUs]         = useState('')
 
   const currentYear    = new Date().getFullYear()
-  const graduationYears = Array.from({ length: 6 }, (_, i) => String(currentYear + i))
+  const gradYearOptions = Array.from({ length: 6 }, (_, i) => String(currentYear + i))
 
   const [form, setForm] = useState({
     firstName:             '',
@@ -327,8 +327,8 @@ export default function JoinPage() {
     // Clear student fields if switching away from a student plan
     if (!plan?.membershipType?.toLowerCase().includes('student')) {
       setStudentIdFile(null)
-      setGraduationSemester('')
-      setGraduationYear('')
+      setGradSemester('')
+      setGradYear('')
     }
   }
 
@@ -352,8 +352,8 @@ export default function JoinPage() {
     if (!form.emergencyRelationship.trim()) { setError('Emergency contact relationship is required.'); return }
     if (!form.waiver)          { setError('You must agree to the membership terms.'); return }
     if (isStudent && !studentIdFile)           { setError('A student ID photo is required for student memberships.'); return }
-    if (isStudent && !graduationSemester)      { setError('Please select a graduation semester.'); return }
-    if (isStudent && !graduationYear)          { setError('Please select a graduation year.'); return }
+    if (isStudent && !gradSemester)            { setError('Please select a graduation semester.'); return }
+    if (isStudent && !gradYear)                { setError('Please select a graduation year.'); return }
 
     const isPtOrProgramming =
       (isTriumph && (ptPlans.some(p => p.priceId === form.priceId) || programmingPlans.some(p => p.priceId === form.priceId))) ||
@@ -392,8 +392,8 @@ export default function JoinPage() {
         membershipType:        form.membershipType,
         addonPriceId:          form.addonPriceId,
         studentIdUploadId,
-        graduationSemester:    isStudent ? graduationSemester : '',
-        graduationYear:        isStudent ? graduationYear     : '',
+        gradSemester:          isStudent ? gradSemester : '',
+        gradYear:              isStudent ? gradYear     : '',
         hearAboutUs:           hearAboutUs || '',
       }
 
@@ -713,7 +713,6 @@ export default function JoinPage() {
                     onChange={e => setStudentIdFile(e.target.files?.[0] ?? null)}
                   />
                 </label>
-                <p className="text-[11px] text-neutral-600">photo or scan of a valid student ID — membership will be verified before activation</p>
               </div>
             </Field>
 
@@ -721,8 +720,8 @@ export default function JoinPage() {
               <div className="grid grid-cols-2 gap-3">
                 <div className="relative">
                   <select
-                    value={graduationSemester}
-                    onChange={e => setGraduationSemester(e.target.value)}
+                    value={gradSemester}
+                    onChange={e => setGradSemester(e.target.value)}
                     className={SELECT}
                   >
                     <option value="">semester</option>
@@ -738,12 +737,12 @@ export default function JoinPage() {
                 </div>
                 <div className="relative">
                   <select
-                    value={graduationYear}
-                    onChange={e => setGraduationYear(e.target.value)}
+                    value={gradYear}
+                    onChange={e => setGradYear(e.target.value)}
                     className={SELECT}
                   >
                     <option value="">year</option>
-                    {graduationYears.map(y => (
+                    {gradYearOptions.map(y => (
                       <option key={y} value={y}>{y}</option>
                     ))}
                   </select>
