@@ -77,6 +77,15 @@ export function DrawerField({ label, value, mono = false, children }) {
 
 function DrawerContent({ member, gymSlug, membershipBorder, onClose, onStatusChange, onSaveAccessCode, onSaveField, onDeleteCode, onRemoveMember, updating, simplified }) {
   const initials = (member.firstName?.[0] ?? '') + (member.lastName?.[0] ?? '')
+
+  // Student graduation tracking — gated by gym + membershipType.
+  // Triumph/Oasis have a standalone "Student" plan; Hydra bundles
+  // Student/Military/EMT into one plan and needs a category picker first.
+  const membershipTypeLower = (member.membershipType || '').toLowerCase()
+  const isStandaloneStudentPlan = (gymSlug === 'triumph-barbell' || gymSlug === 'oasis-boston')
+    && membershipTypeLower.includes('student')
+  const isHydraBundledPlan = gymSlug === 'hydra-athletic-co'
+    && membershipTypeLower.includes('student') && membershipTypeLower.includes('military')
   const [codeInput,    setCodeInput]    = useState(member.accessCode ?? '')
   const [savingCode,   setSavingCode]   = useState(false)
   const [deletingCode, setDeletingCode] = useState(false)
@@ -102,6 +111,13 @@ function DrawerContent({ member, gymSlug, membershipBorder, onClose, onStatusCha
   const [ecRelInput,     setEcRelInput]     = useState(member.emergencyContactRelationship ?? '')
   const [savingEcRel,    setSavingEcRel]    = useState(false)
 
+  const [gradSemesterInput, setGradSemesterInput] = useState(member.gradSemester ?? '')
+  const [savingGradSemester, setSavingGradSemester] = useState(false)
+  const [gradYearInput,     setGradYearInput]     = useState(member.gradYear != null ? String(member.gradYear) : '')
+  const [savingGradYear,    setSavingGradYear]    = useState(false)
+  const [studentCategoryInput, setStudentCategoryInput] = useState(member.studentCategory ?? '')
+  const [savingCategory,       setSavingCategory]       = useState(false)
+
   // Keep codeInput in sync when the member prop changes (different member opened,
   // or same member's accessCode updated by parent after a successful save).
   useEffect(() => {
@@ -114,9 +130,13 @@ function DrawerContent({ member, gymSlug, membershipBorder, onClose, onStatusCha
     setEcNameInput(member.emergencyContactName         ?? '')
     setEcPhoneInput(member.emergencyContactPhone        ?? '')
     setEcRelInput(member.emergencyContactRelationship  ?? '')
+    setGradSemesterInput(member.gradSemester ?? '')
+    setGradYearInput(member.gradYear != null ? String(member.gradYear) : '')
+    setStudentCategoryInput(member.studentCategory ?? '')
   }, [member.id, member.firstName, member.lastName, member.email, member.phone,
       member.accessCode, member.dateOfBirth, member.address,
-      member.emergencyContactName, member.emergencyContactPhone, member.emergencyContactRelationship])
+      member.emergencyContactName, member.emergencyContactPhone, member.emergencyContactRelationship,
+      member.gradSemester, member.gradYear, member.studentCategory])
 
   // Fetch membership history whenever the member changes (skip in simplified mode)
   useEffect(() => {
@@ -231,6 +251,27 @@ function DrawerContent({ member, gymSlug, membershipBorder, onClose, onStatusCha
     setSavingEcRel(true)
     await onSaveField(member.id, { emergencyContactRelationship: ecRelInput.trim() })
     setSavingEcRel(false)
+  }
+
+  async function handleGradSemesterSave() {
+    if (!onSaveField) return
+    setSavingGradSemester(true)
+    await onSaveField(member.id, { gradSemester: gradSemesterInput })
+    setSavingGradSemester(false)
+  }
+
+  async function handleGradYearSave() {
+    if (!onSaveField) return
+    setSavingGradYear(true)
+    await onSaveField(member.id, { gradYear: gradYearInput === '' ? null : parseInt(gradYearInput, 10) })
+    setSavingGradYear(false)
+  }
+
+  async function handleCategorySave() {
+    if (!onSaveField) return
+    setSavingCategory(true)
+    await onSaveField(member.id, { studentCategory: studentCategoryInput })
+    setSavingCategory(false)
   }
 
   async function handleDeleteCode() {
@@ -455,6 +496,85 @@ function DrawerContent({ member, gymSlug, membershipBorder, onClose, onStatusCha
         {/* Membership */}
         <DrawerSection icon={KeyRound} title="membership">
           <DrawerField label="type" value={member.membershipType?.toLowerCase() || '—'} />
+
+          {/* Hydra's bundled Student/Military/EMT plan — category picker first */}
+          {isHydraBundledPlan && (
+            <DrawerField label="category">
+              <div className="flex items-center gap-2 ml-4">
+                <select
+                  value={studentCategoryInput}
+                  onChange={e => setStudentCategoryInput(e.target.value)}
+                  className="bg-[#252525] border border-neutral-700 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-neutral-500"
+                >
+                  <option value="">—</option>
+                  <option value="Student">student</option>
+                  <option value="Military">military</option>
+                  <option value="EMT">emt</option>
+                </select>
+                {onSaveField && (
+                  <button
+                    onClick={handleCategorySave}
+                    disabled={savingCategory || studentCategoryInput === (member.studentCategory ?? '')}
+                    className="text-[10px] px-2 py-1 rounded bg-white/10 text-white hover:bg-white/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shrink-0"
+                  >
+                    {savingCategory ? '…' : 'save'}
+                  </button>
+                )}
+              </div>
+            </DrawerField>
+          )}
+
+          {/* Graduation tracking — standalone student plans (Triumph/Oasis), or
+              Hydra's bundled plan once "Student" is picked as the category */}
+          {(isStandaloneStudentPlan || (isHydraBundledPlan && studentCategoryInput === 'Student')) && (
+            <>
+              <DrawerField label="graduating semester">
+                <div className="flex items-center gap-2 ml-4">
+                  <select
+                    value={gradSemesterInput}
+                    onChange={e => setGradSemesterInput(e.target.value)}
+                    className="bg-[#252525] border border-neutral-700 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-neutral-500"
+                  >
+                    <option value="">—</option>
+                    <option value="Fall">fall</option>
+                    <option value="Spring">spring</option>
+                    <option value="Summer">summer</option>
+                  </select>
+                  {onSaveField && (
+                    <button
+                      onClick={handleGradSemesterSave}
+                      disabled={savingGradSemester || gradSemesterInput === (member.gradSemester ?? '')}
+                      className="text-[10px] px-2 py-1 rounded bg-white/10 text-white hover:bg-white/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shrink-0"
+                    >
+                      {savingGradSemester ? '…' : 'save'}
+                    </button>
+                  )}
+                </div>
+              </DrawerField>
+              <DrawerField label="graduating year">
+                <div className="flex items-center gap-2 ml-4">
+                  <input
+                    type="number"
+                    min={new Date().getFullYear()}
+                    max={new Date().getFullYear() + 6}
+                    value={gradYearInput}
+                    onChange={e => setGradYearInput(e.target.value)}
+                    placeholder="——"
+                    className="bg-[#252525] border border-neutral-700 rounded px-2 py-1 text-xs text-white placeholder-neutral-600 focus:outline-none focus:border-neutral-500 w-20 font-mono [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  />
+                  {onSaveField && (
+                    <button
+                      onClick={handleGradYearSave}
+                      disabled={savingGradYear || gradYearInput === (member.gradYear != null ? String(member.gradYear) : '')}
+                      className="text-[10px] px-2 py-1 rounded bg-white/10 text-white hover:bg-white/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shrink-0"
+                    >
+                      {savingGradYear ? '…' : 'save'}
+                    </button>
+                  )}
+                </div>
+              </DrawerField>
+            </>
+          )}
 
           {/* Access code — inline editor */}
           <DrawerField label="access code">

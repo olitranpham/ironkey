@@ -3,7 +3,9 @@ import prisma from '@/lib/prisma'
 import { deleteSeamCodeByPin } from '@/lib/seam'
 
 const SEAM_API = 'https://connect.getseam.com'
-const VALID_STATUSES = ['ACTIVE', 'FROZEN', 'CANCELED']
+const VALID_STATUSES         = ['ACTIVE', 'FROZEN', 'CANCELED']
+const VALID_GRAD_SEMESTERS   = ['Fall', 'Spring', 'Summer']
+const VALID_STUDENT_CATEGORIES = ['Student', 'Military', 'EMT']
 
 const MEMBER_SELECT = {
   id: true, firstName: true, lastName: true, email: true, phone: true,
@@ -13,6 +15,7 @@ const MEMBER_SELECT = {
   dateFrozen: true, dateCanceled: true, createdAt: true,
   stripeCustomerId: true, stripeSubscriptionId: true,
   hearAboutUs: true,
+  gradSemester: true, gradYear: true, studentCategory: true,
 }
 
 /**
@@ -61,7 +64,8 @@ export async function PATCH(request, { params }) {
     const { status, accessCode, firstName, lastName, email, phone,
             dateOfBirth, address, emergencyContactName, emergencyContactPhone,
             emergencyContactRelationship, membershipType,
-            stripeCustomerId, stripeSubscriptionId } = body
+            stripeCustomerId, stripeSubscriptionId,
+            gradSemester, gradYear, studentCategory } = body
 
     console.log('[members/patch] memberId=%s gymId=%s body=%j', memberId, gymId, body)
 
@@ -118,6 +122,30 @@ export async function PATCH(request, { params }) {
     if (membershipType       !== undefined) data.membershipType       = membershipType === ''       ? null : String(membershipType).trim()
     if (stripeCustomerId     !== undefined) data.stripeCustomerId     = stripeCustomerId === ''     ? null : String(stripeCustomerId).trim()
     if (stripeSubscriptionId !== undefined) data.stripeSubscriptionId = stripeSubscriptionId === '' ? null : String(stripeSubscriptionId).trim()
+
+    if (gradSemester !== undefined) {
+      if (gradSemester !== '' && gradSemester !== null && !VALID_GRAD_SEMESTERS.includes(gradSemester)) {
+        return NextResponse.json({ error: 'Invalid gradSemester' }, { status: 400 })
+      }
+      data.gradSemester = gradSemester === '' ? null : gradSemester
+    }
+
+    if (gradYear !== undefined) {
+      if (gradYear === '' || gradYear === null) {
+        data.gradYear = null
+      } else {
+        const yearNum = parseInt(gradYear, 10)
+        if (isNaN(yearNum)) return NextResponse.json({ error: 'Invalid gradYear' }, { status: 400 })
+        data.gradYear = yearNum
+      }
+    }
+
+    if (studentCategory !== undefined) {
+      if (studentCategory !== '' && studentCategory !== null && !VALID_STUDENT_CATEGORIES.includes(studentCategory)) {
+        return NextResponse.json({ error: 'Invalid studentCategory' }, { status: 400 })
+      }
+      data.studentCategory = studentCategory === '' ? null : studentCategory
+    }
 
     const member = await prisma.member.update({
       where:  { id: memberId },
