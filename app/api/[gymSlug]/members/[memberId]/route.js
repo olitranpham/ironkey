@@ -124,10 +124,19 @@ export async function PATCH(request, { params }) {
     if (stripeSubscriptionId !== undefined) data.stripeSubscriptionId = stripeSubscriptionId === '' ? null : String(stripeSubscriptionId).trim()
 
     if (gradSemester !== undefined) {
-      if (gradSemester !== '' && gradSemester !== null && !VALID_GRAD_SEMESTERS.includes(gradSemester)) {
-        return NextResponse.json({ error: 'Invalid gradSemester' }, { status: 400 })
+      if (gradSemester === '' || gradSemester === null) {
+        data.gradSemester = null
+      } else {
+        // Normalize casing so "fall"/"FALL"/"Fall" all resolve to the
+        // canonical form the profile dropdown's <option> values expect.
+        const canonical = VALID_GRAD_SEMESTERS.find(
+          v => v.toLowerCase() === String(gradSemester).trim().toLowerCase()
+        )
+        if (!canonical) {
+          return NextResponse.json({ error: 'Invalid gradSemester' }, { status: 400 })
+        }
+        data.gradSemester = canonical
       }
-      data.gradSemester = gradSemester === '' ? null : gradSemester
     }
 
     if (gradYear !== undefined) {

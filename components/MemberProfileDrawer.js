@@ -605,17 +605,6 @@ function DrawerContent({ member, gymSlug, membershipBorder, onClose, onStatusCha
             </div>
           </DrawerField>
 
-          {/* Last visited — most recent door entry for this member's access code */}
-          {!simplified && (
-            <DrawerField label="last visited">
-              <span className="text-xs text-white ml-4">
-                {visits === null
-                  ? 'loading…'
-                  : (visits.length === 0 ? null : fmtDateTime(visits[0].createdAt)) ?? 'never'}
-              </span>
-            </DrawerField>
-          )}
-
           {/* Flex check-ins — oasis-boston only */}
           {gymSlug === 'oasis-boston' && member.membershipType?.toLowerCase().includes('flex') && (
             <DrawerField label="check-ins this month">

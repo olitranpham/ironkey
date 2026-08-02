@@ -304,7 +304,7 @@ export default function JoinPage() {
         if (membershipPlans.length) {
           let defaultPlan
           if (gymSlug === 'hydra-athletic-co') {
-            defaultPlan = membershipPlans.find(p => p.name.toLowerCase().includes('pre-sale membership')) ?? membershipPlans[0]
+            defaultPlan = membershipPlans.find(p => p.name.toLowerCase().includes('standard membership')) ?? membershipPlans[0]
           } else if (gymSlug === 'triumph-barbell') {
             defaultPlan = membershipPlans.find(p => p.name.toLowerCase().includes('general')) ?? membershipPlans[0]
           } else {
