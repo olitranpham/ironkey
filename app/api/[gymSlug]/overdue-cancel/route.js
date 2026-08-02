@@ -18,7 +18,8 @@ export async function POST(request, { params }) {
     const { gymSlug } = await params
 
     // ── Auth ──────────────────────────────────────────────────────────────────
-    const body  = await request.json()
+    const bodyText = await request.text()
+    const body     = bodyText ? JSON.parse(bodyText) : {}
     const cronSecret = process.env.CRON_SECRET
     if (!cronSecret || body.token !== cronSecret) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
