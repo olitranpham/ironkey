@@ -9,7 +9,7 @@ const VALID_STUDENT_CATEGORIES = ['Student', 'Military', 'EMT']
 
 const MEMBER_SELECT = {
   id: true, firstName: true, lastName: true, email: true, phone: true,
-  status: true, membershipType: true, accessCode: true,
+  status: true, membershipType: true, accessCode: true, priceId: true,
   dateOfBirth: true, address: true,
   emergencyContactName: true, emergencyContactPhone: true, emergencyContactRelationship: true,
   dateFrozen: true, dateCanceled: true, createdAt: true,

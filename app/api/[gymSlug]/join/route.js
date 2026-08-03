@@ -2,6 +2,12 @@ import { NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import prisma from '@/lib/prisma'
 
+// Hydra's bundled Student/Military/Police/EMT membership product — matched by
+// ID rather than name so a staff rename (e.g. to "student membership") can't
+// silently drop it out of the join page. Update if this product is ever
+// recreated under a new ID.
+const HYDRA_STUDENT_MILITARY_EMT_PRODUCT_ID = 'prod_Uc7pO4ZOBrs4AH'
+
 /**
  * GET /api/[gymSlug]/join
  * Public — returns gym name + available membership plans for the signup form.
@@ -100,7 +106,7 @@ export async function GET(request, { params }) {
             const n = (p.nickname ?? p.product?.name ?? '').toLowerCase()
             return n.includes('pre-sale membership')
                 || n.includes('standard membership')
-                || n.includes('student/military/police/emt membership')
+                || p.product?.id === HYDRA_STUDENT_MILITARY_EMT_PRODUCT_ID
                 || isTaggedMembership(p)
           })
           .map(toplan)

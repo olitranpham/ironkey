@@ -995,19 +995,30 @@ export default function GuestPage() {
             <div className="w-14 h-14 rounded-full bg-emerald-500/15 flex items-center justify-center">
               <CheckCircle2 size={28} className="text-emerald-400" />
             </div>
-            <div>
-              <h2 className="text-xl font-bold text-white">checked in!</h2>
-              <p className="text-sm text-neutral-400 mt-1">
-                welcome{flexMember?.firstName ? `, ${flexMember.firstName.toLowerCase()}` : ''}.
-              </p>
-            </div>
-            {flexResult && (
-              <div className="w-full bg-neutral-900 rounded-xl p-4">
-                <p className="text-xs text-neutral-400">
-                  <span className="text-white font-semibold">{flexResult.checkInsRemaining}</span>{' '}
-                  flex check-in{flexResult.checkInsRemaining !== 1 ? 's' : ''} remaining this month
+            {flexResult?.alreadyActive ? (
+              <div>
+                <h2 className="text-xl font-bold text-white">you're already checked in</h2>
+                <p className="text-sm text-neutral-400 mt-2">
+                  your code is still active. you can enter the gym.
                 </p>
               </div>
+            ) : (
+              <>
+                <div>
+                  <h2 className="text-xl font-bold text-white">checked in!</h2>
+                  <p className="text-sm text-neutral-400 mt-1">
+                    welcome{flexMember?.firstName ? `, ${flexMember.firstName.toLowerCase()}` : ''}.
+                  </p>
+                </div>
+                {flexResult && (
+                  <div className="w-full bg-neutral-900 rounded-xl p-4">
+                    <p className="text-xs text-neutral-400">
+                      <span className="text-white font-semibold">{flexResult.checkInsRemaining}</span>{' '}
+                      flex check-in{flexResult.checkInsRemaining !== 1 ? 's' : ''} remaining this month
+                    </p>
+                  </div>
+                )}
+              </>
             )}
             <button
               onClick={() => { setStep('intent'); setMode(null); setLookupEmail(''); setFlexMember(null); setFlexResult(null); clearError() }}

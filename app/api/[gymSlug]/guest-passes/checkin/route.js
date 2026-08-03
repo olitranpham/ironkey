@@ -12,6 +12,31 @@ const PASS_TYPE_LABEL = {
 }
 
 
+/**
+ * Looks up an existing Seam access code for the given PIN and returns it if
+ * it's still within its active window (no ends_at, or ends_at in the
+ * future). Used to detect a repeat check-in within the same 24-hour window
+ * so the delete/recreate cycle can be skipped entirely — their access is
+ * already live, touching it would just reset the window for no reason.
+ */
+async function findValidSeamCode(seamHeaders, deviceId, pin) {
+  try {
+    const listRes = await fetch(`${SEAM_API}/access_codes/list`, {
+      method: 'POST', headers: seamHeaders,
+      body:   JSON.stringify({ device_id: deviceId }),
+    })
+    if (!listRes.ok) return null
+    const listJson = await listRes.json()
+    const code = listJson.access_codes?.find(c => String(c.code).trim() === String(pin).trim())
+    if (!code) return null
+    const stillValid = !code.ends_at || new Date(code.ends_at) > new Date()
+    return stillValid ? code : null
+  } catch (err) {
+    console.error('[checkin] findValidSeamCode error:', err.message)
+    return null
+  }
+}
+
 function notifyZapier(request, gymSlug, { name, email, phone, accessCode }) {
   const host   = request.headers.get('host') ?? ''
   const scheme = host.startsWith('localhost') ? 'http' : 'https'
@@ -91,6 +116,7 @@ export async function POST(request, { params }) {
       if (newCount > 0 && profile && gym.seamApiKey && gym.seamDeviceId) {
         console.log('[checkin] entering Seam refresh block')
         // Use existing code or generate a new one
+        const hadExistingAccessCode = Boolean(profile.accessCode)
         let accessCode = profile.accessCode
         if (!accessCode) {
           accessCode = String(Math.floor(1000 + Math.random() * 9000))
@@ -100,6 +126,14 @@ export async function POST(request, { params }) {
         const seamHeaders = { Authorization: `Bearer ${gym.seamApiKey}`, 'Content-Type': 'application/json' }
         const pin         = String(accessCode).trim()
 
+        // Repeat check-in within the same window — a valid, non-expired code
+        // already exists for this PIN, so skip the delete/recreate entirely.
+        const validCode = hadExistingAccessCode ? await findValidSeamCode(seamHeaders, gym.seamDeviceId, pin) : null
+
+        if (validCode) {
+          alreadyActive = true
+          console.log('[checkin] repeat check-in within window — code already valid, skipping refresh — pin=%s ends_at=%s', pin, validCode.ends_at)
+        } else {
         // Step 1: delete any existing code for this PIN (best-effort — never blocks create)
         try {
           const listRes  = await fetch(`${SEAM_API}/access_codes/list`, {
@@ -146,6 +180,7 @@ export async function POST(request, { params }) {
         } catch (createErr) {
           console.error('[checkin] Seam create step error:', createErr.message)
         }
+        }
 
         // Persist accessCode to DB (handles null case or newly generated code)
         if (accessCode !== profile.accessCode) {
@@ -159,6 +194,13 @@ export async function POST(request, { params }) {
         const seamHeaders = { Authorization: `Bearer ${gym.seamApiKey}`, 'Content-Type': 'application/json' }
         const pin         = String(profile.accessCode).trim()
 
+        // Repeat check-in within the window — access is already live, skip touching it
+        const validCode = await findValidSeamCode(seamHeaders, gym.seamDeviceId, pin)
+
+        if (validCode) {
+          alreadyActive = true
+          console.log('[checkin] exhausted — repeat check-in within window, code already valid, skipping refresh — pin=%s ends_at=%s', pin, validCode.ends_at)
+        } else {
         // Delete existing code first
         try {
           const listRes  = await fetch(`${SEAM_API}/access_codes/list`, {
@@ -198,6 +240,7 @@ export async function POST(request, { params }) {
           console.log('[checkin] exhausted — Seam create response status=%d body=%j', createRes.status, createJson)
         } catch (createErr) {
           console.error('[checkin] exhausted — Seam create error:', createErr.message)
+        }
         }
       }
 

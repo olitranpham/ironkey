@@ -44,6 +44,31 @@ async function deleteSeamCodeByPin(apiKey, deviceId, pin) {
   }
 }
 
+/**
+ * Looks up an existing Seam access code for the given PIN and returns it if
+ * it's still within its active window (no ends_at, or ends_at in the
+ * future) — used to detect a repeat check-in within the same 24-hour window
+ * so the delete/recreate cycle can be skipped entirely.
+ */
+async function findValidSeamCode(apiKey, deviceId, pin) {
+  try {
+    const seamHeaders = { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' }
+    const listRes = await fetch(`${SEAM_API}/access_codes/list`, {
+      method: 'POST', headers: seamHeaders,
+      body:   JSON.stringify({ device_id: deviceId }),
+    })
+    if (!listRes.ok) return null
+    const listJson = await listRes.json()
+    const code = listJson.access_codes?.find(c => String(c.code).trim() === String(pin).trim())
+    if (!code) return null
+    const stillValid = !code.ends_at || new Date(code.ends_at) > new Date()
+    return stillValid ? code : null
+  } catch (err) {
+    console.error('[flex-checkin] findValidSeamCode error:', err.message)
+    return null
+  }
+}
+
 async function createSeam24hrCode(apiKey, deviceId, pin, memberName) {
   try {
     const seamHeaders = { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' }
@@ -187,16 +212,26 @@ export async function POST(request, { params }) {
     const memberName = `${member.firstName} ${member.lastName}`.trim()
     const hasSeam    = gym.seamApiKey && gym.seamDeviceId && pin
 
+    let alreadyActive = false
     if (hasSeam) {
-      // Always delete the existing code first (clears any previous 24-hr window)
-      await deleteSeamCodeByPin(gym.seamApiKey, gym.seamDeviceId, pin)
+      // Repeat check-in within the window — a valid, non-expired code already
+      // exists for this PIN, so skip the delete/recreate entirely.
+      const validCode = await findValidSeamCode(gym.seamApiKey, gym.seamDeviceId, pin)
 
-      if (checkInsRemaining > 0) {
-        // Check-ins remaining — create a fresh 24-hr code
-        await createSeam24hrCode(gym.seamApiKey, gym.seamDeviceId, pin, memberName)
+      if (validCode) {
+        alreadyActive = true
+        console.log('[flex-checkin] repeat check-in within window — code already valid, skipping refresh — pin=%s ends_at=%s', pin, validCode.ends_at)
       } else {
-        // 5th (final) check-in — delete only, no recreation; access expires immediately
-        console.log('[flex-checkin] final check-in for month — Seam code deleted, not recreated (email=%s)', email)
+        // Always delete the existing code first (clears any previous 24-hr window)
+        await deleteSeamCodeByPin(gym.seamApiKey, gym.seamDeviceId, pin)
+
+        if (checkInsRemaining > 0) {
+          // Check-ins remaining — create a fresh 24-hr code
+          await createSeam24hrCode(gym.seamApiKey, gym.seamDeviceId, pin, memberName)
+        } else {
+          // 5th (final) check-in — delete only, no recreation; access expires immediately
+          console.log('[flex-checkin] final check-in for month — Seam code deleted, not recreated (email=%s)', email)
+        }
       }
     }
 
@@ -216,7 +251,7 @@ export async function POST(request, { params }) {
       }).catch(err => console.error('[flex-checkin webhook]', err))
     }
 
-    return NextResponse.json({ checkInsUsed: newCount, checkInsRemaining })
+    return NextResponse.json({ checkInsUsed: newCount, checkInsRemaining, alreadyActive })
   } catch (error) {
     console.error('[flex-checkin POST]', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

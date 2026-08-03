@@ -14,6 +14,11 @@ const STATUS_TEXT = {
   OVERDUE:   'text-red-400',
 }
 
+// Price ID(s) for Hydra's bundled Student/Military/Police/EMT membership
+// product (currently "student membership" — renamed from its original name,
+// hence matching by ID rather than name so future renames can't break this).
+const HYDRA_STUDENT_MILITARY_EMT_PRICE_IDS = new Set(['price_1TctZyAHpnGUkbkCdCs8HAL3'])
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 const EVENT_LABEL = {
@@ -85,8 +90,13 @@ function DrawerContent({ member, gymSlug, membershipBorder, onClose, onStatusCha
   const membershipTypeLower = (member.membershipType || '').toLowerCase()
   const isStandaloneStudentPlan = (gymSlug === 'triumph-barbell' || gymSlug === 'oasis-boston')
     && membershipTypeLower.includes('student')
+  // Keyed off the price ID rather than the product/membershipType name — a
+  // staff rename of this product (it was "Student/Military/Police/EMT
+  // Membership", now "student membership") previously made this silently
+  // stop matching. Add the new price ID here if Hydra ever adds another
+  // tier to this same bundled product.
   const isHydraBundledPlan = gymSlug === 'hydra-athletic-co'
-    && membershipTypeLower.includes('student') && membershipTypeLower.includes('military')
+    && HYDRA_STUDENT_MILITARY_EMT_PRICE_IDS.has(member.priceId)
   const [codeInput,    setCodeInput]    = useState(member.accessCode ?? '')
   const [savingCode,   setSavingCode]   = useState(false)
   const [deletingCode, setDeletingCode] = useState(false)
