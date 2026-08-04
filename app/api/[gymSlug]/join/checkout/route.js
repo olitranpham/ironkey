@@ -21,12 +21,12 @@ export async function POST(request, { params }) {
       firstName, lastName, email, phone, dob,
       address, address1, address2, city, state, zip,
       emergencyName, emergencyPhone, emergencyRelationship,
-      priceId, membershipType, addonPriceId,
+      priceId, membershipType, addonPriceId, groupTrainingPriceId,
       studentIdUploadId, gradSemester, gradYear, hearAboutUs,
     } = body
 
-    if (!firstName || !lastName || !email || !priceId) {
-      return NextResponse.json({ error: 'firstName, lastName, email, and priceId are required' }, { status: 400 })
+    if (!firstName || !lastName || !email || (!priceId && !groupTrainingPriceId)) {
+      return NextResponse.json({ error: 'firstName, lastName, email, and a selected plan are required' }, { status: 400 })
     }
 
     const gym = await prisma.gym.findUnique({
@@ -45,7 +45,14 @@ export async function POST(request, { params }) {
       ?? request.headers.get('origin')
       ?? `https://${request.headers.get('host')}`
 
-    const lineItems = [{ price: priceId, quantity: 1 }]
+    // "Gym membership included" is informational copy, not a billing
+    // instruction — group training's price already covers membership, so it
+    // must be the ONLY line item. Stacking it alongside a base membership
+    // price (which likely bills on a different interval/cadence) causes
+    // Stripe to reject the session outright.
+    const lineItems = groupTrainingPriceId
+      ? [{ price: groupTrainingPriceId, quantity: 1 }]
+      : [{ price: priceId, quantity: 1 }]
     if (addonPriceId) lineItems.push({ price: addonPriceId, quantity: 1 })
 
     const session = await stripe.checkout.sessions.create({
@@ -73,6 +80,7 @@ export async function POST(request, { params }) {
         emergencyRelationship: emergencyRelationship ?? '',
         membershipType:        membershipType        ?? '',
         addonPriceId:          addonPriceId          ?? '',
+        groupTrainingPriceId:  groupTrainingPriceId  ?? '',
         studentIdUploadId:     studentIdUploadId     ?? '',
         gradSemester:          gradSemester          ?? '',
         gradYear:              gradYear              ?? '',

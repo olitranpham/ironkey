@@ -255,6 +255,7 @@ export default function JoinPage() {
   const [addonPlans,        setAddonPlans]        = useState([])
   const [ptPlans,           setPtPlans]           = useState([])
   const [programmingPlans,  setProgrammingPlans]  = useState([])
+  const [groupTrainingPlans, setGroupTrainingPlans] = useState([])
   const [loading,          setLoading]          = useState(true)
   const [submitting,       setSubmitting]       = useState(false)
   const [error,            setError]            = useState(null)
@@ -285,6 +286,7 @@ export default function JoinPage() {
     priceId:               '',
     membershipType:        '',
     addonPriceId:          '',
+    groupTrainingPriceId:  '',
     waiver:                false,
   })
 
@@ -294,13 +296,14 @@ export default function JoinPage() {
   useEffect(() => {
     fetch(`/api/${gymSlug}/join`)
       .then(r => r.json())
-      .then(({ gym, membershipPlans = [], addonPlans = [], ptPlans = [], programmingPlans = [] }) => {
+      .then(({ gym, membershipPlans = [], addonPlans = [], ptPlans = [], programmingPlans = [], groupTrainingPlans = [] }) => {
         setGymName((gym?.name ?? gymSlug).replace(/-/g, ' '))
         setGymLogo(gym?.logoUrl ?? null)
         setMembershipPlans(membershipPlans)
         setAddonPlans(addonPlans)
         setPtPlans(ptPlans)
         setProgrammingPlans(programmingPlans)
+        setGroupTrainingPlans(groupTrainingPlans)
         if (membershipPlans.length) {
           let defaultPlan
           if (gymSlug === 'hydra-athletic-co') {
@@ -345,7 +348,11 @@ export default function JoinPage() {
     if (!form.city.trim())     { setError('City is required.'); return }
     if (!form.state.trim())    { setError('State is required.'); return }
     if (!form.zip.trim())      { setError('Zip code is required.'); return }
-    if (!form.priceId)         { setError('Please select a membership type.'); return }
+    // A selected group training tier bypasses the membership dropdown entirely —
+    // the training price is billed on its own, so priceId isn't required there.
+    const isGroupTrainingSelected = gymSlug === 'oasis-boston'
+      && groupTrainingPlans.some(p => p.priceId === form.groupTrainingPriceId)
+    if (!form.priceId && !isGroupTrainingSelected) { setError('Please select a membership type.'); return }
     const dobAge = (Date.now() - new Date(form.dob).getTime()) / (365.25 * 24 * 60 * 60 * 1000)
     if (dobAge < 18) { setError('Members under 18 must have a parent or guardian complete this form on their behalf (see Section 14 of the terms).'); return }
     if (!form.emergencyName.trim() || !form.emergencyPhone.trim()) { setError('Emergency contact name and phone are required.'); return }
@@ -391,6 +398,7 @@ export default function JoinPage() {
         priceId:               form.priceId,
         membershipType:        form.membershipType,
         addonPriceId:          form.addonPriceId,
+        groupTrainingPriceId:  form.groupTrainingPriceId,
         studentIdUploadId,
         gradSemester:          isStudent ? gradSemester : '',
         gradYear:              isStudent ? gradYear     : '',
@@ -579,8 +587,8 @@ export default function JoinPage() {
           />
         </Field>
 
-        {/* Membership type — hidden for Oasis PT plans, Triumph PT/programming plans, and Hydra PT plans */}
-        {!(gymSlug === 'oasis-boston'      && ptPlans.some(p => p.priceId === form.priceId)) &&
+        {/* Membership type — hidden for Oasis PT/group training plans, Triumph PT/programming plans, and Hydra PT plans */}
+        {!(gymSlug === 'oasis-boston'      && (ptPlans.some(p => p.priceId === form.priceId) || groupTrainingPlans.some(p => p.priceId === form.groupTrainingPriceId))) &&
          !(gymSlug === 'triumph-barbell'   && (ptPlans.some(p => p.priceId === form.priceId) || programmingPlans.some(p => p.priceId === form.priceId))) &&
          !(gymSlug === 'hydra-athletic-co' && ptPlans.some(p => p.priceId === form.priceId)) &&
          <Field label="membership type" required>
@@ -657,8 +665,9 @@ export default function JoinPage() {
           )}
         </Field>}
 
-        {/* Personal Training — oasis-boston only */}
-        {gymSlug === 'oasis-boston' && ptPlans.length > 0 && (
+        {/* Personal Training — oasis-boston only; hidden while group training is selected */}
+        {gymSlug === 'oasis-boston' && ptPlans.length > 0
+         && !groupTrainingPlans.some(p => p.priceId === form.groupTrainingPriceId) && (
           <Field label="personal training (optional)">
             <div className="flex flex-col gap-1.5">
               <div className="relative">
@@ -667,6 +676,9 @@ export default function JoinPage() {
                   onChange={e => {
                     if (e.target.value) {
                       selectPlan(e.target.value)
+                      // Defensively clear group training too — the two are mutually
+                      // exclusive and this guarantees that state regardless of path.
+                      setForm(f => ({ ...f, groupTrainingPriceId: '' }))
                     } else {
                       // Deselect PT — clear priceId so user must pick a regular plan
                       setForm(f => ({ ...f, priceId: '', membershipType: '' }))
@@ -688,6 +700,61 @@ export default function JoinPage() {
                 </div>
               </div>
               {ptPlans.some(p => p.priceId === form.priceId) && (
+                <p className="text-[11px] text-neutral-500 px-0.5">gym membership included.</p>
+              )}
+            </div>
+          </Field>
+        )}
+
+        {/* Group Training — oasis-boston only; additional line item alongside base
+            membership; hidden while personal training is selected */}
+        {gymSlug === 'oasis-boston' && groupTrainingPlans.length > 0
+         && !ptPlans.some(p => p.priceId === form.priceId) && (
+          <Field label="group training (optional)">
+            <div className="flex flex-col gap-1.5">
+              <div className="relative">
+                <select
+                  value={form.groupTrainingPriceId}
+                  onChange={e => {
+                    const priceId = e.target.value
+                    if (priceId) {
+                      // Selecting a tier overwrites membershipType with the group
+                      // training tier — same pattern PT already uses — so signup
+                      // metadata reflects what's actually being billed, not
+                      // whatever the now-hidden base membership last held.
+                      // Prefixed with "group training: " since the tier names
+                      // themselves ("1 session/week" etc) are otherwise identical
+                      // strings to PT's own — without this they'd be indistinguishable
+                      // and get bucketed under "personal training" by mistake.
+                      const plan = groupTrainingPlans.find(p => p.priceId === priceId)
+                      setForm(f => ({ ...f, groupTrainingPriceId: priceId, membershipType: plan ? `group training: ${plan.membershipType}` : f.membershipType }))
+                    } else {
+                      // Deselecting restores membershipType to whatever the base
+                      // membership dropdown is currently set to (untouched this
+                      // whole time), not PT's clear-to-empty behavior — the base
+                      // plan selection is independent and shouldn't be wiped.
+                      setForm(f => {
+                        const basePlan = membershipPlans.find(p => p.priceId === f.priceId)
+                        return { ...f, groupTrainingPriceId: '', membershipType: basePlan?.membershipType ?? f.membershipType }
+                      })
+                    }
+                  }}
+                  className={SELECT}
+                >
+                  <option value="">— none —</option>
+                  {groupTrainingPlans.map(p => (
+                    <option key={p.priceId} value={p.priceId}>
+                      {p.name.replace(/(\d+\s*sessions?)\s*\/\s*week/i, '$1 / week')} — {Number(p.amount).toLocaleString('en-US', { style: 'currency', currency: 'USD' })} / 4 weeks
+                    </option>
+                  ))}
+                </select>
+                <div className="pointer-events-none absolute inset-y-0 right-3 flex items-center">
+                  <svg className="w-4 h-4 text-neutral-500" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.17l3.71-3.94a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
+                  </svg>
+                </div>
+              </div>
+              {groupTrainingPlans.some(p => p.priceId === form.groupTrainingPriceId) && (
                 <p className="text-[11px] text-neutral-500 px-0.5">gym membership included.</p>
               )}
             </div>

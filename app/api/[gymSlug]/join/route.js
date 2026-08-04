@@ -28,6 +28,7 @@ export async function GET(request, { params }) {
     let addonPlans        = []
     let ptPlans           = []
     let programmingPlans  = []
+    let groupTrainingPlans = []
 
     if (gym.stripeSecretKey) {
       const stripe = new Stripe(gym.stripeSecretKey, { apiVersion: '2024-06-20' })
@@ -98,6 +99,12 @@ export async function GET(request, { params }) {
           .filter(p => p.product?.id === 'prod_Uqf1w4GB1ESyRI')
           .map(toplan)
           .sort((a, b) => a.amount - b.amount)
+
+        // Group Training add-on (additional line item alongside base membership)
+        groupTrainingPlans = recurring
+          .filter(p => p.product?.id === 'prod_V0Vdl6bPgfqgud')
+          .map(toplan)
+          .sort((a, b) => a.amount - b.amount)
       } else if (gymSlug === 'hydra-athletic-co') {
         // Membership plans: Pre-Sale, Standard, and Student/Military/Police/EMT
         // memberships, or anything tagged as a membership plan by the products page
@@ -125,7 +132,7 @@ export async function GET(request, { params }) {
       }
     }
 
-    return NextResponse.json({ gym: { name: gym.name, slug: gymSlug, logoUrl: gym.logoUrl ?? null }, membershipPlans, addonPlans, ptPlans, programmingPlans })
+    return NextResponse.json({ gym: { name: gym.name, slug: gymSlug, logoUrl: gym.logoUrl ?? null }, membershipPlans, addonPlans, ptPlans, programmingPlans, groupTrainingPlans })
   } catch (error) {
     console.error('[join GET]', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
