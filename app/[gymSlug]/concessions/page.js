@@ -3,19 +3,11 @@
 import { useState, useEffect } from 'react'
 import { useParams } from 'next/navigation'
 import { Loader2, Minus, Plus, ShoppingBag } from 'lucide-react'
+import PublicPageHeader from '@/components/PublicPageHeader'
+import { SectionDivider, BUTTON_PRIMARY } from '@/components/PublicPageStyles'
 
 function fmt(n) {
   return Number(n).toLocaleString('en-US', { style: 'currency', currency: 'USD' })
-}
-
-function SectionDivider({ label }) {
-  return (
-    <div className="flex items-center gap-3 py-1">
-      <div className="flex-1 border-t border-white/8" />
-      <span className="text-[10px] font-semibold tracking-widest text-neutral-600 uppercase">{label}</span>
-      <div className="flex-1 border-t border-white/8" />
-    </div>
-  )
 }
 
 // Groups items by their staff-set sectionLabel (e.g. "drinks", "snacks"),
@@ -99,25 +91,19 @@ export default function ConcessionsPage() {
   return (
     <div className="min-h-screen bg-[#292929] flex flex-col items-center py-12 px-4">
 
-      {/* Header */}
-      <div className="flex flex-col items-center text-center gap-3 mb-8">
-        {gymLogo && (
-          <img src={gymLogo} alt={gymName} className="w-24 h-24 object-contain" />
-        )}
-        {!gymLogo && <h1 className="text-xl font-bold text-white">{gymName}</h1>}
-      </div>
+      <PublicPageHeader gymLogo={gymLogo} gymName={gymName} />
 
       <div className="w-full max-w-2xl flex flex-col gap-4">
 
         {items.length === 0 && (
-          <div className="bg-[#1c1c1c] border border-white/10 rounded-xl p-4 shadow-2xl">
+          <div className="bg-[#1c1c1c] border border-white/10 rounded-2xl p-4 shadow-2xl">
             <p className="text-sm text-neutral-500 text-center py-6">nothing available right now — check back soon.</p>
           </div>
         )}
 
         <div className="flex flex-col gap-4">
         {groupBySection(items).map(group => (
-          <div key={group.section} className="bg-[#1c1c1c] border border-white/10 rounded-xl p-4 flex flex-col gap-3 shadow-2xl">
+          <div key={group.section} className="bg-[#1c1c1c] border border-white/10 rounded-2xl p-4 flex flex-col gap-3 shadow-2xl">
             <SectionDivider label={group.section} />
             {group.items.map(item => {
               const qty         = quantities[item.id] ?? 0
@@ -166,7 +152,7 @@ export default function ConcessionsPage() {
         </div>
 
         {items.length > 0 && (
-          <div className="bg-[#1c1c1c] border border-white/10 rounded-xl p-4 flex flex-col gap-3 shadow-2xl">
+          <div className="bg-[#1c1c1c] border border-white/10 rounded-2xl p-4 flex flex-col gap-3 shadow-2xl">
             <div className="flex items-center justify-between">
               <span className="text-sm text-neutral-400">total</span>
               <span className="text-lg font-bold text-white">{fmt(total)}</span>
@@ -182,7 +168,7 @@ export default function ConcessionsPage() {
             <button
               onClick={handleCheckout}
               disabled={submitting || selectedCount === 0}
-              className="w-full py-3.5 rounded-xl text-sm font-semibold bg-white text-[#1c1c1c] hover:bg-neutral-100 disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-150 flex items-center justify-center gap-2"
+              className={BUTTON_PRIMARY}
             >
               {submitting ? (
                 <><Loader2 size={15} className="animate-spin" /> redirecting to checkout…</>

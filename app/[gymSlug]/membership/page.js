@@ -3,19 +3,8 @@
 import { useState, useEffect } from 'react'
 import { useParams } from 'next/navigation'
 import { Loader2, ChevronLeft, Snowflake, PlayCircle, XCircle } from 'lucide-react'
-
-function Field({ label, required, children }) {
-  return (
-    <div className="flex flex-col gap-2">
-      <label className="text-xs font-semibold text-neutral-300 tracking-wide">
-        {label}{required && <span className="text-rose-400 ml-0.5">*</span>}
-      </label>
-      {children}
-    </div>
-  )
-}
-
-const INPUT = "w-full bg-[#242424] border border-neutral-700/60 rounded-lg px-3.5 py-2.5 text-sm text-white placeholder-neutral-600 focus:outline-none focus:ring-2 focus:ring-white/10 focus:border-neutral-500 transition-all duration-150"
+import PublicPageHeader from '@/components/PublicPageHeader'
+import { Field, INPUT, BUTTON_PRIMARY } from '@/components/PublicPageStyles'
 
 const STATUS_LABEL = {
   ACTIVE:   'active',
@@ -156,14 +145,8 @@ export default function MembershipManagerPage() {
   return (
     <div className={`min-h-screen bg-[#292929] flex flex-col items-center px-4 ${step === 'success' ? 'justify-center' : 'py-12'}`}>
 
-      {/* Header */}
       {step !== 'success' && (
-        <div className="flex flex-col items-center text-center gap-3 mb-8">
-          {gymLogo && (
-            <img src={gymLogo} alt={gymName} className="w-24 h-24 object-contain" />
-          )}
-          {!gymLogo && <h1 className="text-xl font-bold text-white">{gymName}</h1>}
-        </div>
+        <PublicPageHeader gymLogo={gymLogo} gymName={gymName} />
       )}
 
       <div className="w-full max-w-md">
@@ -203,7 +186,7 @@ export default function MembershipManagerPage() {
             <button
               type="submit"
               disabled={lookingUp}
-              className="w-full py-3 rounded-xl text-sm font-semibold bg-white text-[#1c1c1c] hover:bg-neutral-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+              className={BUTTON_PRIMARY}
             >
               {lookingUp ? <><Loader2 size={15} className="animate-spin" /> looking up…</> : 'continue →'}
             </button>
@@ -330,7 +313,7 @@ export default function MembershipManagerPage() {
             <button
               type="submit"
               disabled={submitting}
-              className="w-full py-3 rounded-xl text-sm font-semibold bg-white text-[#1c1c1c] hover:bg-neutral-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+              className={BUTTON_PRIMARY}
             >
               {submitting ? <><Loader2 size={15} className="animate-spin" /> submitting…</> : 'submit request'}
             </button>
@@ -341,7 +324,7 @@ export default function MembershipManagerPage() {
         {step === 'success' && (
           <div className="bg-[#1c1c1c] border border-neutral-800 rounded-2xl p-8 flex flex-col items-center text-center gap-5 shadow-2xl">
             {gymLogo && (
-              <img src={gymLogo} alt={gymName} className="w-24 h-24 object-contain" />
+              <img src={gymLogo} alt={gymName} className="w-14 h-14 object-contain" />
             )}
             <div>
               <h2 className="text-3xl font-bold text-white">request submitted</h2>

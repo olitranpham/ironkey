@@ -34,10 +34,11 @@ export async function GET(request, { params }) {
 /**
  * DELETE /api/[gymSlug]/stripe/connect
  * Disconnects the gym's Stripe connected account (clears stripeAccountId).
- * Only OWNER may disconnect.
+ * Only OWNER may disconnect, and only for their own gym.
  */
-export async function DELETE(request) {
+export async function DELETE(request, { params }) {
   try {
+    const { gymSlug } = await params
     const gymId = request.headers.get('x-gym-id')
     const role  = (request.headers.get('x-gym-role') ?? '').toUpperCase()
 
@@ -47,8 +48,15 @@ export async function DELETE(request) {
 
     const gym = await prisma.gym.findUnique({
       where:  { id: gymId },
-      select: { stripeAccountId: true },
+      select: { slug: true, stripeAccountId: true },
     })
+
+    // Defense in depth — the JWT's gymId must actually belong to the gym in
+    // the URL, so an authenticated owner of one gym can't pass a different
+    // gym's slug and disconnect that gym's Stripe account.
+    if (!gym || gym.slug !== gymSlug) {
+      return NextResponse.json({ error: 'Gym mismatch' }, { status: 403 })
+    }
 
     // Revoke the OAuth grant on Stripe's side (fire-and-forget — DB update is authoritative)
     if (gym?.stripeAccountId && process.env.STRIPE_CLIENT_ID && process.env.STRIPE_SECRET_KEY) {

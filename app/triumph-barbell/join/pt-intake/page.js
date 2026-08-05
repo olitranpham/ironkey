@@ -90,7 +90,7 @@ export default function PTIntakePage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#292929] flex flex-col items-center py-12 px-4" style={{ fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif" }}>
+    <div className="min-h-screen bg-[#292929] flex flex-col items-center py-12 px-4">
       <form
         onSubmit={handleSubmit}
         className="w-full max-w-2xl bg-[#1c1c1c] border border-white/10 rounded-2xl p-7 flex flex-col gap-5 shadow-2xl"

@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react'
 import { useParams } from 'next/navigation'
 import { Loader2, X, ShoppingCart, LogIn, CheckCircle2, ChevronLeft, Dumbbell } from 'lucide-react'
+import PublicPageHeader from '@/components/PublicPageHeader'
+import { Field, SectionDivider, INPUT, SELECT, BUTTON_PRIMARY } from '@/components/PublicPageStyles'
 function maskPhone(value) {
   const d = value.replace(/\D/g, '').slice(0, 10)
   if (d.length < 4) return d.length ? `(${d}` : ''
@@ -191,29 +193,6 @@ function fmt(amount) {
   return Number(amount).toLocaleString('en-US', { style: 'currency', currency: 'USD' })
 }
 
-function Field({ label, required, children }) {
-  return (
-    <div className="flex flex-col gap-1.5">
-      <label className="text-xs text-neutral-400">
-        {label}{required && <span className="text-rose-400 ml-0.5">*</span>}
-      </label>
-      {children}
-    </div>
-  )
-}
-
-function SectionDivider({ label }) {
-  return (
-    <div className="flex items-center gap-3 py-1">
-      <div className="flex-1 border-t border-white/8" />
-      <span className="text-[10px] font-semibold tracking-widest text-neutral-600 uppercase">{label}</span>
-      <div className="flex-1 border-t border-white/8" />
-    </div>
-  )
-}
-
-const INPUT  = "w-full bg-[#1c1c1c] border border-neutral-700 rounded-lg px-3 py-2.5 text-sm text-white placeholder-neutral-600 focus:outline-none focus:border-neutral-500 transition-colors"
-const SELECT = "w-full bg-[#1c1c1c] border border-neutral-700 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-neutral-500 transition-colors appearance-none"
 
 // ── Plan selector ──────────────────────────────────────────────────────────────
 
@@ -517,12 +496,7 @@ export default function GuestPage() {
     <div className="min-h-screen bg-[#292929] flex flex-col items-center py-12 px-4">
 
       {/* Header */}
-      <div className="flex flex-col items-center text-center gap-3 mb-8">
-        {gymLogo && (
-          <img src={gymLogo} alt={gymName} className="w-24 h-24 object-contain" />
-        )}
-        {!gymLogo && <h1 className="text-xl font-bold text-white">{gymName}</h1>}
-      </div>
+      <PublicPageHeader gymLogo={gymLogo} gymName={gymName} />
 
       <div className="w-full max-w-2xl">
 
@@ -586,7 +560,7 @@ export default function GuestPage() {
         {step === 'new-form' && (
           <form
             onSubmit={handleNewGuestSubmit}
-            className="bg-[#1c1c1c] border border-neutral-800 rounded-2xl p-6 flex flex-col gap-5 shadow-2xl"
+            className="bg-[#1c1c1c] border border-white/10 rounded-2xl p-7 flex flex-col gap-5 shadow-2xl"
           >
             <SectionDivider label="guest pass registration" />
 
@@ -765,7 +739,7 @@ export default function GuestPage() {
             <button
               type="submit"
               disabled={submitting || plans.length === 0 || (!!form.confirmEmail && form.email.trim().toLowerCase() !== form.confirmEmail.trim().toLowerCase())}
-              className="w-full py-3 rounded-xl text-sm font-semibold bg-white text-[#1c1c1c] hover:bg-neutral-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+              className={BUTTON_PRIMARY}
             >
               {submitting
                 ? <><Loader2 size={15} className="animate-spin" /> redirecting to checkout…</>
@@ -780,7 +754,7 @@ export default function GuestPage() {
         {step === 'email-input' && (
           <form
             onSubmit={mode === 'flex' ? handleFlexLookup : handleLookup}
-            className="bg-[#1c1c1c] border border-neutral-800 rounded-2xl p-6 flex flex-col gap-5 shadow-2xl"
+            className="bg-[#1c1c1c] border border-white/10 rounded-2xl p-7 flex flex-col gap-5 shadow-2xl"
           >
             <div>
               <p className="text-sm font-semibold text-white">
@@ -815,7 +789,7 @@ export default function GuestPage() {
             <button
               type="submit"
               disabled={submitting}
-              className="w-full py-3 rounded-xl text-sm font-semibold bg-white text-[#1c1c1c] hover:bg-neutral-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+              className={BUTTON_PRIMARY}
             >
               {submitting
                 ? <><Loader2 size={15} className="animate-spin" /> looking up…</>
@@ -827,7 +801,7 @@ export default function GuestPage() {
 
         {/* ── Step: returning-confirm ─────────────────────────────────────── */}
         {step === 'returning-confirm' && (
-          <div className="bg-[#1c1c1c] border border-neutral-800 rounded-2xl p-6 flex flex-col gap-5 shadow-2xl">
+          <div className="bg-[#1c1c1c] border border-white/10 rounded-2xl p-6 flex flex-col gap-5 shadow-2xl">
             <div>
               <p className="text-sm font-semibold text-white">welcome back</p>
               <p className="text-xs text-neutral-500 mt-1">{lookupEmail}</p>
@@ -862,7 +836,7 @@ export default function GuestPage() {
             <button
               onClick={handleReturningCheckout}
               disabled={submitting || plans.length === 0}
-              className="w-full py-3 rounded-xl text-sm font-semibold bg-white text-[#1c1c1c] hover:bg-neutral-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+              className={BUTTON_PRIMARY}
             >
               {submitting
                 ? <><Loader2 size={15} className="animate-spin" /> redirecting to checkout…</>
@@ -875,7 +849,7 @@ export default function GuestPage() {
 
         {/* ── Step: checkin-confirm ───────────────────────────────────────── */}
         {step === 'checkin-confirm' && lookupResult && (
-          <div className="bg-[#1c1c1c] border border-neutral-800 rounded-2xl p-6 flex flex-col gap-5 shadow-2xl">
+          <div className="bg-[#1c1c1c] border border-white/10 rounded-2xl p-6 flex flex-col gap-5 shadow-2xl">
             {/* Profile card */}
             <div className="bg-neutral-900 rounded-xl p-4 flex flex-col gap-1">
               <p className="text-sm font-semibold text-white">
@@ -913,7 +887,7 @@ export default function GuestPage() {
                 <button
                   onClick={handleCheckin}
                   disabled={submitting}
-                  className="w-full py-3 rounded-xl text-sm font-semibold bg-white text-[#1c1c1c] hover:bg-neutral-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+                  className={BUTTON_PRIMARY}
                 >
                   {submitting
                     ? <><Loader2 size={15} className="animate-spin" /> checking in…</>
@@ -934,7 +908,7 @@ export default function GuestPage() {
                     setReturningName(lookupResult.profile?.name ?? '')
                     setStep('returning-confirm')
                   }}
-                  className="w-full py-3 rounded-xl text-sm font-semibold bg-white text-[#1c1c1c] hover:bg-neutral-200 transition-colors"
+                  className={BUTTON_PRIMARY}
                 >
                   purchase a pass
                 </button>
@@ -945,7 +919,7 @@ export default function GuestPage() {
 
         {/* ── Step: flex-confirm ──────────────────────────────────────────── */}
         {step === 'flex-confirm' && flexMember && (
-          <div className="bg-[#1c1c1c] border border-neutral-800 rounded-2xl p-6 flex flex-col gap-5 shadow-2xl">
+          <div className="bg-[#1c1c1c] border border-white/10 rounded-2xl p-6 flex flex-col gap-5 shadow-2xl">
             {/* Profile card */}
             <div className="bg-neutral-900 rounded-xl p-4 flex flex-col gap-1">
               <p className="text-sm font-semibold text-white">
@@ -977,7 +951,7 @@ export default function GuestPage() {
                 <button
                   onClick={handleFlexCheckin}
                   disabled={submitting}
-                  className="w-full py-3 rounded-xl text-sm font-semibold bg-white text-[#1c1c1c] hover:bg-neutral-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+                  className={BUTTON_PRIMARY}
                 >
                   {submitting
                     ? <><Loader2 size={15} className="animate-spin" /> checking in…</>

@@ -10,7 +10,11 @@ export async function middleware(request) {
     pathname.startsWith('/api/auth') ||
     pathname === '/api/stripe/callback' ||
     (request.method === 'POST' && pathname === '/api/stripe/webhook') ||
-    /^\/api\/[^/]+\/stripe\/connect$/.test(pathname) ||
+    // GET only — kicks off Stripe's OAuth flow via a plain <a href>, which
+    // can't carry a Bearer token. DELETE (disconnect) must go through the
+    // normal JWT gate below — it must never bypass auth just because it
+    // shares this path with the public GET.
+    (request.method === 'GET' && /^\/api\/[^/]+\/stripe\/connect$/.test(pathname)) ||
     pathname === '/api/admin/login' ||
     (request.method === 'POST' && /^\/api\/[^/]+\/members$/.test(pathname)) ||
     (request.method === 'POST' && /^\/api\/[^/]+\/guest-passes$/.test(pathname)) ||
