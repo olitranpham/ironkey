@@ -33,9 +33,10 @@ model Gym {
   logoUrl String?
 
   // Zapier webhook URLs for outbound notifications
-  zapierGuestWebhookUrl   String?
-  zapierMemberWebhookUrl  String?
-  zapierOverdueWebhookUrl String?
+  zapierGuestWebhookUrl              String?
+  zapierMemberWebhookUrl             String?
+  zapierOverdueWebhookUrl            String?
+  zapierMembershipRequestWebhookUrl  String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -50,6 +51,7 @@ model Gym {
   personalTrainers     PersonalTrainer[]
   ptSessions           PTSession[]
   ptIntakes            PTIntake[]
+  membershipRequests   MembershipRequest[]
 }
 
 // ─── Member ───────────────────────────────────────────────────────────────────
@@ -298,6 +300,27 @@ model MembershipEvent {
   member   Member   @relation(fields: [memberId], references: [id], onDelete: Cascade)
 
   @@index([memberId])
+}
+
+// ─── MembershipRequest ────────────────────────────────────────────────────────
+// Self-service requests submitted from the public /[gymSlug]/membership page.
+// Purely a request record + staff notification (Zapier) — does not itself
+// mutate the member's status; staff action the request manually.
+
+model MembershipRequest {
+  id            String    @id @default(cuid())
+  gymId         String
+  gym           Gym       @relation(fields: [gymId], references: [id], onDelete: Cascade)
+
+  memberEmail   String
+  memberName    String
+  requestType   String    // 'freeze' | 'unfreeze' | 'cancel'
+  reason        String?
+  requestedDate DateTime?
+
+  createdAt     DateTime  @default(now())
+
+  @@index([gymId, memberEmail])
 }
 
 // ─── FinancialEntry ───────────────────────────────────────────────────────────

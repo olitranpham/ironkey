@@ -20,6 +20,7 @@ export async function GET() {
           zapierMemberWebhookUrl:  true,
           zapierGuestWebhookUrl:   true,
           zapierOverdueWebhookUrl: true,
+          zapierMembershipRequestWebhookUrl: true,
         },
       }),
       prisma.member.groupBy({
@@ -50,6 +51,7 @@ export async function GET() {
       zapierMemberWebhookUrl:  gym.zapierMemberWebhookUrl  ?? '',
       zapierGuestWebhookUrl:   gym.zapierGuestWebhookUrl   ?? '',
       zapierOverdueWebhookUrl: gym.zapierOverdueWebhookUrl ?? '',
+      zapierMembershipRequestWebhookUrl: gym.zapierMembershipRequestWebhookUrl ?? '',
     }))
 
     console.log('[admin/gyms GET] returning %d gym(s); seamDeviceIds: %j', result.length, result.map(g => `${g.slug}=${g.seamDeviceId || '(none)'}`))

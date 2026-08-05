@@ -171,6 +171,7 @@ function EditGymModal({ gym, onClose, onUpdated, onDeleted, adminToken }) {
   const [zapierMemberWebhookUrl,  setZapierMemberWebhookUrl]  = useState(gym.zapierMemberWebhookUrl  ?? '')
   const [zapierGuestWebhookUrl,   setZapierGuestWebhookUrl]   = useState(gym.zapierGuestWebhookUrl   ?? '')
   const [zapierOverdueWebhookUrl, setZapierOverdueWebhookUrl] = useState(gym.zapierOverdueWebhookUrl ?? '')
+  const [zapierMembershipRequestWebhookUrl, setZapierMembershipRequestWebhookUrl] = useState(gym.zapierMembershipRequestWebhookUrl ?? '')
   const [loading,         setLoading]         = useState(false)
   const [saved,           setSaved]           = useState(false)
   const [error,           setError]           = useState(null)
@@ -184,7 +185,7 @@ function EditGymModal({ gym, onClose, onUpdated, onDeleted, adminToken }) {
       const res  = await fetch(`/api/admin/gyms/${gym.id}`, {
         method:  'PATCH',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
-        body:    JSON.stringify({ name, slug, seamApiKey, seamDeviceId, stripeAccountId, zapierMemberWebhookUrl, zapierGuestWebhookUrl, zapierOverdueWebhookUrl }),
+        body:    JSON.stringify({ name, slug, seamApiKey, seamDeviceId, stripeAccountId, zapierMemberWebhookUrl, zapierGuestWebhookUrl, zapierOverdueWebhookUrl, zapierMembershipRequestWebhookUrl }),
       })
       const data = await res.json()
       if (!res.ok) { setError(data.error); return }
@@ -229,6 +230,7 @@ function EditGymModal({ gym, onClose, onUpdated, onDeleted, adminToken }) {
           <Field label="zapier member webhook url"  value={zapierMemberWebhookUrl}  onChange={setZapierMemberWebhookUrl}  placeholder="https://hooks.zapier.com/…" />
           <Field label="zapier guest webhook url"   value={zapierGuestWebhookUrl}   onChange={setZapierGuestWebhookUrl}   placeholder="https://hooks.zapier.com/…" />
           <Field label="zapier overdue webhook url" value={zapierOverdueWebhookUrl} onChange={setZapierOverdueWebhookUrl} placeholder="https://hooks.zapier.com/…" />
+          <Field label="zapier membership request webhook url" value={zapierMembershipRequestWebhookUrl} onChange={setZapierMembershipRequestWebhookUrl} placeholder="https://hooks.zapier.com/…" />
           {error && <p className="text-xs text-red-400">{error}</p>}
           <div className="flex gap-2 pt-2">
             <button type="button" onClick={onClose} disabled={loading} className="flex-1 py-2 rounded-lg text-xs font-medium border border-neutral-700 text-neutral-400 hover:text-white disabled:opacity-40 transition-colors">

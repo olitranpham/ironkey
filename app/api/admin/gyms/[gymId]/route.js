@@ -21,6 +21,7 @@ export async function PATCH(request, { params }) {
     if (body.zapierMemberWebhookUrl  !== undefined) data.zapierMemberWebhookUrl  = body.zapierMemberWebhookUrl.trim()  || null
     if (body.zapierGuestWebhookUrl   !== undefined) data.zapierGuestWebhookUrl   = body.zapierGuestWebhookUrl.trim()   || null
     if (body.zapierOverdueWebhookUrl !== undefined) data.zapierOverdueWebhookUrl = body.zapierOverdueWebhookUrl.trim() || null
+    if (body.zapierMembershipRequestWebhookUrl !== undefined) data.zapierMembershipRequestWebhookUrl = body.zapierMembershipRequestWebhookUrl.trim() || null
 
     console.log('[admin/gyms PATCH] gymId=%s incoming body seamDeviceId=%j writing=%j', gymId, body.seamDeviceId, data)
 
@@ -31,7 +32,7 @@ export async function PATCH(request, { params }) {
     const gym = await prisma.gym.update({
       where:  { id: gymId },
       data,
-      select: { id: true, name: true, slug: true, stripeAccountId: true, seamApiKey: true, seamDeviceId: true, zapierMemberWebhookUrl: true, zapierGuestWebhookUrl: true, zapierOverdueWebhookUrl: true },
+      select: { id: true, name: true, slug: true, stripeAccountId: true, seamApiKey: true, seamDeviceId: true, zapierMemberWebhookUrl: true, zapierGuestWebhookUrl: true, zapierOverdueWebhookUrl: true, zapierMembershipRequestWebhookUrl: true },
     })
     console.log('[admin/gyms PATCH] DB result: name=%j slug=%j seamDeviceId=%j', gym.name, gym.slug, gym.seamDeviceId)
 
@@ -46,6 +47,7 @@ export async function PATCH(request, { params }) {
         zapierMemberWebhookUrl:  gym.zapierMemberWebhookUrl  ?? '',
         zapierGuestWebhookUrl:   gym.zapierGuestWebhookUrl   ?? '',
         zapierOverdueWebhookUrl: gym.zapierOverdueWebhookUrl ?? '',
+        zapierMembershipRequestWebhookUrl: gym.zapierMembershipRequestWebhookUrl ?? '',
       },
     })
   } catch (error) {

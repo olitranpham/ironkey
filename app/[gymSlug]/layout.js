@@ -69,7 +69,8 @@ function gymInitials(name) {
     .toUpperCase()
 }
 
-// Exported layout — routes /join through a bare shell, everything else through the portal
+// Exported layout — routes /join, /guest, /concessions, and /membership through
+// a bare shell (no sidebar), everything else through the staff portal
 export default function GymLayout({ children }) {
   const params   = useParams()
   const pathname = usePathname()
@@ -78,7 +79,8 @@ export default function GymLayout({ children }) {
   if (
     pathname.startsWith(`/${gymSlug}/join`) ||
     pathname === `/${gymSlug}/guest` || pathname.startsWith(`/${gymSlug}/guest/`) ||
-    pathname === `/${gymSlug}/concessions` || pathname.startsWith(`/${gymSlug}/concessions/`)
+    pathname === `/${gymSlug}/concessions` || pathname.startsWith(`/${gymSlug}/concessions/`) ||
+    pathname === `/${gymSlug}/membership` || pathname.startsWith(`/${gymSlug}/membership/`)
   ) {
     return <div className="min-h-screen bg-[#292929]">{children}</div>
   }
