@@ -193,6 +193,14 @@ function fmt(amount) {
   return Number(amount).toLocaleString('en-US', { style: 'currency', currency: 'USD' })
 }
 
+// A minor can't legally sign the liability waiver or authorize payment
+// themselves — this determines whether the guardian fields reveal inline.
+function calculateAge(dobStr) {
+  const dob = new Date(dobStr)
+  if (isNaN(dob.getTime())) return null
+  return (Date.now() - dob.getTime()) / (365.25 * 24 * 60 * 60 * 1000)
+}
+
 
 // ── Plan selector ──────────────────────────────────────────────────────────────
 
@@ -240,8 +248,13 @@ export default function GuestPage() {
     firstName: '', lastName: '', email: '', confirmEmail: '', phone: '', dob: '',
     address1: '', address2: '', city: '', state: '', zip: '',
     emergencyName: '', emergencyPhone: '', emergencyRelationship: '',
+    guardianFirstName: '', guardianLastName: '',
+    guardianEmail: '', guardianConfirmEmail: '', guardianPhone: '', guardianRelationship: '',
     waiver: false,
   })
+
+  const age     = form.dob ? calculateAge(form.dob) : null
+  const isMinor = age !== null && age < 18
 
   // Shared
   const [selectedPriceId, setSelectedPriceId] = useState('')
@@ -337,8 +350,13 @@ export default function GuestPage() {
     if (form.email.trim().toLowerCase() !== form.confirmEmail.trim().toLowerCase()) { setError('email addresses don\'t match.'); return }
     if (!form.phone.trim())    { setError('phone number is required.'); return }
     if (!form.dob)             { setError('date of birth is required.'); return }
-    const dobAge = (Date.now() - new Date(form.dob).getTime()) / (365.25 * 24 * 60 * 60 * 1000)
-    if (dobAge < 18) { setError('guests under 18 must have a parent or guardian complete this form on their behalf (see section 14 of the terms).'); return }
+    if (isMinor) {
+      if (!form.guardianFirstName.trim() || !form.guardianLastName.trim()) { setError("guardian's first and last name are required."); return }
+      if (!form.guardianEmail.trim()) { setError("guardian's email is required."); return }
+      if (form.guardianEmail.trim().toLowerCase() !== form.guardianConfirmEmail.trim().toLowerCase()) { setError("guardian's email addresses don't match."); return }
+      if (!form.guardianPhone.trim()) { setError("guardian's phone number is required."); return }
+      if (!form.guardianRelationship.trim()) { setError('relationship to the guest is required.'); return }
+    }
     if (!form.address1.trim()) { setError('address is required.'); return }
     if (!form.city.trim())     { setError('city is required.'); return }
     if (!form.state.trim())    { setError('state is required.'); return }
@@ -350,6 +368,12 @@ export default function GuestPage() {
 
     const plan = plans.find(p => p.priceId === selectedPriceId)
     console.log('[guest/page] new guest checkout — selectedPriceId:', selectedPriceId, '| matched plan:', JSON.stringify(plan), '| sending passType:', plan?.passType ?? 'SINGLE')
+
+    // Guardian is the point of contact for a minor's guest pass — their
+    // email/phone become the checkout/contact info, not the minor's own.
+    const accountEmail = isMinor ? form.guardianEmail.trim() : form.email.trim()
+    const accountPhone = isMinor ? form.guardianPhone.trim() : form.phone.trim()
+
     setSubmitting(true)
     try {
       const res = await fetch(`/api/${gymSlug}/guest/checkout`, {
@@ -361,8 +385,8 @@ export default function GuestPage() {
           passesLeft:            plan?.passesLeft ?? 1,
           firstName:             form.firstName.trim(),
           lastName:              form.lastName.trim(),
-          email:                 form.email.trim(),
-          phone:                 form.phone.trim(),
+          email:                 accountEmail,
+          phone:                 accountPhone,
           dob:                   form.dob,
           address:               [form.address1.trim(), form.address2.trim()].filter(Boolean).join(', '),
           address1:              form.address1.trim(),
@@ -374,6 +398,11 @@ export default function GuestPage() {
           emergencyPhone:        form.emergencyPhone.trim(),
           emergencyRelationship: form.emergencyRelationship.trim(),
           isNewGuest:            true,
+          isMinor,
+          guardianName:          isMinor ? `${form.guardianFirstName.trim()} ${form.guardianLastName.trim()}`.trim() : '',
+          guardianEmail:         isMinor ? accountEmail : '',
+          guardianPhone:         isMinor ? accountPhone : '',
+          guardianRelationship:  isMinor ? form.guardianRelationship.trim() : '',
         }),
       })
       const json = await res.json()
@@ -624,6 +653,75 @@ export default function GuestPage() {
               />
             </Field>
 
+            {/* Guardian fields — animated inline reveal, no navigation. A
+                minor can't legally sign the waiver or authorize payment, so
+                once their DOB shows they're under 18 the guardian becomes
+                the point of contact for everything below. */}
+            <div className={`grid transition-[grid-template-rows] duration-300 ease-out ${isMinor ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}>
+              <div className="overflow-hidden">
+                <div className="flex flex-col gap-5 pt-1">
+                  <div className="flex items-start gap-2.5 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3.5 py-3">
+                    <span className="text-amber-400 mt-px shrink-0">⚠</span>
+                    <p className="text-xs text-amber-200 leading-relaxed">
+                      guests under 18 need a parent or legal guardian to complete this on their behalf. the guardian below becomes the point of contact — they'll sign the waiver and complete payment.
+                    </p>
+                  </div>
+
+                  <SectionDivider label="guardian information" />
+                  <div className="grid grid-cols-2 gap-3">
+                    <Field label="guardian's first name" required={isMinor}>
+                      <input
+                        type="text" placeholder="john"
+                        value={form.guardianFirstName} onChange={e => setField('guardianFirstName', e.target.value)}
+                        className={INPUT} required={isMinor}
+                      />
+                    </Field>
+                    <Field label="guardian's last name" required={isMinor}>
+                      <input
+                        type="text" placeholder="smith"
+                        value={form.guardianLastName} onChange={e => setField('guardianLastName', e.target.value)}
+                        className={INPUT} required={isMinor}
+                      />
+                    </Field>
+                  </div>
+                  <Field label="guardian's email" required={isMinor}>
+                    <input
+                      type="email" placeholder="john@example.com"
+                      value={form.guardianEmail} onChange={e => setField('guardianEmail', e.target.value)}
+                      className={INPUT} required={isMinor}
+                    />
+                  </Field>
+                  <Field label="confirm guardian's email" required={isMinor}>
+                    <input
+                      type="email" placeholder="john@example.com"
+                      value={form.guardianConfirmEmail} onChange={e => setField('guardianConfirmEmail', e.target.value)}
+                      autoComplete="off"
+                      onPaste={e => e.preventDefault()}
+                      onDrop={e => e.preventDefault()}
+                      className={INPUT} required={isMinor}
+                    />
+                    {form.guardianConfirmEmail && form.guardianEmail.trim().toLowerCase() !== form.guardianConfirmEmail.trim().toLowerCase() && (
+                      <p className="text-xs text-rose-400 mt-1">email addresses don't match</p>
+                    )}
+                  </Field>
+                  <Field label="guardian's phone number" required={isMinor}>
+                    <input
+                      type="tel" placeholder="(555) 000-0000"
+                      value={form.guardianPhone} onChange={e => setField('guardianPhone', maskPhone(e.target.value))}
+                      className={INPUT} required={isMinor}
+                    />
+                  </Field>
+                  <Field label="relationship to guest" required={isMinor}>
+                    <input
+                      type="text" placeholder="parent, legal guardian, etc."
+                      value={form.guardianRelationship} onChange={e => setField('guardianRelationship', e.target.value)}
+                      className={INPUT} required={isMinor}
+                    />
+                  </Field>
+                </div>
+              </div>
+            </div>
+
             {/* Address */}
             <Field label="address line 1" required>
               <input
@@ -663,7 +761,7 @@ export default function GuestPage() {
               />
             </Field>
 
-            <SectionDivider label="emergency contact" />
+            <SectionDivider label={isMinor ? "guardian's emergency contact" : 'emergency contact'} />
             <div className="grid grid-cols-2 gap-3">
               <Field label="name" required>
                 <input
@@ -719,14 +817,30 @@ export default function GuestPage() {
                 </div>
               </div>
               <span className="text-xs text-neutral-400 leading-relaxed">
-                I agree to the{' '}
-                <button
-                  type="button"
-                  onClick={e => { e.preventDefault(); setWaiverOpen(true) }}
-                  className="text-white underline underline-offset-2 hover:text-neutral-200 transition-colors"
-                >
-                  liability waiver & terms
-                </button>
+                {isMinor ? (
+                  <>
+                    I, {form.guardianFirstName.trim() || 'the undersigned'} {form.guardianLastName.trim()}, as parent/legal guardian of {form.firstName.trim() || 'the guest'} {form.lastName.trim()}, agree to the{' '}
+                    <button
+                      type="button"
+                      onClick={e => { e.preventDefault(); setWaiverOpen(true) }}
+                      className="text-white underline underline-offset-2 hover:text-neutral-200 transition-colors"
+                    >
+                      liability waiver & terms
+                    </button>
+                    {' '}on their behalf.
+                  </>
+                ) : (
+                  <>
+                    I agree to the{' '}
+                    <button
+                      type="button"
+                      onClick={e => { e.preventDefault(); setWaiverOpen(true) }}
+                      className="text-white underline underline-offset-2 hover:text-neutral-200 transition-colors"
+                    >
+                      liability waiver & terms
+                    </button>
+                  </>
+                )}
               </span>
             </label>
 
@@ -738,7 +852,9 @@ export default function GuestPage() {
 
             <button
               type="submit"
-              disabled={submitting || plans.length === 0 || (!!form.confirmEmail && form.email.trim().toLowerCase() !== form.confirmEmail.trim().toLowerCase())}
+              disabled={submitting || plans.length === 0
+                || (!!form.confirmEmail && form.email.trim().toLowerCase() !== form.confirmEmail.trim().toLowerCase())
+                || (isMinor && !!form.guardianConfirmEmail && form.guardianEmail.trim().toLowerCase() !== form.guardianConfirmEmail.trim().toLowerCase())}
               className={BUTTON_PRIMARY}
             >
               {submitting

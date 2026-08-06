@@ -191,6 +191,11 @@ export async function GET(request, { params }) {
         emergencyContactName:         true,
         emergencyContactPhone:        true,
         emergencyContactRelationship: true,
+        isMinor:              true,
+        guardianName:         true,
+        guardianEmail:        true,
+        guardianPhone:        true,
+        guardianRelationship: true,
       },
     })
 

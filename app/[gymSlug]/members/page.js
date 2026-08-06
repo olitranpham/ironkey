@@ -252,6 +252,7 @@ export default function MembersPage() {
       'join date', 'freeze date', 'cancel date',
       'date of birth', 'address',
       'emergency contact name', 'emergency contact phone', 'emergency contact relationship',
+      'is minor', 'guardian name', 'guardian email', 'guardian phone', 'guardian relationship',
     ]
     const rows = visible.map(m => [
       m.firstName,
@@ -269,6 +270,11 @@ export default function MembersPage() {
       m.emergencyContactName,
       m.emergencyContactPhone,
       m.emergencyContactRelationship,
+      m.isMinor ? 'yes' : 'no',
+      m.guardianName,
+      m.guardianEmail,
+      m.guardianPhone,
+      m.guardianRelationship,
     ].map(escape))
 
     const csv  = [header, ...rows].map(r => r.join(',')).join('\n')

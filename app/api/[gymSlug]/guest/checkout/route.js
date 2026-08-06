@@ -24,6 +24,7 @@ export async function POST(request, { params }) {
       address, address1, address2, city, state, zip,
       emergencyName, emergencyPhone, emergencyRelationship,
       isNewGuest,
+      isMinor, guardianName, guardianEmail, guardianPhone, guardianRelationship,
     } = body
 
     if (!priceId || !email?.trim()) {
@@ -73,6 +74,11 @@ export async function POST(request, { params }) {
         passType:              passType              ?? 'SINGLE',
         passesLeft:            String(passesLeft     ?? 1),
         isNewGuest:            isNewGuest ? 'yes' : 'no',
+        isMinor:               isMinor ? 'true' : '',
+        guardianName:          guardianName          ?? '',
+        guardianEmail:         guardianEmail         ?? '',
+        guardianPhone:         guardianPhone         ?? '',
+        guardianRelationship:  guardianRelationship  ?? '',
       },
     })
 

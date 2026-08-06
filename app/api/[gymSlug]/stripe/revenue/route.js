@@ -7,9 +7,23 @@ import prisma from '@/lib/prisma'
 const revenueCache = new Map()
 const CACHE_TTL    = 30 * 60 * 1000  // 30 minutes
 
-function monthStart(year, month) {
-  // month is 0-indexed; Date handles year/month rollover automatically
-  return Math.floor(new Date(year, month, 1).getTime() / 1000)
+// Midnight on the 1st of `year`-`month` (0-indexed), as a UTC epoch second,
+// interpreted in `timeZone` rather than the server process's own local time.
+// Without this, "this month" silently follows whatever TZ the server
+// happens to run in (e.g. Railway's container defaults to UTC) instead of
+// the gym's actual local day — pushing early/late-month charges into the
+// wrong bucket relative to what a gym owner sees on their own clock.
+function monthStart(year, month, timeZone = 'America/New_York') {
+  const utcGuess = Date.UTC(year, month, 1)
+  const fmt = new Intl.DateTimeFormat('en-US', {
+    timeZone, hourCycle: 'h23',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+  })
+  const parts = Object.fromEntries(fmt.formatToParts(utcGuess).map(p => [p.type, p.value]))
+  const asUTC = Date.UTC(+parts.year, +parts.month - 1, +parts.day, +parts.hour, +parts.minute, +parts.second)
+  const offsetMs = asUTC - utcGuess
+  return Math.floor((utcGuess - offsetMs) / 1000)
 }
 
 // Fallback keyword match for one-time payments whose Checkout Session predates
@@ -35,6 +49,22 @@ async function stripeWithRetry(fn) {
   }
 }
 
+// Stripe list endpoints cap a single page at 100 records — any month (or any
+// account) with more than that silently gets truncated to whatever `list()`
+// returns on the first page unless `has_more`/`starting_after` are followed.
+// This walks every page and returns the full result set.
+async function stripeListAll(fn, params) {
+  let results = []
+  let startingAfter
+  while (true) {
+    const page = await stripeWithRetry(() => fn({ ...params, limit: 100, starting_after: startingAfter }))
+    results = results.concat(page.data)
+    if (!page.has_more) break
+    startingAfter = page.data[page.data.length - 1].id
+  }
+  return results
+}
+
 // ── Route handler ─────────────────────────────────────────────────────────────
 
 export async function GET(request, { params }) {
@@ -52,26 +82,34 @@ export async function GET(request, { params }) {
 
     const gym = await prisma.gym.findUnique({
       where:  { slug: gymSlug },
-      select: { id: true, stripeSecretKey: true },
+      select: { id: true, stripeSecretKey: true, timezone: true },
     })
     if (!gym?.stripeSecretKey) {
       return NextResponse.json({ error: 'Stripe not configured for this gym' }, { status: 400 })
     }
 
-    const stripe = new Stripe(gym.stripeSecretKey, { apiVersion: '2024-06-20' })
+    const stripe   = new Stripe(gym.stripeSecretKey, { apiVersion: '2024-06-20' })
+    const gymTz    = gym.timezone || 'America/New_York'
 
-    const now       = new Date()
-    const thisYear  = now.getFullYear()
-    const thisMonth = now.getMonth()  // 0-indexed
+    // "Now" in the gym's own timezone, not the server's — otherwise a gym
+    // near a month boundary can have "this month" resolve to a different
+    // calendar month than what its own clock shows.
+    const nowParts  = Object.fromEntries(
+      new Intl.DateTimeFormat('en-US', { timeZone: gymTz, year: 'numeric', month: 'numeric' })
+        .formatToParts(new Date())
+        .map(p => [p.type, p.value])
+    )
+    const thisYear  = Number(nowParts.year)
+    const thisMonth = Number(nowParts.month) - 1  // 0-indexed
 
     // ── Parallel: earliest FinancialEntry + always-needed Stripe calls ────────
-    const [firstEntry, subsResult, recentResult, inventoryItems] = await Promise.all([
+    const [firstEntry, activeSubs, recentResult, inventoryItems] = await Promise.all([
       prisma.financialEntry.findFirst({
         where:   { gymId: gym.id },
         orderBy: { date: 'asc' },
         select:  { date: true },
       }),
-      stripeWithRetry(() => stripe.subscriptions.list({ status: 'active', limit: 100 })),
+      stripeListAll(p => stripe.subscriptions.list(p), { status: 'active' }),
       stripeWithRetry(() => stripe.charges.list({ limit: 50, expand: ['data.customer'] })),
       prisma.inventoryItem.findMany({
         where:  { gymId: gym.id, stripeProductId: { not: null } },
@@ -84,7 +122,7 @@ export async function GET(request, { params }) {
 
     // ── MRR ───────────────────────────────────────────────────────────────────
     let mrrCents = 0
-    for (const sub of subsResult.data) {
+    for (const sub of activeSubs) {
       for (const item of sub.items.data) {
         const amount   = item.price?.unit_amount ?? 0
         const interval = item.price?.recurring?.interval
@@ -135,8 +173,8 @@ export async function GET(request, { params }) {
     ) {
       monthRanges.push({
         key:   `${rangeYear}-${String(rangeMonth + 1).padStart(2, '0')}`,
-        start: monthStart(rangeYear, rangeMonth),
-        end:   monthStart(rangeYear, rangeMonth + 1),
+        start: monthStart(rangeYear, rangeMonth, gymTz),
+        end:   monthStart(rangeYear, rangeMonth + 1, gymTz),
       })
       rangeMonth++
       if (rangeMonth > 11) { rangeMonth = 0; rangeYear++ }
@@ -154,8 +192,8 @@ export async function GET(request, { params }) {
     const monthResults = await Promise.all(
       monthRanges.map(({ start, end }) =>
         Promise.all([
-          stripeWithRetry(() => stripe.charges.list({ limit: 100, created: { gte: start, lt: end } })),
-          stripeWithRetry(() => stripe.checkout.sessions.list({ limit: 100, created: { gte: start, lt: end } })),
+          stripeListAll(p => stripe.charges.list(p), { created: { gte: start, lt: end } }),
+          stripeListAll(p => stripe.checkout.sessions.list(p), { created: { gte: start, lt: end } }),
         ])
       )
     )
@@ -184,9 +222,7 @@ export async function GET(request, { params }) {
     }
 
     const monthly = await Promise.all(monthRanges.map(async ({ key }, i) => {
-      const [chargesResult, sessionsResult] = monthResults[i]
-      const charges  = chargesResult?.data  ?? []
-      const sessions = sessionsResult?.data ?? []
+      const [charges, sessions] = monthResults[i]
 
       // Memberships — recurring subscription charges (tied to an invoice)
       const membershipCents = charges

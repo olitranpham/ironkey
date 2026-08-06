@@ -50,6 +50,15 @@ export async function PATCH(request, { params }) {
     if (body.emergencyContactRelationship !== undefined)
       data.emergencyContactRelationship = body.emergencyContactRelationship === '' ? null : String(body.emergencyContactRelationship).trim()
 
+    if (body.guardianName !== undefined)
+      data.guardianName = body.guardianName === '' ? null : String(body.guardianName).trim()
+    if (body.guardianEmail !== undefined)
+      data.guardianEmail = body.guardianEmail === '' ? null : String(body.guardianEmail).trim()
+    if (body.guardianPhone !== undefined)
+      data.guardianPhone = body.guardianPhone === '' ? null : String(body.guardianPhone).trim()
+    if (body.guardianRelationship !== undefined)
+      data.guardianRelationship = body.guardianRelationship === '' ? null : String(body.guardianRelationship).trim()
+
     const updated = await prisma.guest.update({
       where: { id: profileId },
       data,

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { X, KeyRound, Phone, User, ShieldAlert } from 'lucide-react'
+import { X, KeyRound, Phone, User, ShieldAlert, UserCheck } from 'lucide-react'
 import { formatPhone } from '@/lib/phone'
 
 // ── Shared constants ──────────────────────────────────────────────────────────
@@ -79,6 +79,13 @@ export function GuestProfilePanel({ profile, passTypeBorder, onClose, onSaveCode
   const [ecPhoneInput, setEcPhoneInput] = useState(profile.emergencyContactPhone        ?? '')
   const [ecRelInput,   setEcRelInput]   = useState(profile.emergencyContactRelationship ?? '')
 
+  // Guardian — minors only
+  const isMinor = Boolean(profile.isMinor || profile.guardianName)
+  const [guardianNameInput, setGuardianNameInput] = useState(profile.guardianName ?? '')
+  const [guardianEmailInput, setGuardianEmailInput] = useState(profile.guardianEmail ?? '')
+  const [guardianPhoneInput, setGuardianPhoneInput] = useState(profile.guardianPhone ?? '')
+  const [guardianRelInput,   setGuardianRelInput]   = useState(profile.guardianRelationship ?? '')
+
   const visits     = totalVisits(profile)
   const isUnlinked = profile._unlinked === true
   const nameParts  = profile.name.trim().split(/\s+/)
@@ -95,6 +102,10 @@ export function GuestProfilePanel({ profile, passTypeBorder, onClose, onSaveCode
     setEcNameInput(profile.emergencyContactName         ?? '')
     setEcPhoneInput(profile.emergencyContactPhone       ?? '')
     setEcRelInput(profile.emergencyContactRelationship  ?? '')
+    setGuardianNameInput(profile.guardianName ?? '')
+    setGuardianEmailInput(profile.guardianEmail ?? '')
+    setGuardianPhoneInput(profile.guardianPhone ?? '')
+    setGuardianRelInput(profile.guardianRelationship ?? '')
   }, [profile.id])
 
   function handleSaveCode() {
@@ -248,6 +259,47 @@ export function GuestProfilePanel({ profile, passTypeBorder, onClose, onSaveCode
               saved={profile.emergencyContactRelationship ?? ''}
               onSave={() => onSaveProfile({ emergencyContactRelationship: ecRelInput.trim() })}
               placeholder="spouse, parent, friend…"
+            />
+          </GSection>
+        )}
+
+        {/* Guardian — minors only, hidden for partner check-in source. The
+            guardian is the point of contact for a minor guest: they signed
+            the waiver and hold the payment method, so staff need this
+            visible separately from the minor's own (nonexistent) contact info. */}
+        {source !== 'partner' && isMinor && (
+          <GSection icon={UserCheck} title="guardian">
+            <GEditField
+              label="name"
+              value={guardianNameInput}
+              setValue={setGuardianNameInput}
+              saved={profile.guardianName ?? ''}
+              onSave={() => onSaveProfile({ guardianName: guardianNameInput.trim() })}
+              placeholder="john smith"
+            />
+            <GEditField
+              label="email"
+              value={guardianEmailInput}
+              setValue={setGuardianEmailInput}
+              saved={profile.guardianEmail ?? ''}
+              onSave={() => onSaveProfile({ guardianEmail: guardianEmailInput.trim() })}
+            />
+            <GEditField
+              label="phone"
+              value={guardianPhoneInput}
+              setValue={setGuardianPhoneInput}
+              saved={profile.guardianPhone ?? ''}
+              onSave={() => onSaveProfile({ guardianPhone: guardianPhoneInput })}
+              onBlur={() => setGuardianPhoneInput(v => formatPhone(v) ?? v)}
+              placeholder="(555) 000-0000"
+            />
+            <GEditField
+              label="relationship"
+              value={guardianRelInput}
+              setValue={setGuardianRelInput}
+              saved={profile.guardianRelationship ?? ''}
+              onSave={() => onSaveProfile({ guardianRelationship: guardianRelInput.trim() })}
+              placeholder="parent, legal guardian, etc."
             />
           </GSection>
         )}

@@ -215,6 +215,15 @@ function WaiverModal({ sections, onClose }) {
   )
 }
 
+// Members under 18 can't legally sign the liability waiver or authorize
+// payment themselves — this determines whether the join flow branches into
+// the guardian-completes-everything path.
+function calculateAge(dobStr) {
+  const dob = new Date(dobStr)
+  if (isNaN(dob.getTime())) return null
+  return (Date.now() - dob.getTime()) / (365.25 * 24 * 60 * 60 * 1000)
+}
+
 function fmt(n, interval, intervalCount = 1, raw = false) {
   const amt   = Number(n).toLocaleString('en-US', { style: 'currency', currency: 'USD' })
   // Treat 4-week billing cycles as monthly for display purposes (unless raw=true)
@@ -262,6 +271,12 @@ export default function JoinPage() {
     emergencyName:         '',
     emergencyPhone:        '',
     emergencyRelationship: '',
+    guardianFirstName:     '',
+    guardianLastName:      '',
+    guardianEmail:         '',
+    guardianConfirmEmail:  '',
+    guardianPhone:         '',
+    guardianRelationship:  '',
     priceId:               '',
     membershipType:        '',
     addonPriceId:          '',
@@ -272,6 +287,8 @@ export default function JoinPage() {
   const isTriumph  = gymSlug === 'triumph-barbell'
   const isHydra    = gymSlug === 'hydra-athletic-co'
   const isStudent  = form.membershipType.toLowerCase().includes('student')
+  const age        = form.dob ? calculateAge(form.dob) : null
+  const isMinor    = age !== null && age < 18
   useEffect(() => {
     fetch(`/api/${gymSlug}/join`)
       .then(r => r.json())
@@ -318,11 +335,21 @@ export default function JoinPage() {
     e.preventDefault()
     setError(null)
 
-    if (!form.firstName.trim() || !form.lastName.trim()) { setError('First and last name are required.'); return }
+    if (!form.firstName.trim() || !form.lastName.trim()) {
+      setError(isMinor ? "The member's first and last name are required." : 'First and last name are required.')
+      return
+    }
     if (!form.email.trim())    { setError('Email is required.'); return }
     if (form.email.trim().toLowerCase() !== form.confirmEmail.trim().toLowerCase()) { setError('Email addresses don\'t match.'); return }
     if (!form.phone.trim())    { setError('Phone number is required.'); return }
     if (!form.dob)             { setError('Date of birth is required.'); return }
+    if (isMinor) {
+      if (!form.guardianFirstName.trim() || !form.guardianLastName.trim()) { setError("Guardian's first and last name are required."); return }
+      if (!form.guardianEmail.trim()) { setError("Guardian's email is required."); return }
+      if (form.guardianEmail.trim().toLowerCase() !== form.guardianConfirmEmail.trim().toLowerCase()) { setError("Guardian's email addresses don't match."); return }
+      if (!form.guardianPhone.trim()) { setError("Guardian's phone number is required."); return }
+      if (!form.guardianRelationship.trim()) { setError('Relationship to the member is required.'); return }
+    }
     if (!form.address1.trim()) { setError('Address is required.'); return }
     if (!form.city.trim())     { setError('City is required.'); return }
     if (!form.state.trim())    { setError('State is required.'); return }
@@ -332,9 +359,7 @@ export default function JoinPage() {
     const isGroupTrainingSelected = gymSlug === 'oasis-boston'
       && groupTrainingPlans.some(p => p.priceId === form.groupTrainingPriceId)
     if (!form.priceId && !isGroupTrainingSelected) { setError('Please select a membership type.'); return }
-    const dobAge = (Date.now() - new Date(form.dob).getTime()) / (365.25 * 24 * 60 * 60 * 1000)
-    if (dobAge < 18) { setError('Members under 18 must have a parent or guardian complete this form on their behalf (see Section 14 of the terms).'); return }
-    if (!form.emergencyName.trim() || !form.emergencyPhone.trim()) { setError('Emergency contact name and phone are required.'); return }
+    if (!form.emergencyName.trim() || !form.emergencyPhone.trim()) { setError(isMinor ? "Guardian's emergency contact name and phone are required." : 'Emergency contact name and phone are required.'); return }
     if (!form.emergencyRelationship.trim()) { setError('Emergency contact relationship is required.'); return }
     if (!form.waiver)          { setError('You must agree to the membership terms.'); return }
     if (isStudent && !studentIdFile)           { setError('A student ID photo is required for student memberships.'); return }
@@ -345,6 +370,12 @@ export default function JoinPage() {
       (isTriumph && (ptPlans.some(p => p.priceId === form.priceId) || programmingPlans.some(p => p.priceId === form.priceId))) ||
       (isHydra   && (ptPlans.some(p => p.priceId === form.priceId) || addonPlans.some(p => p.priceId === form.addonPriceId)))
 
+    // Guardian is the account holder for a minor's membership — their email/
+    // phone become the checkout/contact info, not the (blank, unrendered)
+    // member email/phone fields.
+    const accountEmail = isMinor ? form.guardianEmail.trim() : form.email.trim()
+    const accountPhone = isMinor ? form.guardianPhone.trim() : form.phone.trim()
+
     setSubmitting(true)
     try {
       // Upload student ID before proceeding (student plans only)
@@ -352,7 +383,7 @@ export default function JoinPage() {
       if (isStudent && studentIdFile) {
         const fd = new FormData()
         fd.append('file',  studentIdFile)
-        fd.append('email', form.email.trim().toLowerCase())
+        fd.append('email', accountEmail.toLowerCase())
         const uploadRes  = await fetch(`/api/${gymSlug}/join/student-id`, { method: 'POST', body: fd })
         const uploadJson = await uploadRes.json()
         if (!uploadRes.ok) throw new Error(uploadJson.error ?? 'Failed to upload student ID')
@@ -362,8 +393,8 @@ export default function JoinPage() {
       const checkoutPayload = {
         firstName:             form.firstName.trim(),
         lastName:              form.lastName.trim(),
-        email:                 form.email.trim(),
-        phone:                 form.phone.trim(),
+        email:                 accountEmail,
+        phone:                 accountPhone,
         dob:                   form.dob,
         address:               [form.address1.trim(), form.address2.trim()].filter(Boolean).join(', '),
         address1:              form.address1.trim(),
@@ -382,6 +413,11 @@ export default function JoinPage() {
         gradSemester:          isStudent ? gradSemester : '',
         gradYear:              isStudent ? gradYear     : '',
         hearAboutUs:           hearAboutUs || '',
+        isMinor,
+        guardianName:          isMinor ? `${form.guardianFirstName.trim()} ${form.guardianLastName.trim()}`.trim() : '',
+        guardianEmail:         isMinor ? accountEmail : '',
+        guardianPhone:         isMinor ? accountPhone : '',
+        guardianRelationship:  isMinor ? form.guardianRelationship.trim() : '',
       }
 
       // PT/programming/coaching plans: go to intake form first, then Stripe
@@ -433,7 +469,7 @@ export default function JoinPage() {
 
         {/* Name */}
         <div className="grid grid-cols-2 gap-3">
-          <Field label="first name" required>
+          <Field label={isMinor ? "member's first name" : 'first name'} required>
             <input
               type="text"
               placeholder="jane"
@@ -443,7 +479,7 @@ export default function JoinPage() {
               required
             />
           </Field>
-          <Field label="last name" required>
+          <Field label={isMinor ? "member's last name" : 'last name'} required>
             <input
               type="text"
               placeholder="smith"
@@ -507,6 +543,96 @@ export default function JoinPage() {
             required
           />
         </Field>
+
+        {/* Guardian fields — animated inline reveal, no navigation. A minor
+            can't legally sign the waiver or authorize payment, so once their
+            DOB shows they're under 18 the guardian becomes the account
+            holder for everything below. Collapsed (not unmounted) so the
+            layout animates instead of jumping; inputs are only `required`
+            while visible so hidden/collapsed fields never block submission
+            or trip native validation on the adult path. */}
+        <div className={`grid transition-[grid-template-rows] duration-300 ease-out ${isMinor ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}>
+          <div className="overflow-hidden">
+            <div className="flex flex-col gap-5 pt-1">
+              <div className="flex items-start gap-2.5 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3.5 py-3">
+                <span className="text-amber-400 mt-px shrink-0">⚠</span>
+                <p className="text-xs text-amber-200 leading-relaxed">
+                  members under 18 need a parent or legal guardian to complete signup on their behalf. the guardian below becomes the account holder — they'll sign the waiver and complete payment.
+                </p>
+              </div>
+
+              <SectionDivider label="guardian information" />
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="guardian's first name" required={isMinor}>
+                  <input
+                    type="text"
+                    placeholder="john"
+                    value={form.guardianFirstName}
+                    onChange={e => set('guardianFirstName', e.target.value)}
+                    className={INPUT}
+                    required={isMinor}
+                  />
+                </Field>
+                <Field label="guardian's last name" required={isMinor}>
+                  <input
+                    type="text"
+                    placeholder="smith"
+                    value={form.guardianLastName}
+                    onChange={e => set('guardianLastName', e.target.value)}
+                    className={INPUT}
+                    required={isMinor}
+                  />
+                </Field>
+              </div>
+              <Field label="guardian's email" required={isMinor}>
+                <input
+                  type="email"
+                  placeholder="john@example.com"
+                  value={form.guardianEmail}
+                  onChange={e => set('guardianEmail', e.target.value)}
+                  className={INPUT}
+                  required={isMinor}
+                />
+              </Field>
+              <Field label="confirm guardian's email" required={isMinor}>
+                <input
+                  type="email"
+                  placeholder="john@example.com"
+                  value={form.guardianConfirmEmail}
+                  onChange={e => set('guardianConfirmEmail', e.target.value)}
+                  autoComplete="off"
+                  onPaste={e => e.preventDefault()}
+                  onDrop={e => e.preventDefault()}
+                  className={INPUT}
+                  required={isMinor}
+                />
+                {form.guardianConfirmEmail && form.guardianEmail.trim().toLowerCase() !== form.guardianConfirmEmail.trim().toLowerCase() && (
+                  <p className="text-xs text-rose-400 mt-1">email addresses don't match</p>
+                )}
+              </Field>
+              <Field label="guardian's phone number" required={isMinor}>
+                <input
+                  type="tel"
+                  placeholder="(555) 000-0000"
+                  value={form.guardianPhone}
+                  onChange={e => set('guardianPhone', maskPhone(e.target.value))}
+                  className={INPUT}
+                  required={isMinor}
+                />
+              </Field>
+              <Field label="relationship to member" required={isMinor}>
+                <input
+                  type="text"
+                  placeholder="parent, legal guardian, etc."
+                  value={form.guardianRelationship}
+                  onChange={e => set('guardianRelationship', e.target.value)}
+                  className={INPUT}
+                  required={isMinor}
+                />
+              </Field>
+            </div>
+          </div>
+        </div>
 
         {/* Address */}
         <Field label="address line 1" required>
@@ -910,7 +1036,7 @@ export default function JoinPage() {
           </Field>
         )}
 
-        <SectionDivider label="emergency contact info" />
+        <SectionDivider label={isMinor ? "guardian's emergency contact info" : 'emergency contact info'} />
         <div className="grid grid-cols-2 gap-3">
           <Field label="name" required>
             <input
@@ -991,14 +1117,30 @@ export default function JoinPage() {
             </div>
           </div>
           <span className="text-xs text-neutral-400 leading-relaxed">
-            I agree to the{' '}
-            <button
-              type="button"
-              onClick={e => { e.preventDefault(); setWaiverOpen(true) }}
-              className="text-white underline underline-offset-2 hover:text-neutral-200 transition-colors"
-            >
-              membership terms and release of liability
-            </button>
+            {isMinor ? (
+              <>
+                I, {form.guardianFirstName.trim() || 'the undersigned'} {form.guardianLastName.trim()}, as parent/legal guardian of {form.firstName.trim() || 'the member'} {form.lastName.trim()}, agree to the{' '}
+                <button
+                  type="button"
+                  onClick={e => { e.preventDefault(); setWaiverOpen(true) }}
+                  className="text-white underline underline-offset-2 hover:text-neutral-200 transition-colors"
+                >
+                  membership terms and release of liability
+                </button>
+                {' '}on their behalf.
+              </>
+            ) : (
+              <>
+                I agree to the{' '}
+                <button
+                  type="button"
+                  onClick={e => { e.preventDefault(); setWaiverOpen(true) }}
+                  className="text-white underline underline-offset-2 hover:text-neutral-200 transition-colors"
+                >
+                  membership terms and release of liability
+                </button>
+              </>
+            )}
           </span>
         </label>
 
@@ -1011,7 +1153,9 @@ export default function JoinPage() {
 
         <button
           type="submit"
-          disabled={submitting || membershipPlans.length === 0 || (!!form.confirmEmail && form.email.trim().toLowerCase() !== form.confirmEmail.trim().toLowerCase())}
+          disabled={submitting || membershipPlans.length === 0 || (isMinor
+            ? (!!form.guardianConfirmEmail && form.guardianEmail.trim().toLowerCase() !== form.guardianConfirmEmail.trim().toLowerCase())
+            : (!!form.confirmEmail && form.email.trim().toLowerCase() !== form.confirmEmail.trim().toLowerCase()))}
           className={`${BUTTON_PRIMARY} mt-1`}
         >
           {submitting ? (

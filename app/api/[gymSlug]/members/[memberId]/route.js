@@ -12,6 +12,7 @@ const MEMBER_SELECT = {
   status: true, membershipType: true, accessCode: true, priceId: true,
   dateOfBirth: true, address: true,
   emergencyContactName: true, emergencyContactPhone: true, emergencyContactRelationship: true,
+  isMinor: true, guardianName: true, guardianEmail: true, guardianPhone: true, guardianRelationship: true,
   dateFrozen: true, dateCanceled: true, createdAt: true,
   stripeCustomerId: true, stripeSubscriptionId: true,
   hearAboutUs: true,
@@ -65,7 +66,8 @@ export async function PATCH(request, { params }) {
             dateOfBirth, address, emergencyContactName, emergencyContactPhone,
             emergencyContactRelationship, membershipType,
             stripeCustomerId, stripeSubscriptionId,
-            gradSemester, gradYear, studentCategory } = body
+            gradSemester, gradYear, studentCategory,
+            guardianName, guardianEmail, guardianPhone, guardianRelationship } = body
 
     console.log('[members/patch] memberId=%s gymId=%s body=%j', memberId, gymId, body)
 
@@ -117,6 +119,22 @@ export async function PATCH(request, { params }) {
 
     if (emergencyContactRelationship !== undefined) {
       data.emergencyContactRelationship = emergencyContactRelationship === '' ? null : String(emergencyContactRelationship).trim()
+    }
+
+    if (guardianName !== undefined) {
+      data.guardianName = guardianName === '' ? null : String(guardianName).trim()
+    }
+
+    if (guardianEmail !== undefined) {
+      data.guardianEmail = guardianEmail === '' ? null : String(guardianEmail).trim()
+    }
+
+    if (guardianPhone !== undefined) {
+      data.guardianPhone = guardianPhone === '' ? null : String(guardianPhone).trim()
+    }
+
+    if (guardianRelationship !== undefined) {
+      data.guardianRelationship = guardianRelationship === '' ? null : String(guardianRelationship).trim()
     }
 
     if (membershipType       !== undefined) data.membershipType       = membershipType === ''       ? null : String(membershipType).trim()

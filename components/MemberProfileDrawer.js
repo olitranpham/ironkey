@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { X, Phone, KeyRound, History, User, ShieldAlert, DoorOpen } from 'lucide-react'
+import { X, Phone, KeyRound, History, User, ShieldAlert, DoorOpen, UserCheck } from 'lucide-react'
 import { formatPhone } from '@/lib/phone'
 import { formatMembershipTypeDisplay } from '@/lib/membershipCategory'
 
@@ -122,6 +122,16 @@ function DrawerContent({ member, gymSlug, membershipBorder, onClose, onStatusCha
   const [ecRelInput,     setEcRelInput]     = useState(member.emergencyContactRelationship ?? '')
   const [savingEcRel,    setSavingEcRel]    = useState(false)
 
+  const isMinor = Boolean(member.isMinor || member.guardianName)
+  const [guardianNameInput,  setGuardianNameInput]  = useState(member.guardianName  ?? '')
+  const [savingGuardianName, setSavingGuardianName] = useState(false)
+  const [guardianEmailInput,  setGuardianEmailInput]  = useState(member.guardianEmail  ?? '')
+  const [savingGuardianEmail, setSavingGuardianEmail] = useState(false)
+  const [guardianPhoneInput,  setGuardianPhoneInput]  = useState(member.guardianPhone  ?? '')
+  const [savingGuardianPhone, setSavingGuardianPhone] = useState(false)
+  const [guardianRelInput,    setGuardianRelInput]    = useState(member.guardianRelationship ?? '')
+  const [savingGuardianRel,   setSavingGuardianRel]   = useState(false)
+
   const [gradSemesterInput, setGradSemesterInput] = useState(member.gradSemester ?? '')
   const [savingGradSemester, setSavingGradSemester] = useState(false)
   const [gradYearInput,     setGradYearInput]     = useState(member.gradYear != null ? String(member.gradYear) : '')
@@ -141,12 +151,17 @@ function DrawerContent({ member, gymSlug, membershipBorder, onClose, onStatusCha
     setEcNameInput(member.emergencyContactName         ?? '')
     setEcPhoneInput(member.emergencyContactPhone        ?? '')
     setEcRelInput(member.emergencyContactRelationship  ?? '')
+    setGuardianNameInput(member.guardianName ?? '')
+    setGuardianEmailInput(member.guardianEmail ?? '')
+    setGuardianPhoneInput(member.guardianPhone ?? '')
+    setGuardianRelInput(member.guardianRelationship ?? '')
     setGradSemesterInput(member.gradSemester ?? '')
     setGradYearInput(member.gradYear != null ? String(member.gradYear) : '')
     setStudentCategoryInput(member.studentCategory ?? '')
   }, [member.id, member.firstName, member.lastName, member.email, member.phone,
       member.accessCode, member.dateOfBirth, member.address,
       member.emergencyContactName, member.emergencyContactPhone, member.emergencyContactRelationship,
+      member.guardianName, member.guardianEmail, member.guardianPhone, member.guardianRelationship,
       member.gradSemester, member.gradYear, member.studentCategory])
 
   // Fetch membership history whenever the member changes (skip in simplified mode)
@@ -262,6 +277,34 @@ function DrawerContent({ member, gymSlug, membershipBorder, onClose, onStatusCha
     setSavingEcRel(true)
     await onSaveField(member.id, { emergencyContactRelationship: ecRelInput.trim() })
     setSavingEcRel(false)
+  }
+
+  async function handleGuardianNameSave() {
+    if (!onSaveField) return
+    setSavingGuardianName(true)
+    await onSaveField(member.id, { guardianName: guardianNameInput.trim() })
+    setSavingGuardianName(false)
+  }
+
+  async function handleGuardianEmailSave() {
+    if (!onSaveField) return
+    setSavingGuardianEmail(true)
+    await onSaveField(member.id, { guardianEmail: guardianEmailInput.trim() })
+    setSavingGuardianEmail(false)
+  }
+
+  async function handleGuardianPhoneSave() {
+    if (!onSaveField) return
+    setSavingGuardianPhone(true)
+    await onSaveField(member.id, { guardianPhone: guardianPhoneInput.trim() })
+    setSavingGuardianPhone(false)
+  }
+
+  async function handleGuardianRelSave() {
+    if (!onSaveField) return
+    setSavingGuardianRel(true)
+    await onSaveField(member.id, { guardianRelationship: guardianRelInput.trim() })
+    setSavingGuardianRel(false)
   }
 
   async function handleGradSemesterSave() {
@@ -503,6 +546,94 @@ function DrawerContent({ member, gymSlug, membershipBorder, onClose, onStatusCha
             </div>
           </DrawerField>
         </DrawerSection>
+
+        {/* Guardian — minors only. The guardian is the account holder: they
+            signed the waiver on the member's behalf and hold the payment
+            method, so staff need this visible separately from the member's
+            own (nonexistent, for a minor) contact info. */}
+        {isMinor && (
+          <DrawerSection icon={UserCheck} title="guardian">
+            <DrawerField label="name">
+              <div className="flex items-center gap-2 ml-4">
+                <input
+                  type="text"
+                  value={guardianNameInput}
+                  onChange={e => setGuardianNameInput(e.target.value)}
+                  placeholder="john smith"
+                  className="bg-[#252525] border border-neutral-700 rounded px-2 py-1 text-xs text-white placeholder-neutral-600 focus:outline-none focus:border-neutral-500 w-36 truncate"
+                />
+                {onSaveField && (
+                  <button
+                    onClick={handleGuardianNameSave}
+                    disabled={savingGuardianName || guardianNameInput.trim() === (member.guardianName ?? '')}
+                    className="text-[10px] px-2 py-1 rounded bg-white/10 text-white hover:bg-white/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shrink-0"
+                  >
+                    {savingGuardianName ? '…' : 'save'}
+                  </button>
+                )}
+              </div>
+            </DrawerField>
+            <DrawerField label="email">
+              <div className="flex items-center gap-2 ml-4">
+                <input
+                  type="email"
+                  value={guardianEmailInput}
+                  onChange={e => setGuardianEmailInput(e.target.value)}
+                  className="bg-[#252525] border border-neutral-700 rounded px-2 py-1 text-xs text-white placeholder-neutral-600 focus:outline-none focus:border-neutral-500 w-36 truncate"
+                />
+                {onSaveField && (
+                  <button
+                    onClick={handleGuardianEmailSave}
+                    disabled={savingGuardianEmail || guardianEmailInput.trim().toLowerCase() === (member.guardianEmail ?? '').toLowerCase()}
+                    className="text-[10px] px-2 py-1 rounded bg-white/10 text-white hover:bg-white/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shrink-0"
+                  >
+                    {savingGuardianEmail ? '…' : 'save'}
+                  </button>
+                )}
+              </div>
+            </DrawerField>
+            <DrawerField label="phone">
+              <div className="flex items-center gap-2 ml-4">
+                <input
+                  type="tel"
+                  value={guardianPhoneInput}
+                  onChange={e => setGuardianPhoneInput(e.target.value)}
+                  onBlur={e => setGuardianPhoneInput(formatPhone(e.target.value))}
+                  className="bg-[#252525] border border-neutral-700 rounded px-2 py-1 text-xs text-white placeholder-neutral-600 focus:outline-none focus:border-neutral-500 w-36 truncate"
+                />
+                {onSaveField && (
+                  <button
+                    onClick={handleGuardianPhoneSave}
+                    disabled={savingGuardianPhone || guardianPhoneInput.trim() === (member.guardianPhone ?? '')}
+                    className="text-[10px] px-2 py-1 rounded bg-white/10 text-white hover:bg-white/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shrink-0"
+                  >
+                    {savingGuardianPhone ? '…' : 'save'}
+                  </button>
+                )}
+              </div>
+            </DrawerField>
+            <DrawerField label="relationship">
+              <div className="flex items-center gap-2 ml-4">
+                <input
+                  type="text"
+                  value={guardianRelInput}
+                  onChange={e => setGuardianRelInput(e.target.value)}
+                  placeholder="parent, legal guardian, etc."
+                  className="bg-[#252525] border border-neutral-700 rounded px-2 py-1 text-xs text-white placeholder-neutral-600 focus:outline-none focus:border-neutral-500 w-36 truncate"
+                />
+                {onSaveField && (
+                  <button
+                    onClick={handleGuardianRelSave}
+                    disabled={savingGuardianRel || guardianRelInput.trim() === (member.guardianRelationship ?? '')}
+                    className="text-[10px] px-2 py-1 rounded bg-white/10 text-white hover:bg-white/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shrink-0"
+                  >
+                    {savingGuardianRel ? '…' : 'save'}
+                  </button>
+                )}
+              </div>
+            </DrawerField>
+          </DrawerSection>
+        )}
 
         {/* Membership */}
         <DrawerSection icon={KeyRound} title="membership">

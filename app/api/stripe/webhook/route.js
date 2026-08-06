@@ -121,9 +121,11 @@ export async function POST(request) {
 
       console.log('[platform/webhook] guest pass — passType:', passType, '| source:', meta.passType ? 'metadata' : lineItemProductId ? 'product map' : 'default')
 
+      const guestIsMinor = meta.isMinor === 'true'
+
       let guestProfile = null
       if (email) {
-        console.log('[platform/webhook] guest upsert — dob:', meta.dob || '(empty)', '| address:', meta.address || '(empty)', '| emergencyName:', meta.emergencyName || '(empty)', '| emergencyPhone:', meta.emergencyPhone || '(empty)', '| emergencyRelationship:', meta.emergencyRelationship || '(empty)')
+        console.log('[platform/webhook] guest upsert — dob:', meta.dob || '(empty)', '| address:', meta.address || '(empty)', '| emergencyName:', meta.emergencyName || '(empty)', '| emergencyPhone:', meta.emergencyPhone || '(empty)', '| emergencyRelationship:', meta.emergencyRelationship || '(empty)', '| isMinor:', guestIsMinor)
         guestProfile = await prisma.guest.upsert({
           where:  { email },
           update: {
@@ -134,6 +136,13 @@ export async function POST(request) {
             emergencyContactName:        meta.emergencyName    || undefined,
             emergencyContactPhone:       meta.emergencyPhone   || undefined,
             emergencyContactRelationship: meta.emergencyRelationship || undefined,
+            ...(guestIsMinor ? {
+              isMinor:              true,
+              guardianName:         meta.guardianName         || null,
+              guardianEmail:        meta.guardianEmail        || null,
+              guardianPhone:        meta.guardianPhone        || null,
+              guardianRelationship: meta.guardianRelationship || null,
+            } : {}),
           },
           create: {
             name:                        guestName || email,
@@ -144,6 +153,11 @@ export async function POST(request) {
             emergencyContactName:        meta.emergencyName    || null,
             emergencyContactPhone:       meta.emergencyPhone   || null,
             emergencyContactRelationship: meta.emergencyRelationship || null,
+            isMinor:                     guestIsMinor,
+            guardianName:                guestIsMinor ? (meta.guardianName         || null) : null,
+            guardianEmail:               guestIsMinor ? (meta.guardianEmail        || null) : null,
+            guardianPhone:               guestIsMinor ? (meta.guardianPhone        || null) : null,
+            guardianRelationship:        guestIsMinor ? (meta.guardianRelationship || null) : null,
           },
         })
       }
@@ -263,7 +277,14 @@ export async function POST(request) {
         fetch(zapierGuestUrl, {
           method:  'POST',
           headers: { 'Content-Type': 'application/json' },
-          body:    JSON.stringify({ name: guestName, email, accessCode, passType, passesLeft: savedPassesLeft, firstTime, alreadyActive }),
+          body:    JSON.stringify({
+            name: guestName, email, accessCode, passType, passesLeft: savedPassesLeft, firstTime, alreadyActive,
+            isMinor:               guestIsMinor,
+            guardianName:          guestIsMinor ? (meta.guardianName         || null) : null,
+            guardianEmail:         guestIsMinor ? (meta.guardianEmail        || null) : null,
+            guardianPhone:         guestIsMinor ? (meta.guardianPhone        || null) : null,
+            guardianRelationship:  guestIsMinor ? (meta.guardianRelationship || null) : null,
+          }),
         })
           .then(r => console.log('[platform/webhook] Zapier guest webhook status:', r.status))
           .catch(e => console.error('[platform/webhook] Zapier guest webhook error:', e.message))
@@ -417,6 +438,8 @@ export async function POST(request) {
     const parsedGradSemester = normalizeGradSemester(meta.gradSemester)
     const parsedGradYear     = meta.gradYear ? parseInt(meta.gradYear, 10) : null
 
+    const isMinor = meta.isMinor === 'true'
+
     if (!member) {
       member = await prisma.member.create({
         data: {
@@ -439,9 +462,14 @@ export async function POST(request) {
           gradYear:                     Number.isNaN(parsedGradYear) ? null : parsedGradYear,
           studentIdImage:               studentIdImage,
           hearAboutUs:                  meta.hearAboutUs           || null,
+          isMinor:                      isMinor,
+          guardianName:                 isMinor ? (meta.guardianName         || null) : null,
+          guardianEmail:                isMinor ? (meta.guardianEmail        || null) : null,
+          guardianPhone:                isMinor ? (meta.guardianPhone        || null) : null,
+          guardianRelationship:         isMinor ? (meta.guardianRelationship || null) : null,
         },
       })
-      console.log('[platform/webhook] created member from checkout:', member.id, email, '| hearAboutUs=%s', meta.hearAboutUs || '(none)')
+      console.log('[platform/webhook] created member from checkout:', member.id, email, '| hearAboutUs=%s', meta.hearAboutUs || '(none)', '| isMinor=%s', isMinor)
     } else {
       member = await prisma.member.update({
         where: { id: member.id },
@@ -455,6 +483,13 @@ export async function POST(request) {
           ...(parsedGradYear && !Number.isNaN(parsedGradYear) ? { gradYear: parsedGradYear } : {}),
           ...(studentIdImage          ? { studentIdImage }                               : {}),
           ...(meta.hearAboutUs        ? { hearAboutUs: meta.hearAboutUs }               : {}),
+          ...(isMinor ? {
+            isMinor:              true,
+            guardianName:         meta.guardianName         || null,
+            guardianEmail:        meta.guardianEmail        || null,
+            guardianPhone:        meta.guardianPhone        || null,
+            guardianRelationship: meta.guardianRelationship || null,
+          } : {}),
         },
       })
       console.log('[platform/webhook] updated existing member from checkout:', member.id, email)
@@ -473,12 +508,19 @@ export async function POST(request) {
 
     const zapierMemberUrl = gym.zapierMemberWebhookUrl || process.env.ZAPIER_MEMBER_WEBHOOK_URL
     console.log('[platform/webhook] firing Zapier member webhook:', zapierMemberUrl)
-    console.log('[platform/webhook] Zapier member payload: firstName=%s lastName=%s email=%s accessCode=%s membershipType=%s', firstName, lastName, email, accessCode, membershipType)
+    console.log('[platform/webhook] Zapier member payload: firstName=%s lastName=%s email=%s accessCode=%s membershipType=%s isMinor=%s', firstName, lastName, email, accessCode, membershipType, isMinor)
     if (zapierMemberUrl) {
       fetch(zapierMemberUrl, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ firstName, lastName, email, accessCode, membershipType }),
+        body:    JSON.stringify({
+          firstName, lastName, email, accessCode, membershipType,
+          isMinor,
+          guardianName:         isMinor ? (meta.guardianName         || null) : null,
+          guardianEmail:        isMinor ? (meta.guardianEmail        || null) : null,
+          guardianPhone:        isMinor ? (meta.guardianPhone        || null) : null,
+          guardianRelationship: isMinor ? (meta.guardianRelationship || null) : null,
+        }),
       })
         .then(r => console.log('[platform/webhook] Zapier member webhook status:', r.status))
         .catch(e => console.error('[platform/webhook] Zapier member webhook error:', e.message))

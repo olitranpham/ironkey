@@ -81,6 +81,15 @@ model Member {
   emergencyContactPhone        String?
   emergencyContactRelationship String?
 
+  // Guardian info — populated when the member was a minor (under 18) at
+  // signup. The guardian is the account holder (payer + waiver signer);
+  // firstName/lastName/dateOfBirth above remain the minor's own info.
+  isMinor              Boolean @default(false)
+  guardianName         String?
+  guardianEmail        String?
+  guardianPhone        String?
+  guardianRelationship String?
+
   // Seam / smart-lock access code
   accessCode       String?
   seamDeviceId     String?
@@ -147,6 +156,15 @@ model Guest {
   emergencyContactName         String?
   emergencyContactPhone        String?
   emergencyContactRelationship String?
+
+  // Guardian info — populated when the guest was a minor (under 18) at
+  // signup. The guardian is the point of contact (payer + waiver signer);
+  // name/dateOfBirth above remain the minor guest's own info.
+  isMinor              Boolean @default(false)
+  guardianName         String?
+  guardianEmail        String?
+  guardianPhone        String?
+  guardianRelationship String?
 
   passes   GuestVisit[]
   waivers  GuestWaiver[]
