@@ -28,7 +28,7 @@ export default function ConcessionsSuccessPage() {
       </div>
 
       <p className="mt-6 text-[11px] text-neutral-700">
-        powered by <span className="text-neutral-600 font-medium">ironkey llc</span>
+        powered by <a href="https://ironkeyentry.com" target="_blank" rel="noopener noreferrer" className="text-neutral-600 font-medium underline">ironkey llc</a> · © 2026
       </p>
     </div>
   )
