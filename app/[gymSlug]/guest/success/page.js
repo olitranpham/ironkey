@@ -134,7 +134,7 @@ export default function GuestSuccessPage() {
       </div>
 
       <p className="mt-6 text-[11px] text-neutral-700">
-        powered by <span className="text-neutral-600 font-medium">ironkey</span>
+        powered by <span className="text-neutral-600 font-medium">ironkey llc</span>
       </p>
     </div>
   )

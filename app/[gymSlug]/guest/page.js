@@ -1163,7 +1163,7 @@ export default function GuestPage() {
 
       </div>
 
-      <p className="text-center text-[11px] text-neutral-700 mt-6">powered by <strong>ironkey</strong> · secured by <strong>Stripe</strong></p>
+      <p className="text-center text-[11px] text-neutral-700 mt-6">powered by <strong>ironkey llc</strong> · secured by <strong>Stripe</strong></p>
 
       {waiverOpen && (
         <WaiverModal

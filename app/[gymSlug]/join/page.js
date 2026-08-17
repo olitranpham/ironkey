@@ -1165,7 +1165,7 @@ export default function JoinPage() {
           )}
         </button>
 
-        <p className="text-center text-[11px] text-neutral-700">powered by <strong>ironkey</strong> · secured by <strong>Stripe</strong></p>
+        <p className="text-center text-[11px] text-neutral-700">powered by <strong>ironkey llc</strong> · © 2026 · secured by <strong>Stripe</strong></p>
 
       </form>
 

@@ -298,7 +298,7 @@ function PortalLayout({ gymSlug, children }) {
         {!collapsed && (
           <div className="border-t border-neutral-800 px-2 py-3">
             <p className="text-center text-[11px] text-neutral-600">
-              powered by <span className="text-neutral-500 font-medium">ironkey</span>
+              powered by <span className="text-neutral-500 font-medium">ironkey llc</span> · © 2026
             </p>
           </div>
         )}
