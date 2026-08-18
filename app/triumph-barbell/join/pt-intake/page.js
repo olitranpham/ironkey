@@ -148,7 +148,7 @@ export default function PTIntakePage() {
           )}
         </button>
 
-        <p className="text-center text-[11px] text-neutral-700">powered by <a href="https://ironkeyentry.com" target="_blank" rel="noopener noreferrer" className="underline"><strong>ironkey llc</strong></a> · © 2026 · secured by <strong>Stripe</strong></p>
+        <p className="text-center text-[11px] text-neutral-700">powered by <a href="https://ironkeyentry.com" target="_blank" rel="noopener noreferrer" className="underline"><strong>ironkey llc</strong></a> · © 2026</p>
       </form>
     </div>
   )
