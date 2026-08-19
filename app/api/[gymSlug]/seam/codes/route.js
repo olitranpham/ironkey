@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
+import { generateUniqueAccessCode } from '@/lib/seam'
 
 const SEAM_API = 'https://connect.getseam.com'
 
@@ -300,14 +301,20 @@ export async function POST(request, { params }) {
       )
     }
 
-    const apiKey   = process.env.SEAM_API_KEY
+    const apiKey   = gym.seamApiKey ?? process.env.SEAM_API_KEY
     const deviceId = gym.seamDeviceId ?? process.env.SEAM_DEVICE_ID
     if (!apiKey) {
       return NextResponse.json({ error: 'Seam not configured' }, { status: 422 })
     }
 
-    // Generate a 4-digit code if none provided
-    const accessCode = code || String(Math.floor(1000 + Math.random() * 9000))
+    // Generate a 4-digit code if none provided — checked for collisions
+    // against this gym's Member rows and whatever's currently active on
+    // Seam. A code explicitly supplied by the caller is left as-is (a
+    // deliberate manual override, not an auto-generation the collision
+    // check applies to).
+    const accessCode = code || await generateUniqueAccessCode({
+      prisma, gymId: gym.id, apiKey, deviceId, logPrefix: '[seam/codes POST]',
+    })
 
     const seamHeaders = {
       Authorization: `Bearer ${apiKey}`,

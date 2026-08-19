@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import prisma from '@/lib/prisma'
-import { deleteSeamCodeByPin } from '@/lib/seam'
+import { deleteSeamCodeByPin, generateUniqueAccessCode } from '@/lib/seam'
 import { formatPhone } from '@/lib/phone'
 import { normalizeGradSemester } from '@/lib/gradSemester'
 
@@ -499,7 +499,13 @@ export async function POST(request) {
       data: { memberId: member.id, gymId: gym.id, type: isNew ? 'joined' : 'reactivated' },
     })
 
-    const accessCode = String(Math.floor(1000 + Math.random() * 9000))
+    const memberSeamApiKey   = gym.seamApiKey ?? process.env.SEAM_API_KEY
+    const memberSeamDeviceId = gym.seamDeviceId ?? process.env.SEAM_DEVICE_ID
+
+    const accessCode = await generateUniqueAccessCode({
+      prisma, gymId: gym.id, apiKey: memberSeamApiKey, deviceId: memberSeamDeviceId,
+      logPrefix: '[platform/webhook]',
+    })
     member = await prisma.member.update({
       where: { id: member.id },
       data:  { accessCode },
@@ -526,9 +532,8 @@ export async function POST(request) {
         .catch(e => console.error('[platform/webhook] Zapier member webhook error:', e.message))
     }
 
-    const memberSeamApiKey = gym.seamApiKey ?? process.env.SEAM_API_KEY
     if (memberSeamApiKey) {
-      const deviceId    = gym.seamDeviceId ?? process.env.SEAM_DEVICE_ID
+      const deviceId    = memberSeamDeviceId
       const seamHeaders = {
         Authorization:  `Bearer ${memberSeamApiKey}`,
         'Content-Type': 'application/json',
