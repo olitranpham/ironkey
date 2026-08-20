@@ -80,7 +80,8 @@
       "Bash(railway whoami *)",
       "Bash(env)",
       "Bash(echo \"exit: $?\")",
-      "Bash(claude mcp *)"
+      "Bash(claude mcp *)",
+      "Bash(railway --version)"
     ]
   }
 }

@@ -27,6 +27,7 @@ const EVENT_LABEL = {
   frozen:                  'frozen',
   unfrozen:                'unfrozen',
   cancellation_scheduled:  'cancellation scheduled',
+  cancellation_reversed:   'cancellation reversed',
   canceled:                'canceled',
 }
 
@@ -81,7 +82,7 @@ export function DrawerField({ label, value, mono = false, children }) {
 
 // ── Drawer content ────────────────────────────────────────────────────────────
 
-function DrawerContent({ member, gymSlug, membershipBorder, onClose, onStatusChange, onSaveAccessCode, onSaveField, onDeleteCode, onRemoveMember, updating, simplified }) {
+function DrawerContent({ member, gymSlug, membershipBorder, onClose, onStatusChange, onSaveAccessCode, onSaveField, onDeleteCode, onRemoveMember, onReverseCancel, updating, simplified }) {
   const initials = (member.firstName?.[0] ?? '') + (member.lastName?.[0] ?? '')
 
   // Student graduation tracking — gated by gym + membershipType.
@@ -812,7 +813,7 @@ function DrawerContent({ member, gymSlug, membershipBorder, onClose, onStatusCha
             {deletingCode ? 'removing…' : 'delete code'}
           </button>
         </div>
-      ) : (onStatusChange || onRemoveMember) && (
+      ) : (onStatusChange || onRemoveMember || onReverseCancel) && (
         <div className="shrink-0 px-5 py-4 border-t border-neutral-800 space-y-2">
           {onStatusChange && member.status !== 'CANCELED' && (
             <>
@@ -825,13 +826,21 @@ function DrawerContent({ member, gymSlug, membershipBorder, onClose, onStatusCha
                   >
                     freeze membership
                   </button>
-                  {!member.cancelScheduled && (
+                  {!member.cancelScheduled ? (
                     <button
                       onClick={() => onStatusChange(member.id, 'CANCELED')}
                       disabled={updating}
                       className="w-full py-2 rounded-lg text-sm font-medium bg-red-500/10 text-red-400 hover:bg-red-500/20 disabled:opacity-40 transition-colors"
                     >
                       cancel membership
+                    </button>
+                  ) : onReverseCancel && (
+                    <button
+                      onClick={onReverseCancel}
+                      disabled={updating}
+                      className="w-full py-2 rounded-lg text-sm font-medium bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 disabled:opacity-40 transition-colors"
+                    >
+                      reverse cancellation
                     </button>
                   )}
                 </>
@@ -876,6 +885,7 @@ export default function MemberProfileDrawer({
   onSaveField,
   onDeleteCode,
   onRemoveMember,
+  onReverseCancel,
   updating = false,
   simplified = false,
 }) {
@@ -907,6 +917,7 @@ export default function MemberProfileDrawer({
             onSaveField={onSaveField}
             onDeleteCode={onDeleteCode}
             onRemoveMember={onRemoveMember}
+            onReverseCancel={onReverseCancel}
             updating={updating}
             simplified={simplified}
           />

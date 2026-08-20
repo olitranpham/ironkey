@@ -70,6 +70,16 @@ const CONFIRM_COPY = {
     cta:     'yes, remove',
     ctaCls:  'bg-red-500/10 text-red-400 hover:bg-red-500/20',
   },
+  'reverse-cancel': {
+    title:   'reverse cancellation?',
+    bullets: [
+      'only works if their billing period hasn’t ended yet',
+      'their membership stays active on its normal schedule',
+      'their door code is reissued only if it was already revoked — otherwise it’s untouched',
+    ],
+    cta:     'yes, reverse cancellation',
+    ctaCls:  'bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20',
+  },
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -106,9 +116,10 @@ export default function MembersPage() {
   const closeTimer = useRef(null)
 
   // Confirm modal
-  const [confirmModal,  setConfirmModal]  = useState(null) // { action, member }
-  const [actionLoading, setActionLoading] = useState(false)
-  const [actionError,   setActionError]   = useState(null)
+  const [confirmModal,    setConfirmModal]    = useState(null) // { action, member }
+  const [actionLoading,   setActionLoading]   = useState(false)
+  const [actionError,     setActionError]     = useState(null)
+  const [successBanner,   setSuccessBanner]   = useState(null) // string | null, auto-dismisses
 
   // ── Fetch ────────────────────────────────────────────────────────────────
 
@@ -214,8 +225,8 @@ export default function MembersPage() {
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body:    JSON.stringify({ memberId: member.id }),
       })
-      if (!res.ok) throw new Error('Request failed')
-      const json = await res.json()
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(json.error || 'Request failed')
       const { member: updated } = json
       setMembers(prev => prev.map(m => m.id === updated.id ? { ...m, ...updated } : m))
       setSelectedMember(prev => prev?.id === updated.id ? { ...prev, ...updated } : prev)
@@ -224,10 +235,18 @@ export default function MembersPage() {
         // Leave modal open so the owner sees the message
       } else {
         setConfirmModal(null)
+        if (action === 'reverse-cancel') {
+          setSuccessBanner(
+            json.codeReissued
+              ? `cancellation reversed — their old code was revoked, new code: ${json.accessCode}`
+              : 'cancellation reversed — their existing door code is unaffected'
+          )
+          setTimeout(() => setSuccessBanner(null), 8000)
+        }
       }
     } catch (err) {
       console.error('[confirmAction]', err)
-      setActionError('something went wrong — please try again')
+      setActionError(err.message || 'something went wrong — please try again')
     } finally {
       setActionLoading(false)
     }
@@ -357,6 +376,13 @@ export default function MembersPage() {
         )}
       </header>
 
+      {/* Success banner (e.g. reverse-cancellation result) */}
+      {successBanner && (
+        <div className="shrink-0 px-6 py-2 bg-emerald-500/10 border-b border-emerald-500/20">
+          <p className="text-xs text-emerald-400">{successBanner}</p>
+        </div>
+      )}
+
       {/* Main */}
       <main className="md:flex-1 flex flex-col p-5 gap-4 md:overflow-hidden md:min-h-0">
 
@@ -475,6 +501,10 @@ export default function MembersPage() {
           const actionMap = { FROZEN: 'freeze', CANCELED: 'cancel', ACTIVE: 'resume' }
           setActionError(null)
           setConfirmModal({ action: actionMap[newStatus], member: selectedMember })
+        }}
+        onReverseCancel={() => {
+          setActionError(null)
+          setConfirmModal({ action: 'reverse-cancel', member: selectedMember })
         }}
         onRemoveMember={() => {
           setActionError(null)
