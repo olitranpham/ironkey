@@ -183,6 +183,26 @@ export default function DashboardPage() {
     }
   }
 
+  async function handleReverseCancel(memberId) {
+    setUpdatingStatus(true)
+    try {
+      const token = localStorage.getItem('ik_token')
+      const res = await fetch(`/api/${gymSlug}/reverse-cancel`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body:    JSON.stringify({ memberId }),
+      })
+      if (!res.ok) throw new Error('Failed')
+      const { member: updated } = await res.json()
+      setMembers(prev => prev.map(m => m.id === memberId ? { ...m, ...updated } : m))
+      setSelectedMember(prev => prev?.id === memberId ? { ...prev, ...updated } : prev)
+    } catch {
+      // non-fatal — leave UI as-is
+    } finally {
+      setUpdatingStatus(false)
+    }
+  }
+
   async function handleConfirmRemove() {
     if (!removeTarget) return
     setRemoving(true)
@@ -363,6 +383,7 @@ export default function DashboardPage() {
         onSaveAccessCode={handleAccessCodeSave}
         onSaveField={handleSaveField}
         onRemoveMember={() => { setRemoveError(null); setRemoveTarget(selectedMember) }}
+        onReverseCancel={() => handleReverseCancel(selectedMember.id)}
         updating={updatingStatus}
       />
 

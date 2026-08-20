@@ -14,6 +14,7 @@ const MEMBER_SELECT = {
   emergencyContactName: true, emergencyContactPhone: true, emergencyContactRelationship: true,
   isMinor: true, guardianName: true, guardianEmail: true, guardianPhone: true, guardianRelationship: true,
   dateFrozen: true, dateCanceled: true, createdAt: true,
+  cancelScheduled: true, cancelEffectiveDate: true,
   stripeCustomerId: true, stripeSubscriptionId: true,
   hearAboutUs: true,
   gradSemester: true, gradYear: true, studentCategory: true,

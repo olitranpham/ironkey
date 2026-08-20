@@ -46,6 +46,7 @@ export async function POST(request) {
     console.log('[cancel] memberId:', memberId, '| subId:', subId, '| stripeKey set:', Boolean(stripeKey), '| key prefix:', stripeKey?.slice(0, 8) ?? 'n/a')
 
     let stripeWarning = null
+    let effectiveAtSecs = null // when the cancellation actually takes effect, for cancelEffectiveDate
 
     if (subId && stripeKey) {
       try {
@@ -58,7 +59,8 @@ export async function POST(request) {
         let stripeParams
         if (sub.current_period_end >= thirtyDaysFromNow) {
           // Period end is already 30+ days out — cancel at natural period end
-          stripeParams = { cancel_at_period_end: true }
+          stripeParams   = { cancel_at_period_end: true }
+          effectiveAtSecs = sub.current_period_end
           console.log('[cancel] current_period_end >= 30d — using cancel_at_period_end:true | period_end:', sub.current_period_end)
         } else {
           const recurring   = sub.items?.data?.[0]?.price?.recurring ?? {}
@@ -73,7 +75,8 @@ export async function POST(request) {
             // slightly off Stripe's true period boundary and triggering a
             // prorated charge instead of a clean cancellation.
             const nextEnd = nextBillingPeriodEnd(sub.current_period_end, sub)
-            stripeParams  = { cancel_at: nextEnd }
+            stripeParams   = { cancel_at: nextEnd }
+            effectiveAtSecs = nextEnd
             console.log('[cancel] current_period_end < 30d, long cycle — single push — using cancel_at:', nextEnd, '| current_period_end:', sub.current_period_end)
           } else {
             // Shorter-than-monthly billing (weekly, every 4 weeks/28 days) —
@@ -86,7 +89,8 @@ export async function POST(request) {
               nextEnd = nextBillingPeriodEnd(nextEnd, sub)
               periodsAdvanced += 1
             }
-            stripeParams = { cancel_at: nextEnd }
+            stripeParams   = { cancel_at: nextEnd }
+            effectiveAtSecs = nextEnd
             console.log('[cancel] current_period_end < 30d, short cycle — advanced %d period(s) — using cancel_at:', periodsAdvanced, nextEnd, '| current_period_end:', sub.current_period_end)
           }
         }
@@ -107,8 +111,9 @@ export async function POST(request) {
     const member = await prisma.member.update({
       where: { id: memberId },
       data: {
-        cancelScheduled: true,
-        updatedAt:       now,
+        cancelScheduled:     true,
+        cancelEffectiveDate: effectiveAtSecs ? new Date(effectiveAtSecs * 1000) : null,
+        updatedAt:           now,
       },
     })
 

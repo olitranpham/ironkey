@@ -83,7 +83,7 @@ export async function POST(request, { params }) {
     if (member.status !== 'CANCELED') {
       await prisma.member.update({
         where: { id: member.id },
-        data:  { status: 'CANCELED', dateCanceled: new Date(), updatedAt: new Date() },
+        data:  { status: 'CANCELED', cancelScheduled: false, cancelEffectiveDate: null, dateCanceled: new Date(), updatedAt: new Date() },
       })
       await prisma.membershipEvent.create({
         data: { memberId: member.id, gymId: gym.id, type: 'canceled' },

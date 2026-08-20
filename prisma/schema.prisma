@@ -109,7 +109,13 @@ model Member {
   flexCheckInResetDate DateTime?
 
   // Cancellation scheduled (cancel_at_period_end on Stripe — still ACTIVE until period ends)
-  cancelScheduled Boolean @default(false)
+  cancelScheduled     Boolean   @default(false)
+  // When that scheduled cancellation actually takes effect — mirrors
+  // whichever of Stripe's cancel_at_period_end (-> current_period_end) or
+  // explicit cancel_at the /cancel route used. Null once cancelScheduled
+  // is false (cleared by /reverse-cancel, or by the subscription.deleted
+  // webhook once it's actually happened).
+  cancelEffectiveDate DateTime?
 
   // Student membership fields
   studentIdImage String? // base64 data URL of uploaded student ID photo

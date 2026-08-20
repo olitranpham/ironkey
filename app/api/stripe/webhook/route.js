@@ -672,7 +672,7 @@ export async function POST(request) {
       const now = new Date()
       await prisma.member.update({
         where: { id: member.id },
-        data:  { status: 'CANCELED', cancelScheduled: false, dateCanceled: now, updatedAt: now },
+        data:  { status: 'CANCELED', cancelScheduled: false, cancelEffectiveDate: null, dateCanceled: now, updatedAt: now },
       })
       await prisma.membershipEvent.create({
         data: { memberId: member.id, gymId: gym.id, type: 'canceled' },

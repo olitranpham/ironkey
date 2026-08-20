@@ -471,7 +471,9 @@ export default function MembersPage() {
                           <div className="min-w-0">
                             <p className="text-white text-sm leading-tight">{m.firstName} {m.lastName}</p>
                             {m.cancelScheduled && (
-                              <p className="text-[10px] text-amber-500/70 leading-tight mt-0.5">cancellation scheduled</p>
+                              <p className="text-[10px] text-amber-500/70 leading-tight mt-0.5">
+                                cancellation scheduled{m.cancelEffectiveDate ? ` — ${fmtDate(m.cancelEffectiveDate)}` : ''}
+                              </p>
                             )}
                           </div>
                         </div>

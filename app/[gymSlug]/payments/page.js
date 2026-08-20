@@ -433,7 +433,7 @@ function PaymentPanel({ member, gymSlug, onClose, onAction, onSaveField, actionL
           <p className="text-white font-semibold text-base leading-tight">{member.firstName} {member.lastName}</p>
           {member.cancelScheduled && (
             <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20">
-              cancellation scheduled
+              cancellation scheduled{member.cancelEffectiveDate ? ` — ${fmtEvDate(member.cancelEffectiveDate)}` : ''}
             </span>
           )}
         </div>

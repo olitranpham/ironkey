@@ -93,9 +93,10 @@ export async function POST(request, { params }) {
     let codeReissued = false
     let accessCode   = member.accessCode
     const updateData = {
-      cancelScheduled: false,
-      dateCanceled:    null,
-      updatedAt:       new Date(),
+      cancelScheduled:     false,
+      cancelEffectiveDate: null,
+      dateCanceled:        null,
+      updatedAt:           new Date(),
     }
 
     if (apiKey) {
