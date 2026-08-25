@@ -502,15 +502,26 @@ export async function POST(request) {
     const memberSeamApiKey   = gym.seamApiKey ?? process.env.SEAM_API_KEY
     const memberSeamDeviceId = gym.seamDeviceId ?? process.env.SEAM_DEVICE_ID
 
-    const accessCode = await generateUniqueAccessCode({
-      prisma, gymId: gym.id, apiKey: memberSeamApiKey, deviceId: memberSeamDeviceId,
-      logPrefix: '[platform/webhook]',
-    })
-    member = await prisma.member.update({
-      where: { id: member.id },
-      data:  { accessCode },
-    })
-    console.log('[platform/webhook] access code generated for member:', member.id, '| code:', accessCode)
+    // Rutgers Powerlifting Club — one-off $5 payment, club president lets
+    // members in manually, so this membership type must never get a Seam
+    // access code.
+    const isRutgersPowerliftingOneOff = gymSlug === 'hydra-athletic-co'
+      && (meta.membershipType ?? '').toLowerCase() === 'rutgers powerlifting'
+
+    let accessCode = null
+    if (!isRutgersPowerliftingOneOff) {
+      accessCode = await generateUniqueAccessCode({
+        prisma, gymId: gym.id, apiKey: memberSeamApiKey, deviceId: memberSeamDeviceId,
+        logPrefix: '[platform/webhook]',
+      })
+      member = await prisma.member.update({
+        where: { id: member.id },
+        data:  { accessCode },
+      })
+      console.log('[platform/webhook] access code generated for member:', member.id, '| code:', accessCode)
+    } else {
+      console.log('[platform/webhook] Rutgers Powerlifting one-off — skipping access code generation for member:', member.id)
+    }
 
     const zapierMemberUrl = gym.zapierMemberWebhookUrl || process.env.ZAPIER_MEMBER_WEBHOOK_URL
     console.log('[platform/webhook] firing Zapier member webhook:', zapierMemberUrl)
@@ -532,7 +543,7 @@ export async function POST(request) {
         .catch(e => console.error('[platform/webhook] Zapier member webhook error:', e.message))
     }
 
-    if (memberSeamApiKey) {
+    if (memberSeamApiKey && !isRutgersPowerliftingOneOff) {
       const deviceId    = memberSeamDeviceId
       const seamHeaders = {
         Authorization:  `Bearer ${memberSeamApiKey}`,

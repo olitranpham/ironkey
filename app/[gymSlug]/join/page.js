@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { Loader2, X } from 'lucide-react'
 import PublicPageHeader from '@/components/PublicPageHeader'
 import { Field, SectionDivider, INPUT, SELECT, BUTTON_PRIMARY } from '@/components/PublicPageStyles'
@@ -233,9 +233,15 @@ function fmt(n, interval, intervalCount = 1, raw = false) {
 }
 
 
+// Hidden-link-gated plan — only requested from the API (and auto-selected
+// here) when the join page is loaded with ?plan=rutgers-powerlifting.
+const HYDRA_RUTGERS_POWERLIFTING_PRICE_ID = 'price_1U84lzAHpnGUkbkC2kNFvTwD'
+
 export default function JoinPage() {
   const { gymSlug } = useParams()
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const planParam = searchParams.get('plan')
 
   const [gymName,          setGymName]          = useState('')
   const [gymLogo,          setGymLogo]          = useState(null)
@@ -290,7 +296,8 @@ export default function JoinPage() {
   const age        = form.dob ? calculateAge(form.dob) : null
   const isMinor    = age !== null && age < 18
   useEffect(() => {
-    fetch(`/api/${gymSlug}/join`)
+    const query = planParam ? `?plan=${encodeURIComponent(planParam)}` : ''
+    fetch(`/api/${gymSlug}/join${query}`)
       .then(r => r.json())
       .then(({ gym, membershipPlans = [], addonPlans = [], ptPlans = [], programmingPlans = [], groupTrainingPlans = [] }) => {
         setGymName((gym?.name ?? gymSlug).replace(/-/g, ' '))
@@ -301,8 +308,17 @@ export default function JoinPage() {
         setProgrammingPlans(programmingPlans)
         setGroupTrainingPlans(groupTrainingPlans)
         if (membershipPlans.length) {
+          // Following the hidden Rutgers Powerlifting link auto-selects that
+          // plan so it doesn't have to be hunted for in the dropdown — the
+          // rest of the list is untouched either way.
+          const linkedPlan = planParam === 'rutgers-powerlifting'
+            ? membershipPlans.find(p => p.priceId === HYDRA_RUTGERS_POWERLIFTING_PRICE_ID)
+            : null
+
           let defaultPlan
-          if (gymSlug === 'hydra-athletic-co') {
+          if (linkedPlan) {
+            defaultPlan = linkedPlan
+          } else if (gymSlug === 'hydra-athletic-co') {
             defaultPlan = membershipPlans.find(p => p.name.toLowerCase().includes('standard membership')) ?? membershipPlans[0]
           } else if (gymSlug === 'triumph-barbell') {
             defaultPlan = membershipPlans.find(p => p.name.toLowerCase().includes('general')) ?? membershipPlans[0]
@@ -314,7 +330,7 @@ export default function JoinPage() {
       })
       .catch(() => setError('Could not load membership options.'))
       .finally(() => setLoading(false))
-  }, [gymSlug])
+  }, [gymSlug, planParam])
 
   function set(k, v) {
     setForm(f => ({ ...f, [k]: v }))
@@ -733,6 +749,8 @@ export default function JoinPage() {
                       }
                     } else if (gymSlug === 'hydra-athletic-co' && p.name.toLowerCase().includes('pre-sale membership')) {
                       displayFmt = '$50.00 / 4 weeks'
+                    } else if (gymSlug === 'hydra-athletic-co' && !p.interval) {
+                      displayFmt = Number(p.amount).toLocaleString('en-US', { style: 'currency', currency: 'USD' })
                     } else {
                       displayFmt = fmt(p.amount, p.interval, p.intervalCount)
                     }

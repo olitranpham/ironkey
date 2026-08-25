@@ -2,6 +2,11 @@ import { NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import prisma from '@/lib/prisma'
 
+// Rutgers Powerlifting Club — one-off $5 non-recurring membership for
+// hydra-athletic-co. Stripe rejects a one-time price as a line item in
+// subscription-mode checkout, so this price alone must use payment mode.
+const HYDRA_RUTGERS_POWERLIFTING_PRICE_ID = 'price_1U84lzAHpnGUkbkC2kNFvTwD'
+
 /**
  * POST /api/[gymSlug]/join/checkout
  * Public — creates a Stripe Checkout session and returns the URL.
@@ -56,8 +61,10 @@ export async function POST(request, { params }) {
       : [{ price: priceId, quantity: 1 }]
     if (addonPriceId) lineItems.push({ price: addonPriceId, quantity: 1 })
 
+    const isRutgersPowerliftingOneOff = gymSlug === 'hydra-athletic-co' && priceId === HYDRA_RUTGERS_POWERLIFTING_PRICE_ID
+
     const session = await stripe.checkout.sessions.create({
-      mode:                  'subscription',
+      mode:                  isRutgersPowerliftingOneOff ? 'payment' : 'subscription',
       customer_email:        email,
       line_items:            lineItems,
       allow_promotion_codes: true,

@@ -8,6 +8,12 @@ import prisma from '@/lib/prisma'
 // recreated under a new ID.
 const HYDRA_STUDENT_MILITARY_EMT_PRODUCT_ID = 'prod_Uc7pO4ZOBrs4AH'
 
+// Rutgers Powerlifting Club — one-off $5 non-recurring membership. It's a
+// one-time Stripe price, so it's excluded by the `recurring` filter below
+// like every other one-time price; allowlisted back in explicitly by price
+// ID for hydra-athletic-co only, rather than widening that filter for all gyms.
+const HYDRA_RUTGERS_POWERLIFTING_PRICE_ID = 'price_1U84lzAHpnGUkbkC2kNFvTwD'
+
 /**
  * GET /api/[gymSlug]/join
  * Public — returns gym name + available membership plans for the signup form.
@@ -17,6 +23,7 @@ const HYDRA_STUDENT_MILITARY_EMT_PRODUCT_ID = 'prod_Uc7pO4ZOBrs4AH'
 export async function GET(request, { params }) {
   try {
     const { gymSlug } = await params
+    const planParam = new URL(request.url).searchParams.get('plan')
 
     const gym = await prisma.gym.findUnique({
       where:  { slug: gymSlug },
@@ -118,6 +125,27 @@ export async function GET(request, { params }) {
           })
           .map(toplan)
           .sort((a, b) => a.amount - b.amount)
+
+        // One-off Rutgers Powerlifting Club price — not recurring, so it isn't
+        // in `recurring` at all; pull it straight from the full price list.
+        // Hidden-link gated: only included when the request carries
+        // ?plan=rutgers-powerlifting, so it isn't discoverable on the plain
+        // join page — it's meant to only be reachable via a link handed
+        // directly to the club.
+        const rutgersPrice = planParam === 'rutgers-powerlifting'
+          ? prices.data.find(p => p.id === HYDRA_RUTGERS_POWERLIFTING_PRICE_ID && p.product?.active)
+          : null
+        if (rutgersPrice) {
+          membershipPlans.push({
+            priceId:        rutgersPrice.id,
+            name:           rutgersPrice.nickname ?? rutgersPrice.product?.name ?? 'Rutgers Powerlifting',
+            amount:         rutgersPrice.unit_amount / 100,
+            interval:       null,
+            intervalCount:  1,
+            membershipType: rutgersPrice.nickname ?? rutgersPrice.product?.name ?? 'Rutgers Powerlifting',
+          })
+          membershipPlans.sort((a, b) => a.amount - b.amount)
+        }
 
         // Coaching add-ons: members-only Coaching/Programs (non-member tier excluded)
         addonPlans = recurring
