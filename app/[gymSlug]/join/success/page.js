@@ -75,6 +75,12 @@ export default function JoinSuccessPage() {
           </div>
         ) : accessCode ? (
           <div className="w-full bg-neutral-900 rounded-xl p-4 text-left space-y-3">
+            {gymSlug === 'oasis-boston' && (
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-neutral-400">front lockbox</span>
+                <span className="text-lg font-bold text-white font-mono tracking-widest">4532</span>
+              </div>
+            )}
             <div className="flex items-center justify-between">
               <span className="text-xs text-neutral-400">your door code</span>
               <span className="text-lg font-bold text-white font-mono tracking-widest">{accessCode}</span>

@@ -81,7 +81,8 @@
       "Bash(env)",
       "Bash(echo \"exit: $?\")",
       "Bash(claude mcp *)",
-      "Bash(railway --version)"
+      "Bash(railway --version)",
+      "Bash(echo \"BUILD EXIT CODE: $?\")"
     ]
   }
 }

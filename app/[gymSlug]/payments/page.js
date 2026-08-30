@@ -33,6 +33,11 @@ const CONFIRM_COPY = {
     bullets: ['the member will regain immediate access', 'membership returns to active status'],
     cta: 'yes, resume', ctaCls: 'bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20',
   },
+  'reverse-cancel': {
+    title:  'reverse cancellation?',
+    bullets: ['the scheduled cancellation will be lifted', 'access will be re-provisioned if it was revoked'],
+    cta: 'yes, reverse', ctaCls: 'bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20',
+  },
 }
 
 // ── Page ──────────────────────────────────────────────────────────────────────
@@ -95,7 +100,9 @@ export default function PaymentsPage() {
   const visible = members
     .filter(m => {
       const statuses = TAB_STATUSES[activeTab]
-      const matchTab    = !statuses || statuses.includes(m.status)
+      const matchTab    = activeTab === 'canceled'
+        ? (m.status === 'CANCELED' || m.cancelScheduled === true)
+        : (!statuses || statuses.includes(m.status)) && !m.cancelScheduled
       const q           = search.trim().toLowerCase()
       const matchSearch = !q || `${m.firstName} ${m.lastName} ${m.email}`.toLowerCase().includes(q)
       return matchTab && matchSearch
@@ -333,6 +340,22 @@ function fmtEvDate(iso) {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' }).toLowerCase()
 }
 
+// Days remaining until cancelEffectiveDate — null when there's no date to
+// count down from (e.g. no Stripe subscription was linked at cancel time).
+function daysUntilCancel(iso) {
+  if (!iso) return null
+  const d = new Date(iso)
+  if (isNaN(d.getTime())) return null
+  return Math.ceil((d.getTime() - Date.now()) / 86400000)
+}
+
+// A member is still reversible while cancelEffectiveDate hasn't passed yet —
+// or indefinitely if there's no date to compare against.
+function cancelWindowOpen(member) {
+  if (!member.cancelEffectiveDate) return true
+  return new Date(member.cancelEffectiveDate).getTime() > Date.now()
+}
+
 const SAVE_BTN = 'text-[10px] px-2 py-1 rounded bg-white/10 text-white hover:bg-white/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shrink-0'
 const INPUT    = 'bg-[#252525] border border-neutral-700 rounded px-2 py-1 text-xs text-white placeholder-neutral-600 focus:outline-none focus:border-neutral-500 truncate'
 
@@ -432,9 +455,19 @@ function PaymentPanel({ member, gymSlug, onClose, onAction, onSaveField, actionL
           </div>
           <p className="text-white font-semibold text-base leading-tight">{member.firstName} {member.lastName}</p>
           {member.cancelScheduled && (
-            <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20">
-              cancellation scheduled{member.cancelEffectiveDate ? ` — ${fmtEvDate(member.cancelEffectiveDate)}` : ''}
-            </span>
+            <div className="flex flex-col items-center gap-1">
+              <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                cancellation scheduled{member.cancelEffectiveDate ? ` — ${fmtEvDate(member.cancelEffectiveDate)}` : ''}
+              </span>
+              {member.cancelEffectiveDate && (() => {
+                const days = daysUntilCancel(member.cancelEffectiveDate)
+                return (
+                  <span className="text-[10px] text-neutral-500">
+                    {days <= 0 ? 'cancellation takes effect today' : `${days} day${days === 1 ? '' : 's'} until cancellation`}
+                  </span>
+                )
+              })()}
+            </div>
           )}
         </div>
 
@@ -596,6 +629,18 @@ function PaymentPanel({ member, gymSlug, onClose, onAction, onSaveField, actionL
               className="w-full py-2 rounded-lg text-sm font-medium bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 disabled:opacity-40 transition-colors"
             >
               resume membership
+            </button>
+          )}
+          {/* Independent of status — reverse-cancel stays available for any
+              still-in-window canceled member, including FROZEN, not just
+              ACTIVE/OVERDUE. */}
+          {member.cancelScheduled && cancelWindowOpen(member) && (
+            <button
+              onClick={() => onAction('reverse-cancel', member)}
+              disabled={actionLoading}
+              className="w-full py-2 rounded-lg text-sm font-medium bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 disabled:opacity-40 transition-colors"
+            >
+              reverse cancellation
             </button>
           )}
         </div>

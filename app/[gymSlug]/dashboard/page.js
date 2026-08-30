@@ -312,8 +312,11 @@ export default function DashboardPage() {
 
   const visible = members
     .filter(m => {
-      const tabStatus = activeTab === 'canceled' ? 'canceled' : activeTab
-      const matchTab = activeTab === 'all' || m.status.toLowerCase() === tabStatus
+      const matchTab = activeTab === 'all'
+        ? true
+        : activeTab === 'canceled'
+          ? (m.status === 'CANCELED' || m.cancelScheduled === true)
+          : m.status.toLowerCase() === activeTab && !m.cancelScheduled
       const q = search.trim().toLowerCase()
       const matchSearch = !q ||
         `${m.firstName} ${m.lastName} ${m.email} ${m.phone ?? ''}`.toLowerCase().includes(q)

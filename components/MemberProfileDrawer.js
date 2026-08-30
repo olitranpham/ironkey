@@ -51,6 +51,22 @@ function fmtDateTime(iso) {
   return `${date} at ${time}`
 }
 
+// Days remaining until cancelEffectiveDate — null when there's no date to
+// count down from (e.g. no Stripe subscription was linked at cancel time).
+function daysUntilCancel(iso) {
+  if (!iso) return null
+  const d = new Date(iso)
+  if (isNaN(d.getTime())) return null
+  return Math.ceil((d.getTime() - Date.now()) / 86400000)
+}
+
+// A member is still reversible while cancelEffectiveDate hasn't passed yet —
+// or indefinitely if there's no date to compare against.
+function cancelWindowOpen(member) {
+  if (!member.cancelEffectiveDate) return true
+  return new Date(member.cancelEffectiveDate).getTime() > Date.now()
+}
+
 // ── Shared sub-components ─────────────────────────────────────────────────────
 
 export function DrawerSection({ icon: Icon, title, children }) {
@@ -364,9 +380,19 @@ function DrawerContent({ member, gymSlug, membershipBorder, onClose, onStatusCha
             {member.firstName} {member.lastName}
           </p>
           {member.cancelScheduled && (
-            <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20">
-              cancellation scheduled{member.cancelEffectiveDate ? ` — ${fmtDate(member.cancelEffectiveDate)}` : ''}
-            </span>
+            <div className="flex flex-col items-center gap-1">
+              <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                cancellation scheduled{member.cancelEffectiveDate ? ` — ${fmtDate(member.cancelEffectiveDate)}` : ''}
+              </span>
+              {member.cancelEffectiveDate && (() => {
+                const days = daysUntilCancel(member.cancelEffectiveDate)
+                return (
+                  <span className="text-[10px] text-neutral-500">
+                    {days <= 0 ? 'cancellation takes effect today' : `${days} day${days === 1 ? '' : 's'} until cancellation`}
+                  </span>
+                )
+              })()}
+            </div>
           )}
         </div>
 
@@ -826,21 +852,13 @@ function DrawerContent({ member, gymSlug, membershipBorder, onClose, onStatusCha
                   >
                     freeze membership
                   </button>
-                  {!member.cancelScheduled ? (
+                  {!member.cancelScheduled && (
                     <button
                       onClick={() => onStatusChange(member.id, 'CANCELED')}
                       disabled={updating}
                       className="w-full py-2 rounded-lg text-sm font-medium bg-red-500/10 text-red-400 hover:bg-red-500/20 disabled:opacity-40 transition-colors"
                     >
                       cancel membership
-                    </button>
-                  ) : onReverseCancel && (
-                    <button
-                      onClick={onReverseCancel}
-                      disabled={updating}
-                      className="w-full py-2 rounded-lg text-sm font-medium bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 disabled:opacity-40 transition-colors"
-                    >
-                      reverse cancellation
                     </button>
                   )}
                 </>
@@ -855,6 +873,18 @@ function DrawerContent({ member, gymSlug, membershipBorder, onClose, onStatusCha
                 </button>
               )}
             </>
+          )}
+          {/* Independent of status — reverse-cancel stays available for any
+              still-in-window canceled member, including FROZEN, not just
+              ACTIVE/OVERDUE. */}
+          {onReverseCancel && member.cancelScheduled && cancelWindowOpen(member) && (
+            <button
+              onClick={onReverseCancel}
+              disabled={updating}
+              className="w-full py-2 rounded-lg text-sm font-medium bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 disabled:opacity-40 transition-colors"
+            >
+              reverse cancellation
+            </button>
           )}
           {onRemoveMember && (
             <button
