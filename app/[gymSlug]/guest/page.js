@@ -601,6 +601,9 @@ export default function GuestPage() {
                   value={form.firstName} onChange={e => setField('firstName', e.target.value)}
                   className={INPUT} required
                 />
+                {form.firstName.trim() && form.firstName.trim().length < 2 && (
+                  <p className="text-xs text-rose-400 mt-1">must be at least 2 characters</p>
+                )}
               </Field>
               <Field label="last name" required>
                 <input
@@ -608,6 +611,9 @@ export default function GuestPage() {
                   value={form.lastName} onChange={e => setField('lastName', e.target.value)}
                   className={INPUT} required
                 />
+                {form.lastName.trim() && form.lastName.trim().length < 2 && (
+                  <p className="text-xs text-rose-400 mt-1">must be at least 2 characters</p>
+                )}
               </Field>
             </div>
 
