@@ -30,6 +30,12 @@ export async function POST(request, { params }) {
     if (!priceId || !email?.trim()) {
       return NextResponse.json({ error: 'priceId and email are required' }, { status: 400 })
     }
+    // firstName/lastName aren't always required here (a returning guest can
+    // send a pre-built `name` instead) — only enforce the length minimum when
+    // they're actually supplied.
+    if ((firstName?.trim() && firstName.trim().length < 2) || (lastName?.trim() && lastName.trim().length < 2)) {
+      return NextResponse.json({ error: 'firstName and lastName must be at least 2 characters' }, { status: 400 })
+    }
 
     const gym = await prisma.gym.findUnique({
       where:  { slug: gymSlug },

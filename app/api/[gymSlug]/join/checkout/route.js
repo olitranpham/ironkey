@@ -34,6 +34,9 @@ export async function POST(request, { params }) {
     if (!firstName || !lastName || !email || (!priceId && !groupTrainingPriceId)) {
       return NextResponse.json({ error: 'firstName, lastName, email, and a selected plan are required' }, { status: 400 })
     }
+    if (firstName.trim().length < 2 || lastName.trim().length < 2) {
+      return NextResponse.json({ error: 'firstName and lastName must be at least 2 characters' }, { status: 400 })
+    }
 
     const gym = await prisma.gym.findUnique({
       where:  { slug: gymSlug },

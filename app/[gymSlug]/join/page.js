@@ -351,8 +351,8 @@ export default function JoinPage() {
     e.preventDefault()
     setError(null)
 
-    if (!form.firstName.trim() || !form.lastName.trim()) {
-      setError(isMinor ? "The member's first and last name are required." : 'First and last name are required.')
+    if (!form.firstName.trim() || !form.lastName.trim() || form.firstName.trim().length < 2 || form.lastName.trim().length < 2) {
+      setError(isMinor ? "The member's first and last name must be at least 2 characters." : 'First and last name must be at least 2 characters.')
       return
     }
     if (!form.email.trim())    { setError('Email is required.'); return }
@@ -494,6 +494,9 @@ export default function JoinPage() {
               className={INPUT}
               required
             />
+            {form.firstName.trim() && form.firstName.trim().length < 2 && (
+              <p className="text-xs text-rose-400 mt-1">must be at least 2 characters</p>
+            )}
           </Field>
           <Field label={isMinor ? "member's last name" : 'last name'} required>
             <input
@@ -504,6 +507,9 @@ export default function JoinPage() {
               className={INPUT}
               required
             />
+            {form.lastName.trim() && form.lastName.trim().length < 2 && (
+              <p className="text-xs text-rose-400 mt-1">must be at least 2 characters</p>
+            )}
           </Field>
         </div>
 

@@ -345,7 +345,7 @@ export default function GuestPage() {
     e.preventDefault()
     clearError()
 
-    if (!form.firstName.trim() || !form.lastName.trim()) { setError('first and last name are required.'); return }
+    if (!form.firstName.trim() || !form.lastName.trim() || form.firstName.trim().length < 2 || form.lastName.trim().length < 2) { setError('first and last name must be at least 2 characters.'); return }
     if (!form.email.trim())    { setError('email is required.'); return }
     if (form.email.trim().toLowerCase() !== form.confirmEmail.trim().toLowerCase()) { setError('email addresses don\'t match.'); return }
     if (!form.phone.trim())    { setError('phone number is required.'); return }
