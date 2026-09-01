@@ -315,8 +315,8 @@ export default function MembersPage() {
   function matchesTab(m, tab) {
     if (tab === 'active')   return (m.status === 'ACTIVE' || m.status === 'OVERDUE') && !isFlex(m) && !m.cancelScheduled
     if (tab === 'flex')     return isFlex(m) && !m.cancelScheduled
-    if (tab === 'frozen')   return m.status === 'FROZEN' && !m.cancelScheduled
-    if (tab === 'canceled') return m.status === 'CANCELED' || m.cancelScheduled === true
+    if (tab === 'frozen')   return m.status === 'FROZEN'
+    if (tab === 'canceled') return m.status === 'CANCELED' || ((m.status === 'ACTIVE' || m.status === 'OVERDUE') && m.cancelScheduled === true)
     return true
   }
 

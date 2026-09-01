@@ -315,8 +315,10 @@ export default function DashboardPage() {
       const matchTab = activeTab === 'all'
         ? true
         : activeTab === 'canceled'
-          ? (m.status === 'CANCELED' || m.cancelScheduled === true)
-          : m.status.toLowerCase() === activeTab && !m.cancelScheduled
+          ? (m.status === 'CANCELED' || ((m.status === 'ACTIVE' || m.status === 'OVERDUE') && m.cancelScheduled === true))
+          : activeTab === 'frozen'
+            ? m.status === 'FROZEN'
+            : m.status.toLowerCase() === activeTab && !m.cancelScheduled
       const q = search.trim().toLowerCase()
       const matchSearch = !q ||
         `${m.firstName} ${m.lastName} ${m.email} ${m.phone ?? ''}`.toLowerCase().includes(q)

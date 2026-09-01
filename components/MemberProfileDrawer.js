@@ -874,10 +874,10 @@ function DrawerContent({ member, gymSlug, membershipBorder, onClose, onStatusCha
               )}
             </>
           )}
-          {/* Independent of status — reverse-cancel stays available for any
-              still-in-window canceled member, including FROZEN, not just
-              ACTIVE/OVERDUE. */}
-          {onReverseCancel && member.cancelScheduled && cancelWindowOpen(member) && (
+          {/* FROZEN members never get reverse-cancel — freezing and canceling
+              are handled as separate, non-overlapping states here. Only
+              ACTIVE/OVERDUE members with an open cancellation window qualify. */}
+          {onReverseCancel && member.status !== 'FROZEN' && member.cancelScheduled && cancelWindowOpen(member) && (
             <button
               onClick={onReverseCancel}
               disabled={updating}

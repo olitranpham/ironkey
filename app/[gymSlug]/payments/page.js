@@ -101,8 +101,10 @@ export default function PaymentsPage() {
     .filter(m => {
       const statuses = TAB_STATUSES[activeTab]
       const matchTab    = activeTab === 'canceled'
-        ? (m.status === 'CANCELED' || m.cancelScheduled === true)
-        : (!statuses || statuses.includes(m.status)) && !m.cancelScheduled
+        ? (m.status === 'CANCELED' || ((m.status === 'ACTIVE' || m.status === 'OVERDUE') && m.cancelScheduled === true))
+        : activeTab === 'frozen'
+          ? statuses.includes(m.status)
+          : (!statuses || statuses.includes(m.status)) && !m.cancelScheduled
       const q           = search.trim().toLowerCase()
       const matchSearch = !q || `${m.firstName} ${m.lastName} ${m.email}`.toLowerCase().includes(q)
       return matchTab && matchSearch
@@ -631,10 +633,10 @@ function PaymentPanel({ member, gymSlug, onClose, onAction, onSaveField, actionL
               resume membership
             </button>
           )}
-          {/* Independent of status — reverse-cancel stays available for any
-              still-in-window canceled member, including FROZEN, not just
-              ACTIVE/OVERDUE. */}
-          {member.cancelScheduled && cancelWindowOpen(member) && (
+          {/* FROZEN members never get reverse-cancel — freezing and canceling
+              are handled as separate, non-overlapping states here. Only
+              ACTIVE/OVERDUE members with an open cancellation window qualify. */}
+          {member.status !== 'FROZEN' && member.cancelScheduled && cancelWindowOpen(member) && (
             <button
               onClick={() => onAction('reverse-cancel', member)}
               disabled={actionLoading}
