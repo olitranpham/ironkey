@@ -354,6 +354,7 @@ export function GuestProfilePanel({ profile, passTypeBorder, onClose, onSaveCode
                     <th className="px-3 py-2 text-[10px] font-semibold text-neutral-500 tracking-wider">type</th>
                     <th className="px-3 py-2 text-[10px] font-semibold text-neutral-500 tracking-wider">left</th>
                     <th className="px-3 py-2 text-[10px] font-semibold text-neutral-500 tracking-wider">purchased</th>
+                    <th className="px-3 py-2 text-[10px] font-semibold text-neutral-500 tracking-wider">student id</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-neutral-800">
@@ -392,6 +393,19 @@ export function GuestProfilePanel({ profile, passTypeBorder, onClose, onSaveCode
                         )}
                       </td>
                       <td className="px-3 py-2.5 text-neutral-500 whitespace-nowrap">{fmtDate(p.usedAt)}</td>
+                      <td className="px-3 py-2.5">
+                        {p.studentIdImage ? (
+                          <a href={p.studentIdImage} target="_blank" rel="noopener noreferrer">
+                            <img
+                              src={p.studentIdImage}
+                              alt="student id"
+                              className="w-8 h-8 rounded object-cover border border-neutral-700 hover:border-neutral-500 transition-colors"
+                            />
+                          </a>
+                        ) : (
+                          <span className="text-neutral-700">—</span>
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>

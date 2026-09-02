@@ -258,12 +258,18 @@ export default function GuestPage() {
 
   // Shared
   const [selectedPriceId, setSelectedPriceId] = useState('')
+  const [studentIdFile,   setStudentIdFile]   = useState(null)
   const [lookupEmail,     setLookupEmail]      = useState('')
   const [lookupResult,    setLookupResult]     = useState(null)   // { profile, hasSignedWaiver, passesLeft, packs }
   const [returningName,   setReturningName]    = useState('')
   const [checkinResult,   setCheckinResult]    = useState(null)
   const [flexMember,      setFlexMember]       = useState(null)   // { id, firstName, lastName, email, accessCode }
   const [flexResult,      setFlexResult]       = useState(null)   // { checkInsUsed, checkInsRemaining }
+
+  // "Student Pass" is identified purely by name — no dedicated metadata tag
+  // exists (same loose-match convention used elsewhere for guest pass types).
+  const selectedPlan     = plans.find(p => p.priceId === selectedPriceId)
+  const requiresStudentId = Boolean(selectedPlan?.name?.toLowerCase().includes('student'))
 
   useEffect(() => {
     document.title = 'guest pass registration'
@@ -365,8 +371,9 @@ export default function GuestPage() {
     if (!form.emergencyRelationship.trim()) { setError('emergency contact relationship is required.'); return }
     if (!form.waiver)          { setError('you must agree to the liability waiver.'); return }
     if (!selectedPriceId)      { setError('please select a pass type.'); return }
+    if (requiresStudentId && !studentIdFile) { setError('a student ID photo is required for this pass type.'); return }
 
-    const plan = plans.find(p => p.priceId === selectedPriceId)
+    const plan = selectedPlan
     console.log('[guest/page] new guest checkout — selectedPriceId:', selectedPriceId, '| matched plan:', JSON.stringify(plan), '| sending passType:', plan?.passType ?? 'SINGLE')
 
     // Guardian is the point of contact for a minor's guest pass — their
@@ -376,6 +383,20 @@ export default function GuestPage() {
 
     setSubmitting(true)
     try {
+      // Upload the student ID before checkout — mirrors the join flow
+      // exactly, reusing the same staging endpoint/table so payment can
+      // still fail/abandon without a file ever landing on a permanent record.
+      let studentIdUploadId = ''
+      if (requiresStudentId && studentIdFile) {
+        const fd = new FormData()
+        fd.append('file',  studentIdFile)
+        fd.append('email', accountEmail.toLowerCase())
+        const uploadRes  = await fetch(`/api/${gymSlug}/join/student-id`, { method: 'POST', body: fd })
+        const uploadJson = await uploadRes.json()
+        if (!uploadRes.ok) throw new Error(uploadJson.error ?? 'failed to upload student ID')
+        studentIdUploadId = uploadJson.uploadId
+      }
+
       const res = await fetch(`/api/${gymSlug}/guest/checkout`, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -403,6 +424,7 @@ export default function GuestPage() {
           guardianEmail:         isMinor ? accountEmail : '',
           guardianPhone:         isMinor ? accountPhone : '',
           guardianRelationship:  isMinor ? form.guardianRelationship.trim() : '',
+          studentIdUploadId,
         }),
       })
       const json = await res.json()
@@ -420,10 +442,22 @@ export default function GuestPage() {
     clearError()
     if (!returningName.trim()) { setError('please enter your name.'); return }
     if (!selectedPriceId)      { setError('please select a pass type.'); return }
-    const plan = plans.find(p => p.priceId === selectedPriceId)
+    if (requiresStudentId && !studentIdFile) { setError('a student ID photo is required for this pass type.'); return }
+    const plan = selectedPlan
     console.log('[guest/page] returning guest checkout — selectedPriceId:', selectedPriceId, '| matched plan:', JSON.stringify(plan), '| sending passType:', plan?.passType ?? 'SINGLE')
     setSubmitting(true)
     try {
+      let studentIdUploadId = ''
+      if (requiresStudentId && studentIdFile) {
+        const fd = new FormData()
+        fd.append('file',  studentIdFile)
+        fd.append('email', lookupEmail.trim().toLowerCase())
+        const uploadRes  = await fetch(`/api/${gymSlug}/join/student-id`, { method: 'POST', body: fd })
+        const uploadJson = await uploadRes.json()
+        if (!uploadRes.ok) throw new Error(uploadJson.error ?? 'failed to upload student ID')
+        studentIdUploadId = uploadJson.uploadId
+      }
+
       const res = await fetch(`/api/${gymSlug}/guest/checkout`, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -434,6 +468,7 @@ export default function GuestPage() {
           name:       returningName.trim(),
           email:      lookupEmail.trim(),
           isNewGuest: false,
+          studentIdUploadId,
         }),
       })
       const json = await res.json()
@@ -803,6 +838,27 @@ export default function GuestPage() {
               />
             </Field>
 
+            {requiresStudentId && (
+              <Field label="upload student ID" required>
+                <div className="flex flex-col gap-2">
+                  <label className="flex items-center justify-center gap-2 w-full border border-dashed border-neutral-600 rounded-lg px-3 py-4 cursor-pointer hover:border-neutral-400 transition-colors">
+                    <svg className="w-4 h-4 text-neutral-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+                    </svg>
+                    <span className="text-xs text-neutral-400">
+                      {studentIdFile ? studentIdFile.name : 'choose photo or PDF'}
+                    </span>
+                    <input
+                      type="file"
+                      accept="image/*,.pdf"
+                      className="sr-only"
+                      onChange={e => setStudentIdFile(e.target.files?.[0] ?? null)}
+                    />
+                  </label>
+                </div>
+              </Field>
+            )}
+
             <SectionDivider label="terms" />
 
             {/* Waiver */}
@@ -860,7 +916,8 @@ export default function GuestPage() {
               type="submit"
               disabled={submitting || plans.length === 0
                 || (!!form.confirmEmail && form.email.trim().toLowerCase() !== form.confirmEmail.trim().toLowerCase())
-                || (isMinor && !!form.guardianConfirmEmail && form.guardianEmail.trim().toLowerCase() !== form.guardianConfirmEmail.trim().toLowerCase())}
+                || (isMinor && !!form.guardianConfirmEmail && form.guardianEmail.trim().toLowerCase() !== form.guardianConfirmEmail.trim().toLowerCase())
+                || (requiresStudentId && !studentIdFile)}
               className={BUTTON_PRIMARY}
             >
               {submitting
@@ -949,6 +1006,27 @@ export default function GuestPage() {
               />
             </Field>
 
+            {requiresStudentId && (
+              <Field label="upload student ID" required>
+                <div className="flex flex-col gap-2">
+                  <label className="flex items-center justify-center gap-2 w-full border border-dashed border-neutral-600 rounded-lg px-3 py-4 cursor-pointer hover:border-neutral-400 transition-colors">
+                    <svg className="w-4 h-4 text-neutral-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+                    </svg>
+                    <span className="text-xs text-neutral-400">
+                      {studentIdFile ? studentIdFile.name : 'choose photo or PDF'}
+                    </span>
+                    <input
+                      type="file"
+                      accept="image/*,.pdf"
+                      className="sr-only"
+                      onChange={e => setStudentIdFile(e.target.files?.[0] ?? null)}
+                    />
+                  </label>
+                </div>
+              </Field>
+            )}
+
             {error && (
               <p className="text-xs text-rose-400 bg-rose-500/10 border border-rose-500/20 rounded-lg px-3 py-2">
                 {error}
@@ -957,7 +1035,7 @@ export default function GuestPage() {
 
             <button
               onClick={handleReturningCheckout}
-              disabled={submitting || plans.length === 0}
+              disabled={submitting || plans.length === 0 || (requiresStudentId && !studentIdFile)}
               className={BUTTON_PRIMARY}
             >
               {submitting

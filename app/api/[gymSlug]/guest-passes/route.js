@@ -157,6 +157,7 @@ export async function GET(request, { params }) {
         usedAt:         true,
         expiresAt:      true,
         createdAt:      true,
+        studentIdImage: true,
       },
     })
 
@@ -166,12 +167,13 @@ export async function GET(request, { params }) {
       const pid = pass.guestProfileId
       if (!passesByProfileId.has(pid)) passesByProfileId.set(pid, [])
       passesByProfileId.get(pid).push({
-        id:         pass.id,
-        passType:   pass.passType,
-        passesLeft: pass.passesLeft,
-        usedAt:     pass.usedAt,
-        expiresAt:  pass.expiresAt,
-        createdAt:  pass.createdAt,
+        id:             pass.id,
+        passType:       pass.passType,
+        passesLeft:     pass.passesLeft,
+        usedAt:         pass.usedAt,
+        expiresAt:      pass.expiresAt,
+        createdAt:      pass.createdAt,
+        studentIdImage: pass.studentIdImage,
       })
     }
 

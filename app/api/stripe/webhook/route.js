@@ -266,6 +266,28 @@ export async function POST(request) {
           const zapJson = await zapRes.json()
           savedPassesLeft = zapJson.pass?.passesLeft ?? savedPassesLeft
           console.log('[platform/webhook] guest-passes notified for', email, '| passType:', passType, '| savedPassesLeft:', savedPassesLeft)
+
+          // Student ID photo — mirrors the Member resolution logic above:
+          // look up the temp staging row by ID, copy its file data onto the
+          // permanent record (here, this specific GuestVisit rather than the
+          // globally-shared Guest), then delete the temp row.
+          if (meta.studentIdUploadId && zapJson.pass?.id) {
+            try {
+              const upload = await prisma.studentIdUpload.findUnique({
+                where: { id: meta.studentIdUploadId },
+              })
+              if (upload) {
+                await prisma.guestVisit.update({
+                  where: { id: zapJson.pass.id },
+                  data:  { studentIdImage: upload.fileData },
+                })
+                await prisma.studentIdUpload.delete({ where: { id: upload.id } })
+                console.log('[platform/webhook] guest student ID image retrieved and upload record deleted:', meta.studentIdUploadId)
+              }
+            } catch (err) {
+              console.error('[platform/webhook] failed to retrieve guest student ID upload:', err.message)
+            }
+          }
         }
       } catch (e) {
         console.error('[platform/webhook] guest-passes notify error:', e.message)

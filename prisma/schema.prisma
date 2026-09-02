@@ -202,6 +202,12 @@ model GuestVisit {
   passType   PassType  @default(SINGLE)
   passesLeft Int?
 
+  // Student ID photo — base64 data URL, required for "Student Pass" type
+  // purchases. Scoped here (not on Guest) since Guest is shared globally
+  // across gyms by email, but a photo proves student status for one
+  // specific pass purchase at one specific gym.
+  studentIdImage String?
+
   usedAt    DateTime?
   expiresAt DateTime
 

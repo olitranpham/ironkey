@@ -23,7 +23,7 @@ export async function POST(request, { params }) {
       firstName, lastName, email, phone, dob,
       address, address1, address2, city, state, zip,
       emergencyName, emergencyPhone, emergencyRelationship,
-      isNewGuest,
+      isNewGuest, studentIdUploadId,
       isMinor, guardianName, guardianEmail, guardianPhone, guardianRelationship,
     } = body
 
@@ -80,6 +80,7 @@ export async function POST(request, { params }) {
         passType:              passType              ?? 'SINGLE',
         passesLeft:            String(passesLeft     ?? 1),
         isNewGuest:            isNewGuest ? 'yes' : 'no',
+        studentIdUploadId:     studentIdUploadId     ?? '',
         isMinor:               isMinor ? 'true' : '',
         guardianName:          guardianName          ?? '',
         guardianEmail:         guardianEmail         ?? '',
