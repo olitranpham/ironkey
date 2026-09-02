@@ -287,7 +287,15 @@ export default function GuestPage() {
         const p = plans ?? []
         console.log('[guest/page] plans from API:', JSON.stringify(p))
         setPlans(p)
-        if (p.length) setSelectedPriceId(p[0].priceId)
+        // Default to "Single Pass" specifically — not just any passType
+        // 'SINGLE' plan, since "Student Pass" also collapses to passType
+        // 'SINGLE' (its 1-pass count) and would otherwise be picked first.
+        // Falls back to the first passType-'SINGLE' match, then the first
+        // plan overall, so something is always pre-selected.
+        const defaultPlan = p.find(pl => pl.name?.toLowerCase() === 'single pass')
+          ?? p.find(pl => pl.passType === 'SINGLE')
+          ?? p[0]
+        if (defaultPlan) setSelectedPriceId(defaultPlan.priceId)
       })
       .catch(() => {})
       .finally(() => setPageLoading(false))
