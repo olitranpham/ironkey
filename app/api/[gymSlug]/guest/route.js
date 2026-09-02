@@ -57,7 +57,10 @@ export async function GET(request, { params }) {
       plans = prices.data
         .filter(p => !p.recurring && p.unit_amount != null && p.product?.active)   // one-time only, not subscriptions, product not disabled
         .filter(p => {
-          if (gymSlug === 'oasis-boston') return p.product?.id in OASIS_PRODUCT_MAP
+          if (gymSlug === 'oasis-boston') {
+            return (p.product?.id in OASIS_PRODUCT_MAP)
+              || p.product?.metadata?.ironkey_kind === 'guest_pass'
+          }
           const name = p.nickname ?? p.product?.name ?? ''
           // Products created via the staff "products" page are tagged with
           // this metadata, so they always qualify regardless of name.

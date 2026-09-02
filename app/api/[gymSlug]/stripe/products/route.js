@@ -10,11 +10,14 @@ function isLegacyGuestPassName(name = '') {
   return GUEST_PASS_KEYWORDS.some(kw => n.includes(kw))
 }
 
-// Oasis Boston's real guest-pass products don't follow the keyword naming
-// convention above ("Value Pack", "Deluxe Pack" don't contain any of those
-// substrings) — mirrors the OASIS_PRODUCT_MAP hardcoded in the live guest
-// checkout route (/api/[gymSlug]/guest) so this admin page shows exactly the
-// same three products actually sold to the public.
+// Oasis Boston's three original guest-pass products predate the
+// ironkey_kind metadata tag and don't follow the keyword naming convention
+// above ("Value Pack", "Deluxe Pack" don't contain any of those substrings),
+// so they're allowlisted here by ID — mirrors the same OASIS_PRODUCT_MAP
+// fallback in the live guest checkout route (/api/[gymSlug]/guest). Any
+// newer oasis-boston guest pass (including these three) is also recognized
+// there via ironkey_kind === 'guest_pass', same as every other gym — this ID
+// list only exists to keep the three legacy products working.
 const OASIS_GUEST_PASS_PRODUCT_IDS = new Set([
   'prod_UdG5qNSMCuYDhN', // Single Pass
   'prod_UdG5tLURJQAEog', // Value Pack
