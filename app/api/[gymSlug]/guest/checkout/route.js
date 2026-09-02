@@ -51,6 +51,28 @@ export async function POST(request, { params }) {
     // Accept pre-built name (returning guest) or construct from first/last
     const guestName = body.name?.trim() || [firstName, lastName].filter(Boolean).join(' ').trim() || email.trim()
 
+    // Oasis's student pass is weekend-only. Checked server-side against the
+    // Price's own product (never the client-supplied passType — "Student
+    // Pass" collapses to the same passType 'SINGLE' as the regular single
+    // pass, so it isn't a safe signal here) so this can't be bypassed by
+    // hitting the API directly. Weekday is evaluated in the gym's own local
+    // time (America/New_York), not server or UTC time, so a Friday night
+    // in Boston that's already Saturday UTC isn't mistaken for a weekend.
+    if (gymSlug === 'oasis-boston') {
+      try {
+        const priceObj    = await stripe.prices.retrieve(priceId, { expand: ['product'] })
+        const productName = (priceObj.product?.name ?? '').toLowerCase()
+        if (productName.includes('student')) {
+          const nyWeekday = new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', weekday: 'short' }).format(new Date())
+          if (nyWeekday !== 'Sat' && nyWeekday !== 'Sun') {
+            return NextResponse.json({ error: 'student pass is only available on weekends.' }, { status: 400 })
+          }
+        }
+      } catch (err) {
+        console.error('[guest/checkout] failed to check student-pass weekend restriction:', err.message)
+      }
+    }
+
     console.log('[guest/checkout] creating session — priceId:', priceId, '| passType from body:', passType, '| passesLeft:', passesLeft, '| metadata.passType will be:', passType ?? 'SINGLE')
 
     const session = await stripe.checkout.sessions.create({

@@ -277,6 +277,14 @@ export default function GuestPage() {
   const selectedPlan     = plans.find(p => p.priceId === selectedPriceId)
   const requiresStudentId = Boolean(selectedPlan?.name?.toLowerCase().includes('student'))
 
+  // Oasis's student pass is weekend-only — checked in the client's own local
+  // time (this page is normally used in-person at the gym, so that's the
+  // relevant clock here; the server enforces the authoritative check in the
+  // gym's own timezone regardless of who's actually looking at the form).
+  const isOasisStudentPass = gymSlug === 'oasis-boston' && requiresStudentId
+  const isWeekendNow       = [0, 6].includes(new Date().getDay())
+  const studentPassBlockedByDay = isOasisStudentPass && !isWeekendNow
+
   useEffect(() => {
     document.title = 'guest pass registration'
     fetch(`/api/${gymSlug}/guest`)
@@ -386,6 +394,7 @@ export default function GuestPage() {
     if (!form.waiver)          { setError('you must agree to the liability waiver.'); return }
     if (!selectedPriceId)      { setError('please select a pass type.'); return }
     if (requiresStudentId && !studentIdFile) { setError('a student ID photo is required for this pass type.'); return }
+    if (studentPassBlockedByDay) { setError('student pass is only available on weekends.'); return }
 
     const plan = selectedPlan
     console.log('[guest/page] new guest checkout — selectedPriceId:', selectedPriceId, '| matched plan:', JSON.stringify(plan), '| sending passType:', plan?.passType ?? 'SINGLE')
@@ -457,6 +466,7 @@ export default function GuestPage() {
     if (!returningName.trim()) { setError('please enter your name.'); return }
     if (!selectedPriceId)      { setError('please select a pass type.'); return }
     if (requiresStudentId && !studentIdFile) { setError('a student ID photo is required for this pass type.'); return }
+    if (studentPassBlockedByDay) { setError('student pass is only available on weekends.'); return }
     const plan = selectedPlan
     console.log('[guest/page] returning guest checkout — selectedPriceId:', selectedPriceId, '| matched plan:', JSON.stringify(plan), '| sending passType:', plan?.passType ?? 'SINGLE')
     setSubmitting(true)
@@ -850,6 +860,9 @@ export default function GuestPage() {
                 value={selectedPriceId}
                 onChange={setSelectedPriceId}
               />
+              {studentPassBlockedByDay && (
+                <p className="text-xs text-rose-400 mt-1">student pass is only available on weekends.</p>
+              )}
             </Field>
 
             {requiresStudentId && (
@@ -931,7 +944,8 @@ export default function GuestPage() {
               disabled={submitting || plans.length === 0
                 || (!!form.confirmEmail && form.email.trim().toLowerCase() !== form.confirmEmail.trim().toLowerCase())
                 || (isMinor && !!form.guardianConfirmEmail && form.guardianEmail.trim().toLowerCase() !== form.guardianConfirmEmail.trim().toLowerCase())
-                || (requiresStudentId && !studentIdFile)}
+                || (requiresStudentId && !studentIdFile)
+                || studentPassBlockedByDay}
               className={BUTTON_PRIMARY}
             >
               {submitting
@@ -1018,6 +1032,9 @@ export default function GuestPage() {
                 value={selectedPriceId}
                 onChange={setSelectedPriceId}
               />
+              {studentPassBlockedByDay && (
+                <p className="text-xs text-rose-400 mt-1">student pass is only available on weekends.</p>
+              )}
             </Field>
 
             {requiresStudentId && (
@@ -1049,7 +1066,7 @@ export default function GuestPage() {
 
             <button
               onClick={handleReturningCheckout}
-              disabled={submitting || plans.length === 0 || (requiresStudentId && !studentIdFile)}
+              disabled={submitting || plans.length === 0 || (requiresStudentId && !studentIdFile) || studentPassBlockedByDay}
               className={BUTTON_PRIMARY}
             >
               {submitting
