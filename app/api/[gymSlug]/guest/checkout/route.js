@@ -36,6 +36,25 @@ export async function POST(request, { params }) {
     if ((firstName?.trim() && firstName.trim().length < 2) || (lastName?.trim() && lastName.trim().length < 2)) {
       return NextResponse.json({ error: 'firstName and lastName must be at least 2 characters' }, { status: 400 })
     }
+    // Same pattern — address/city/emergencyRelationship/zip are only sent by
+    // the new-guest form (a returning guest's checkout omits them entirely),
+    // so only validate when actually supplied.
+    if ((address1?.trim() && address1.trim().length < 2) || (city?.trim() && city.trim().length < 2)) {
+      return NextResponse.json({ error: 'address1 and city must be at least 2 characters' }, { status: 400 })
+    }
+    if (emergencyRelationship?.trim() && emergencyRelationship.trim().length < 2) {
+      return NextResponse.json({ error: 'emergencyRelationship must be at least 2 characters' }, { status: 400 })
+    }
+    if (zip?.trim() && !/^\d{5}$/.test(zip.trim())) {
+      return NextResponse.json({ error: 'zip must be exactly 5 digits' }, { status: 400 })
+    }
+    // Unlike the length checks above, state has no partial-validity to check
+    // — it's either present or missing — so this is gated on isNewGuest
+    // specifically (the returning-guest flow never sends state at all and
+    // shouldn't start being rejected for it).
+    if (isNewGuest && !state?.trim()) {
+      return NextResponse.json({ error: 'state is required' }, { status: 400 })
+    }
 
     const gym = await prisma.gym.findUnique({
       where:  { slug: gymSlug },

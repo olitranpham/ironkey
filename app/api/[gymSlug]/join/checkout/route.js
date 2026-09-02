@@ -37,6 +37,21 @@ export async function POST(request, { params }) {
     if (firstName.trim().length < 2 || lastName.trim().length < 2) {
       return NextResponse.json({ error: 'firstName and lastName must be at least 2 characters' }, { status: 400 })
     }
+    if (!address1?.trim() || address1.trim().length < 2) {
+      return NextResponse.json({ error: 'address1 must be at least 2 characters' }, { status: 400 })
+    }
+    if (!city?.trim() || city.trim().length < 2) {
+      return NextResponse.json({ error: 'city must be at least 2 characters' }, { status: 400 })
+    }
+    if (!state?.trim()) {
+      return NextResponse.json({ error: 'state is required' }, { status: 400 })
+    }
+    if (!emergencyRelationship?.trim() || emergencyRelationship.trim().length < 2) {
+      return NextResponse.json({ error: 'emergencyRelationship must be at least 2 characters' }, { status: 400 })
+    }
+    if (!/^\d{5}$/.test(zip ?? '')) {
+      return NextResponse.json({ error: 'zip must be exactly 5 digits' }, { status: 400 })
+    }
 
     const gym = await prisma.gym.findUnique({
       where:  { slug: gymSlug },

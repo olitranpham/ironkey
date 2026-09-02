@@ -12,6 +12,17 @@ function maskPhone(value) {
   return `(${d.slice(0, 3)}) ${d.slice(3, 6)}-${d.slice(6)}`
 }
 
+// 50 states + DC + US territories, 2-letter USPS abbreviations used as both
+// value and display.
+const US_STATES = [
+  'AL', 'AK', 'AZ', 'AR', 'CA', 'CO', 'CT', 'DE', 'FL', 'GA',
+  'HI', 'ID', 'IL', 'IN', 'IA', 'KS', 'KY', 'LA', 'ME', 'MD',
+  'MA', 'MI', 'MN', 'MS', 'MO', 'MT', 'NE', 'NV', 'NH', 'NJ',
+  'NM', 'NY', 'NC', 'ND', 'OH', 'OK', 'OR', 'PA', 'RI', 'SC',
+  'SD', 'TN', 'TX', 'UT', 'VT', 'VA', 'WA', 'WV', 'WI', 'WY',
+  'DC', 'PR', 'GU', 'VI', 'AS', 'MP',
+]
+
 // ── Waiver text (Triumph Barbell membership T&C) ──────────────────────────────
 
 const WAIVER_SECTIONS = [
@@ -385,12 +396,12 @@ export default function GuestPage() {
       if (!form.guardianPhone.trim()) { setError("guardian's phone number is required."); return }
       if (!form.guardianRelationship.trim()) { setError('relationship to the guest is required.'); return }
     }
-    if (!form.address1.trim()) { setError('address is required.'); return }
-    if (!form.city.trim())     { setError('city is required.'); return }
+    if (!form.address1.trim() || form.address1.trim().length < 2) { setError('address must be at least 2 characters.'); return }
+    if (!form.city.trim() || form.city.trim().length < 2)         { setError('city must be at least 2 characters.'); return }
     if (!form.state.trim())    { setError('state is required.'); return }
-    if (!form.zip.trim())      { setError('zip code is required.'); return }
+    if (!/^\d{5}$/.test(form.zip)) { setError('zip code must be 5 digits.'); return }
     if (!form.emergencyName.trim() || !form.emergencyPhone.trim()) { setError('emergency contact name and phone are required.'); return }
-    if (!form.emergencyRelationship.trim()) { setError('emergency contact relationship is required.'); return }
+    if (!form.emergencyRelationship.trim() || form.emergencyRelationship.trim().length < 2) { setError('emergency contact relationship must be at least 2 characters.'); return }
     if (!form.waiver)          { setError('you must agree to the liability waiver.'); return }
     if (!selectedPriceId)      { setError('please select a pass type.'); return }
     if (requiresStudentId && !studentIdFile) { setError('a student ID photo is required for this pass type.'); return }
@@ -811,17 +822,29 @@ export default function GuestPage() {
                 />
               </Field>
               <Field label="state" required>
-                <input
-                  type="text" placeholder="MA"
-                  value={form.state} onChange={e => setField('state', e.target.value)}
-                  className={INPUT} required
-                />
+                <div className="relative">
+                  <select
+                    value={form.state} onChange={e => setField('state', e.target.value)}
+                    className={SELECT} required
+                  >
+                    <option value="">select state</option>
+                    {US_STATES.map(s => (
+                      <option key={s} value={s}>{s}</option>
+                    ))}
+                  </select>
+                  <div className="pointer-events-none absolute inset-y-0 right-3 flex items-center">
+                    <svg className="w-4 h-4 text-neutral-500" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.17l3.71-3.94a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                </div>
               </Field>
             </div>
             <Field label="zip code" required>
               <input
                 type="text" placeholder="02101"
-                value={form.zip} onChange={e => setField('zip', e.target.value)}
+                value={form.zip} onChange={e => setField('zip', e.target.value.replace(/\D/g, '').slice(0, 5))}
+                maxLength={5}
                 className={INPUT} required
               />
             </Field>
