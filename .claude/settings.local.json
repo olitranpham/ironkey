@@ -82,7 +82,13 @@
       "Bash(echo \"exit: $?\")",
       "Bash(claude mcp *)",
       "Bash(railway --version)",
-      "Bash(echo \"BUILD EXIT CODE: $?\")"
+      "Bash(echo \"BUILD EXIT CODE: $?\")",
+      "Bash(railway status *)",
+      "Bash(railway list *)",
+      "Bash(railway setup *)",
+      "Bash(railway link *)",
+      "Bash(cd *)",
+      "Bash(railway logs *)"
     ]
   }
 }

@@ -805,6 +805,9 @@ export default function GuestPage() {
                 value={form.address1} onChange={e => setField('address1', e.target.value)}
                 className={INPUT} required
               />
+              {form.address1.trim() && form.address1.trim().length < 2 && (
+                <p className="text-xs text-rose-400 mt-1">must be at least 2 characters</p>
+              )}
             </Field>
             <Field label="address line 2">
               <input
@@ -820,6 +823,9 @@ export default function GuestPage() {
                   value={form.city} onChange={e => setField('city', e.target.value)}
                   className={INPUT} required
                 />
+                {form.city.trim() && form.city.trim().length < 2 && (
+                  <p className="text-xs text-rose-400 mt-1">must be at least 2 characters</p>
+                )}
               </Field>
               <Field label="state" required>
                 <div className="relative">
@@ -872,6 +878,9 @@ export default function GuestPage() {
                 value={form.emergencyRelationship} onChange={e => setField('emergencyRelationship', e.target.value)}
                 className={INPUT} required
               />
+              {form.emergencyRelationship.trim() && form.emergencyRelationship.trim().length < 2 && (
+                <p className="text-xs text-rose-400 mt-1">must be at least 2 characters</p>
+              )}
             </Field>
 
             <SectionDivider label="pass type" />
