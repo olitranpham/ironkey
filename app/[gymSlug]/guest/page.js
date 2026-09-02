@@ -208,10 +208,16 @@ function PlanSelector({ plans, value, onChange }) {
   if (!plans.length) {
     return <p className="text-xs text-neutral-600 px-1">No plans available — contact the gym directly.</p>
   }
+  // Student passes sort to the end, regardless of gym or where Stripe's price
+  // list happens to place them — everything else keeps its relative order.
+  const sortedPlans = [
+    ...plans.filter(p => !p.name.toLowerCase().includes('student')),
+    ...plans.filter(p => p.name.toLowerCase().includes('student')),
+  ]
   return (
     <div className="relative">
       <select value={value} onChange={e => onChange(e.target.value)} className={SELECT}>
-        {plans.map(p => (
+        {sortedPlans.map(p => (
           <option key={p.priceId} value={p.priceId}>
             {p.name} — {fmt(p.amount)}
           </option>

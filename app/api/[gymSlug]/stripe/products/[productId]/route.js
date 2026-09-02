@@ -54,8 +54,27 @@ export async function PATCH(request, { params }) {
 
     const stripe = new Stripe(gym.stripeSecretKey, { apiVersion: '2024-06-20' })
 
+    // A price can't be archived while it's still its product's default_price
+    // — Stripe rejects that outright. Products with a single price (guest
+    // passes, always 1:1) always hit this, since their one price is always
+    // the default. Products with several prices (e.g. membership PT tiers)
+    // don't have this problem in the common case, so their existing
+    // price-level archive/toggle behavior is left untouched — archiving the
+    // whole product there would wrongly take out every sibling price too.
+    async function hasSingleActivePrice() {
+      const activePrices = await stripe.prices.list({ product: productId, active: true, limit: 2 })
+      return activePrices.data.length <= 1
+    }
+
     // ── Price-level active toggle ─────────────────────────────────────────
     if (typeof body.active === 'boolean' && body.priceId) {
+      if (await hasSingleActivePrice()) {
+        const singlePriceProduct = await stripe.products.update(productId, {
+          active:   body.active,
+          metadata: { ironkey_toggle_disabled: body.active ? '' : 'true' },
+        })
+        return NextResponse.json({ product: { id: singlePriceProduct.id, priceId: body.priceId, active: singlePriceProduct.active } })
+      }
       const price = await stripe.prices.update(body.priceId, {
         active:   body.active,
         metadata: { ironkey_toggle_disabled: body.active ? '' : 'true' },
@@ -103,7 +122,14 @@ export async function PATCH(request, { params }) {
       await stripe.prices.update(body.priceUpdate.oldPriceId, { active: false, metadata: { ironkey_toggle_disabled: '' } })
     }
     if (body.archivePriceId) {
-      await stripe.prices.update(body.archivePriceId, { active: false, metadata: { ironkey_toggle_disabled: '' } })
+      if (await hasSingleActivePrice()) {
+        // No toggle-disabled tag — the GET route treats an inactive product
+        // with no tag as gone for good, same convention as an archived price
+        // with no tag today.
+        await stripe.products.update(productId, { active: false, metadata: { ironkey_toggle_disabled: '' } })
+      } else {
+        await stripe.prices.update(body.archivePriceId, { active: false, metadata: { ironkey_toggle_disabled: '' } })
+      }
     }
 
     return NextResponse.json({

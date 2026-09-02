@@ -131,12 +131,22 @@ export async function GET(request, { params }) {
           || (gymSlug === 'oasis-boston' && OASIS_GUEST_PASS_PRODUCT_IDS.has(product.id))
         if (!isGuestPass) continue  // one-time product managed elsewhere (e.g. concessions) — not shown here
 
+        // Single-price guest-pass products are disabled/deleted at the
+        // PRODUCT level (see the PATCH route) rather than on the price
+        // itself, since their one price is always the product's
+        // default_price and Stripe won't let that be archived directly. The
+        // price's own `active` flag is left untouched by that path, so an
+        // inactive product with no toggle-disabled tag means "deleted for
+        // good" — exclude it entirely, same convention as an archived price
+        // with no tag.
+        if (!product.active && product.metadata?.ironkey_toggle_disabled !== 'true') continue
+
         guestPasses.push({
           id:         product.id,
           priceId:    price.id,
           name:       product.name,
           priceLabel: price.nickname ?? null,
-          active:     price.active,
+          active:     product.active && price.active,
           amount:     price.unit_amount / 100,
           passes:     product.metadata?.passes ? parseInt(product.metadata.passes, 10) : inferPasses(product.name),
         })
