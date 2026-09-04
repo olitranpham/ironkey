@@ -115,12 +115,21 @@ export async function GET(request, { params }) {
       if (!product || typeof product === 'string') continue  // expand failed — nothing to show
 
       if (price.recurring) {
+        // Single-price membership products are disabled/deleted at the
+        // PRODUCT level too (see the PATCH route), same as guest passes,
+        // when they have only one active price — that price is always the
+        // product's default_price and Stripe won't let it be archived
+        // directly. An inactive product with no toggle-disabled tag means
+        // "deleted for good" — exclude it entirely, same convention as the
+        // guest-pass branch below.
+        if (!product.active && product.metadata?.ironkey_toggle_disabled !== 'true') continue
+
         membershipPlans.push({
           id:          product.id,
           priceId:     price.id,
           name:        product.name,
           priceLabel:  price.nickname ?? null,
-          active:      price.active,
+          active:      product.active && price.active,
           amount:      price.unit_amount / 100,
           interval:    intervalLabel(price),
           intervalKey: `${price.recurring.interval}:${price.recurring.interval_count ?? 1}`,
