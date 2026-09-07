@@ -683,7 +683,7 @@ export default function ProductsPage() {
         <h1 className="text-sm font-semibold text-white">products</h1>
       </header>
 
-      <main className="flex-1 overflow-y-auto p-5 flex flex-col gap-5">
+      <main className="flex-1 overflow-y-auto p-5 flex flex-col gap-5 md:min-h-0">
         {err ? (
           <div className="flex flex-col items-center justify-center h-48 gap-3">
             <p className="text-sm text-rose-400">{err}</p>
