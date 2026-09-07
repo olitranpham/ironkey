@@ -770,7 +770,7 @@ export default function ProductsPage() {
                   add guest pass type
                 </button>
               </div>
-              <div className="max-h-72 overflow-y-auto">
+              <div className="max-h-[32rem] overflow-y-auto">
                 <table className="w-full">
                   <tbody>
                     {loading ? (
