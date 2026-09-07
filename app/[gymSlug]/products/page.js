@@ -39,6 +39,17 @@ function token() {
   return localStorage.getItem('ik_token')
 }
 
+function fmtCouponDate(iso) {
+  if (!iso) return '—'
+  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+}
+
+function fmtCouponDuration(c) {
+  if (c.duration === 'repeating') return `${c.durationInMonths} month${c.durationInMonths === 1 ? '' : 's'}`
+  if (c.duration === 'forever')   return 'forever'
+  return 'once'
+}
+
 // ── Toggle ────────────────────────────────────────────────────────────────────
 
 function Toggle({ on, onClick, disabled }) {
@@ -228,6 +239,169 @@ function AddGuestPassModal({ initial, onSave, onClose, saving }) {
   )
 }
 
+// ── Add Coupon Modal ──────────────────────────────────────────────────────────
+
+function AddCouponModal({ activeProducts, onSave, onClose, saving }) {
+  const [code,             setCode]             = useState('')
+  const [discountType,     setDiscountType]     = useState('percent')
+  const [value,            setValue]            = useState('')
+  const [duration,         setDuration]         = useState('once')
+  const [durationInMonths, setDurationInMonths] = useState('')
+  const [restrictedIds,    setRestrictedIds]    = useState([])
+  const [expiresAt,        setExpiresAt]        = useState('')
+  const [maxRedemptions,   setMaxRedemptions]   = useState('')
+  const [err,              setErr]              = useState(null)
+
+  function toggleProduct(id) {
+    setRestrictedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
+  }
+
+  function save() {
+    if (!code.trim())                 { setErr('code is required'); return }
+    if (!value || Number(value) <= 0) { setErr('enter a valid value'); return }
+    if (discountType === 'percent' && Number(value) > 100) { setErr('percent cannot exceed 100'); return }
+    if (duration === 'repeating' && (!durationInMonths || Number(durationInMonths) < 1)) { setErr('enter a valid number of months'); return }
+    setErr(null)
+    onSave({
+      code:                 code.trim(),
+      discountType,
+      // amount is sent in cents (API contract), converted from the dollar
+      // amount typed here — same convention as prices elsewhere on this page.
+      value:                discountType === 'amount' ? Math.round(Number(value) * 100) : Number(value),
+      duration,
+      durationInMonths:     duration === 'repeating' ? parseInt(durationInMonths, 10) : undefined,
+      restrictedProductIds: restrictedIds.length > 0 ? restrictedIds : undefined,
+      expiresAt:            expiresAt || undefined,
+      maxRedemptions:       maxRedemptions ? parseInt(maxRedemptions, 10) : undefined,
+    })
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/70" onClick={onClose} />
+      <div className="relative bg-[#1c1c1c] border border-neutral-800 rounded-xl w-full max-w-sm p-6 shadow-2xl flex flex-col gap-4 max-h-[85vh] overflow-y-auto">
+        <p className="text-sm font-semibold text-white">add coupon</p>
+
+        <div className="flex flex-col gap-1.5">
+          <label className="text-[11px] text-neutral-500">code</label>
+          <input
+            type="text" placeholder="e.g. SUMMER25"
+            value={code} onChange={e => setCode(e.target.value)}
+            className="bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-2 text-xs text-white placeholder-neutral-600 focus:outline-none focus:border-neutral-500"
+          />
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <label className="text-[11px] text-neutral-500">discount type</label>
+          <div className="flex gap-1.5">
+            {['percent', 'amount'].map(t => (
+              <button
+                key={t}
+                onClick={() => setDiscountType(t)}
+                className={`flex-1 py-2 rounded-lg text-xs font-medium transition-colors ${discountType === t ? 'bg-white/15 text-white' : 'bg-neutral-900 border border-neutral-700 text-neutral-500 hover:text-white'}`}
+              >
+                {t === 'percent' ? '% off' : '$ off'}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <label className="text-[11px] text-neutral-500">{discountType === 'percent' ? 'percent off' : 'amount off'}</label>
+          <div className="relative">
+            {discountType === 'amount' && (
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500 text-xs">$</span>
+            )}
+            <input
+              type="number" min="0" step={discountType === 'percent' ? '1' : '0.01'} max={discountType === 'percent' ? '100' : undefined}
+              placeholder={discountType === 'percent' ? '25' : '10.00'}
+              value={value} onChange={e => setValue(e.target.value)}
+              className={`w-full bg-neutral-900 border border-neutral-700 rounded-lg ${discountType === 'amount' ? 'pl-6' : 'pl-3'} pr-3 py-2 text-xs text-white placeholder-neutral-600 focus:outline-none focus:border-neutral-500`}
+            />
+            {discountType === 'percent' && (
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-500 text-xs">%</span>
+            )}
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <label className="text-[11px] text-neutral-500">duration</label>
+          <div className="flex gap-1.5">
+            {['once', 'repeating'].map(d => (
+              <button
+                key={d}
+                onClick={() => setDuration(d)}
+                className={`flex-1 py-2 rounded-lg text-xs font-medium transition-colors ${duration === d ? 'bg-white/15 text-white' : 'bg-neutral-900 border border-neutral-700 text-neutral-500 hover:text-white'}`}
+              >
+                {d === 'once' ? 'once' : 'repeating'}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {duration === 'repeating' && (
+          <div className="flex flex-col gap-1.5">
+            <label className="text-[11px] text-neutral-500">number of months</label>
+            <input
+              type="number" min="1" step="1" placeholder="3"
+              value={durationInMonths} onChange={e => setDurationInMonths(e.target.value)}
+              className="bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-2 text-xs text-white placeholder-neutral-600 focus:outline-none focus:border-neutral-500"
+            />
+          </div>
+        )}
+
+        {activeProducts.length > 0 && (
+          <div className="flex flex-col gap-1.5">
+            <label className="text-[11px] text-neutral-500">restrict to plans (optional — leave blank for all)</label>
+            <div className="max-h-32 overflow-y-auto flex flex-col gap-1 bg-neutral-900 border border-neutral-700 rounded-lg p-2">
+              {activeProducts.map(p => (
+                <label key={p.id} className="flex items-center gap-2 text-xs text-neutral-300 px-1 py-0.5 cursor-pointer hover:text-white">
+                  <input
+                    type="checkbox"
+                    checked={restrictedIds.includes(p.id)}
+                    onChange={() => toggleProduct(p.id)}
+                    className="accent-white"
+                  />
+                  {p.name}
+                </label>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="flex flex-col gap-1.5">
+          <label className="text-[11px] text-neutral-500">expiration date (optional)</label>
+          <input
+            type="date"
+            value={expiresAt} onChange={e => setExpiresAt(e.target.value)}
+            className="bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-neutral-500 [color-scheme:dark]"
+          />
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <label className="text-[11px] text-neutral-500">max redemptions (optional)</label>
+          <input
+            type="number" min="1" step="1" placeholder="unlimited"
+            value={maxRedemptions} onChange={e => setMaxRedemptions(e.target.value)}
+            className="bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-2 text-xs text-white placeholder-neutral-600 focus:outline-none focus:border-neutral-500"
+          />
+        </div>
+
+        {err && <p className="text-xs text-rose-400">{err}</p>}
+
+        <div className="flex gap-2 pt-1">
+          <button onClick={onClose} className="flex-1 py-2 rounded-lg text-xs font-medium text-neutral-400 border border-neutral-700 hover:text-white hover:border-neutral-600 transition-colors">
+            cancel
+          </button>
+          <button onClick={save} disabled={saving} className="flex-1 py-2 rounded-lg text-xs font-medium bg-white/10 text-white hover:bg-white/15 disabled:opacity-40 transition-colors">
+            {saving ? 'saving…' : 'add coupon'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Guest pass "number of passes" inline editor ──────────────────────────────
 
 function PassesEditor({ product, onSave }) {
@@ -278,6 +452,13 @@ export default function ProductsPage() {
   const [togglingId,      setTogglingId]       = useState(null)
   const [deletingId,      setDeletingId]       = useState(null)
 
+  const [coupons,         setCoupons]         = useState([])
+  const [couponsLoading,  setCouponsLoading]  = useState(true)
+  const [couponsErr,      setCouponsErr]      = useState(null)
+  const [addCouponOpen,   setAddCouponOpen]   = useState(false)
+  const [couponSaving,    setCouponSaving]    = useState(false)
+  const [deactivatingId,  setDeactivatingId]  = useState(null)
+
   const load = useCallback(async () => {
     setLoading(true); setErr(null)
     try {
@@ -294,6 +475,70 @@ export default function ProductsPage() {
   }, [gymSlug])
 
   useEffect(() => { load() }, [load])
+
+  const loadCoupons = useCallback(async () => {
+    setCouponsLoading(true); setCouponsErr(null)
+    try {
+      const res  = await fetch(`/api/${gymSlug}/stripe/coupons`, { headers: { Authorization: `Bearer ${token()}` } })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error ?? res.status)
+      setCoupons(json.coupons ?? [])
+    } catch (e) {
+      setCouponsErr(e.message)
+    } finally {
+      setCouponsLoading(false)
+    }
+  }, [gymSlug])
+
+  useEffect(() => { loadCoupons() }, [loadCoupons])
+
+  async function createCoupon(data) {
+    setCouponSaving(true)
+    try {
+      const res  = await fetch(`/api/${gymSlug}/stripe/coupons`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` },
+        body:    JSON.stringify(data),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error ?? res.status)
+      await loadCoupons()
+      setAddCouponOpen(false)
+    } catch (e) {
+      alert(e.message)
+    } finally {
+      setCouponSaving(false)
+    }
+  }
+
+  async function deactivateCoupon(promotionCodeId) {
+    if (!confirm('Deactivate this coupon? It will stop working immediately.')) return
+    setDeactivatingId(promotionCodeId)
+    try {
+      const res = await fetch(`/api/${gymSlug}/stripe/coupons/${promotionCodeId}`, {
+        method:  'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` },
+        body:    JSON.stringify({ active: false }),
+      })
+      if (!res.ok) throw new Error((await res.json()).error ?? res.status)
+      setCoupons(prev => prev.map(c => c.id === promotionCodeId ? { ...c, active: false } : c))
+    } catch (e) {
+      alert(e.message)
+    } finally {
+      setDeactivatingId(null)
+    }
+  }
+
+  // Restrictable plans for the coupon form — active membership plans + guest
+  // pass types, deduped by product id (a plan can have several price rows,
+  // e.g. PT tiers, but a coupon restriction is a per-product setting).
+  const activeProducts = (() => {
+    const map = new Map()
+    for (const p of [...membershipPlans, ...guestPasses]) {
+      if (p.active && !map.has(p.id)) map.set(p.id, { id: p.id, name: p.name })
+    }
+    return [...map.values()].sort((a, b) => a.name.localeCompare(b.name))
+  })()
 
   async function createProduct(data) {
     setSaving(true)
@@ -581,6 +826,73 @@ export default function ProductsPage() {
                 </table>
               </div>
             </div>
+
+            {/* ── Coupons ───────────────────────────────────────────────────── */}
+            <div className="bg-white/[0.03] border border-white/5 rounded-xl overflow-hidden">
+              <div className="px-5 py-4 border-b border-neutral-800 flex items-center justify-between">
+                <p className="text-sm font-semibold text-white">coupons</p>
+                <button
+                  onClick={() => setAddCouponOpen(true)}
+                  className="flex items-center gap-1.5 rounded-lg bg-white/5 px-2.5 py-1.5 text-xs text-neutral-400 hover:text-white hover:bg-white/10 transition-colors"
+                >
+                  <Plus size={11} />
+                  add coupon
+                </button>
+              </div>
+              <div className="max-h-72 overflow-y-auto">
+                {couponsErr ? (
+                  <div className="flex flex-col items-center justify-center h-32 gap-3">
+                    <p className="text-xs text-rose-400">{couponsErr}</p>
+                    <button onClick={loadCoupons} className="text-xs text-neutral-400 border border-neutral-700 rounded-lg px-3 py-1.5 hover:text-white transition-colors">retry</button>
+                  </div>
+                ) : (
+                <table className="w-full">
+                  <tbody>
+                    {couponsLoading ? (
+                      Array.from({ length: 2 }).map((_, i) => (
+                        <tr key={i} className={i % 2 === 0 ? 'bg-white/[0.02]' : ''}>
+                          <td className="px-5 py-3"><div className="h-3 w-24 bg-neutral-800 animate-pulse rounded" /></td>
+                          <td className="px-5 py-3"><div className="h-3 w-16 bg-neutral-800 animate-pulse rounded" /></td>
+                          <td className="px-5 py-3"><div className="h-3 w-16 bg-neutral-800 animate-pulse rounded" /></td>
+                        </tr>
+                      ))
+                    ) : coupons.length === 0 ? (
+                      <tr><td colSpan={7} className="px-5 py-12 text-center text-sm text-neutral-600">no coupons yet — click "add coupon" to get started</td></tr>
+                    ) : (
+                      coupons.map((c, i) => (
+                        <tr key={c.id} className={`hover:bg-white/5 transition-colors ${!c.active ? 'opacity-50' : ''} ${i % 2 === 0 ? 'bg-white/[0.02]' : ''}`}>
+                          <td className="px-5 py-3">
+                            <span className="text-sm text-white font-mono">{c.code}</span>
+                            {!c.active && <span className="ml-2 text-[10px] text-neutral-500">inactive</span>}
+                          </td>
+                          <td className="px-5 py-3"><span className="text-xs text-neutral-300">{c.discount}</span></td>
+                          <td className="px-5 py-3"><span className="text-xs text-neutral-500">{fmtCouponDuration(c)}</span></td>
+                          <td className="px-5 py-3"><span className="text-xs text-neutral-500">{c.restrictedProducts.length > 0 ? c.restrictedProducts.join(', ') : 'all plans'}</span></td>
+                          <td className="px-5 py-3"><span className="text-xs text-neutral-500">{fmtCouponDate(c.expiresAt)}</span></td>
+                          <td className="px-5 py-3">
+                            <span className="text-xs text-neutral-500 tabular-nums">
+                              {c.timesRedeemed}{c.maxRedemptions ? ` / ${c.maxRedemptions}` : ''}
+                            </span>
+                          </td>
+                          <td className="px-5 py-3 text-right">
+                            {c.active && (
+                              <button
+                                onClick={() => deactivateCoupon(c.id)}
+                                disabled={deactivatingId === c.id}
+                                className="text-xs px-2.5 py-1.5 rounded-lg text-neutral-400 hover:text-rose-400 hover:bg-rose-500/10 disabled:opacity-40 transition-colors"
+                              >
+                                {deactivatingId === c.id ? '…' : 'deactivate'}
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+                )}
+              </div>
+            </div>
           </>
         )}
       </main>
@@ -596,6 +908,9 @@ export default function ProductsPage() {
       )}
       {editPass && (
         <AddGuestPassModal initial={editPass} onSave={saveEditedGuestPass} onClose={() => setEditPass(null)} saving={saving} />
+      )}
+      {addCouponOpen && (
+        <AddCouponModal activeProducts={activeProducts} onSave={createCoupon} onClose={() => setAddCouponOpen(false)} saving={couponSaving} />
       )}
     </div>
   )
