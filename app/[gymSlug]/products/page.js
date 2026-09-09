@@ -692,8 +692,8 @@ export default function ProductsPage() {
         ) : (
           <>
             {/* ── Membership Plans ─────────────────────────────────────────── */}
-            <div className="bg-white/[0.03] border border-white/5 rounded-xl overflow-hidden">
-              <div className="px-5 py-4 border-b border-neutral-800 flex items-center justify-between">
+            <div className="bg-white/[0.03] border border-white/5 rounded-xl overflow-hidden max-h-[420px] flex flex-col">
+              <div className="px-5 py-4 border-b border-neutral-800 flex items-center justify-between shrink-0">
                 <p className="text-sm font-semibold text-white">membership plans</p>
                 <button
                   onClick={() => setAddPlanOpen(true)}
@@ -703,7 +703,7 @@ export default function ProductsPage() {
                   add plan
                 </button>
               </div>
-              <div className="max-h-72 overflow-y-auto">
+              <div className="flex-1 min-h-0 overflow-y-auto">
                 <table className="w-full">
                   <tbody>
                     {loading ? (
@@ -759,8 +759,8 @@ export default function ProductsPage() {
             </div>
 
             {/* ── Guest Pass Types ──────────────────────────────────────────── */}
-            <div className="bg-white/[0.03] border border-white/5 rounded-xl overflow-hidden">
-              <div className="px-5 py-4 border-b border-neutral-800 flex items-center justify-between">
+            <div className="bg-white/[0.03] border border-white/5 rounded-xl overflow-hidden max-h-[420px] flex flex-col">
+              <div className="px-5 py-4 border-b border-neutral-800 flex items-center justify-between shrink-0">
                 <p className="text-sm font-semibold text-white">guest pass types</p>
                 <button
                   onClick={() => setAddPassOpen(true)}
@@ -770,7 +770,7 @@ export default function ProductsPage() {
                   add guest pass type
                 </button>
               </div>
-              <div className="max-h-[32rem] overflow-y-auto">
+              <div className="flex-1 min-h-0 overflow-y-auto">
                 <table className="w-full">
                   <tbody>
                     {loading ? (
@@ -828,8 +828,8 @@ export default function ProductsPage() {
             </div>
 
             {/* ── Coupons ───────────────────────────────────────────────────── */}
-            <div className="bg-white/[0.03] border border-white/5 rounded-xl overflow-hidden">
-              <div className="px-5 py-4 border-b border-neutral-800 flex items-center justify-between">
+            <div className="bg-white/[0.03] border border-white/5 rounded-xl overflow-hidden max-h-[420px] flex flex-col">
+              <div className="px-5 py-4 border-b border-neutral-800 flex items-center justify-between shrink-0">
                 <p className="text-sm font-semibold text-white">coupons</p>
                 <button
                   onClick={() => setAddCouponOpen(true)}
@@ -839,7 +839,7 @@ export default function ProductsPage() {
                   add coupon
                 </button>
               </div>
-              <div className="max-h-72 overflow-y-auto">
+              <div className="flex-1 min-h-0 overflow-y-auto">
                 {couponsErr ? (
                   <div className="flex flex-col items-center justify-center h-32 gap-3">
                     <p className="text-xs text-rose-400">{couponsErr}</p>

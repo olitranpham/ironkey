@@ -88,7 +88,13 @@
       "Bash(railway setup *)",
       "Bash(railway link *)",
       "Bash(cd *)",
-      "Bash(railway logs *)"
+      "Bash(railway logs *)",
+      "Bash(xargs -r kill)",
+      "Bash(timeout 30 bash -c 'until curl -sf http://localhost:3000 >/dev/null 2>&1 || curl -sf http://localhost:3001 >/dev/null 2>&1; do sleep 1; done')",
+      "Bash(chromium-cli --help)",
+      "Bash(npm root *)",
+      "Bash(NODE_PATH=$\\(npm root -g 2>/dev/null\\) node --experimental-vm-modules -e \"1\")",
+      "Bash(NODE_PATH=\"/Users/olitranpham/.npm/_npx/6bcb61ec6d5aea22/node_modules\" node *)"
     ]
   }
 }
