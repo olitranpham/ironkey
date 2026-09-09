@@ -690,7 +690,7 @@ export default function ProductsPage() {
             <button onClick={load} className="text-xs text-neutral-400 border border-neutral-700 rounded-lg px-3 py-1.5 hover:text-white transition-colors">retry</button>
           </div>
         ) : (
-          <>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {/* ── Membership Plans ─────────────────────────────────────────── */}
             <div className="bg-white/[0.03] border border-white/5 rounded-xl overflow-hidden max-h-[420px] flex flex-col">
               <div className="px-5 py-4 border-b border-neutral-800 flex items-center justify-between shrink-0">
@@ -893,7 +893,7 @@ export default function ProductsPage() {
                 )}
               </div>
             </div>
-          </>
+          </div>
         )}
       </main>
 
