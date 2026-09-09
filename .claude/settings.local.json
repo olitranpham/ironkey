@@ -94,7 +94,15 @@
       "Bash(chromium-cli --help)",
       "Bash(npm root *)",
       "Bash(NODE_PATH=$\\(npm root -g 2>/dev/null\\) node --experimental-vm-modules -e \"1\")",
-      "Bash(NODE_PATH=\"/Users/olitranpham/.npm/_npx/6bcb61ec6d5aea22/node_modules\" node *)"
+      "Bash(NODE_PATH=\"/Users/olitranpham/.npm/_npx/6bcb61ec6d5aea22/node_modules\" node *)",
+      "Bash(awk 'NR==693,NR==930 {print NR\": \"$0}' \"app/[gymSlug]/products/page.js\")",
+      "Bash(disown)",
+      "Bash(timeout 30 bash -c 'until curl -sf http://localhost:3000 >/dev/null; do sleep 1; done')",
+      "Bash(break)",
+      "Bash(npm ls *)",
+      "Bash(find / -maxdepth 8 -path \"*_npx*/node_modules/playwright\" -type d)",
+      "Bash(npm config *)",
+      "Bash(export NODE_PATH=/Users/olitranpham/.npm/_npx/6bcb61ec6d5aea22/node_modules)"
     ]
   }
 }

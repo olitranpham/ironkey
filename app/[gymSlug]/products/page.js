@@ -676,23 +676,23 @@ export default function ProductsPage() {
   }
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden">
+    <div className="h-full flex flex-col overflow-hidden">
 
       {/* Top bar */}
       <header className="h-14 shrink-0 bg-[#1c1c1c] border-b border-neutral-800 flex items-center px-6">
         <h1 className="text-sm font-semibold text-white">products</h1>
       </header>
 
-      <main className="flex-1 overflow-y-auto p-5 flex flex-col gap-5 md:min-h-0">
+      <main className="flex-1 min-h-0 p-5 flex flex-col gap-5">
         {err ? (
           <div className="flex flex-col items-center justify-center h-48 gap-3">
             <p className="text-sm text-rose-400">{err}</p>
             <button onClick={load} className="text-xs text-neutral-400 border border-neutral-700 rounded-lg px-3 py-1.5 hover:text-white transition-colors">retry</button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 flex-1 min-h-0">
             {/* ── Membership Plans ─────────────────────────────────────────── */}
-            <div className="bg-white/[0.03] border border-white/5 rounded-xl overflow-hidden max-h-[420px] flex flex-col">
+            <div className="bg-white/[0.03] border border-white/5 rounded-xl overflow-hidden h-full flex flex-col">
               <div className="px-5 py-4 border-b border-neutral-800 flex items-center justify-between shrink-0">
                 <p className="text-sm font-semibold text-white">membership plans</p>
                 <button
@@ -759,7 +759,7 @@ export default function ProductsPage() {
             </div>
 
             {/* ── Guest Pass Types ──────────────────────────────────────────── */}
-            <div className="bg-white/[0.03] border border-white/5 rounded-xl overflow-hidden max-h-[420px] flex flex-col">
+            <div className="bg-white/[0.03] border border-white/5 rounded-xl overflow-hidden h-full flex flex-col">
               <div className="px-5 py-4 border-b border-neutral-800 flex items-center justify-between shrink-0">
                 <p className="text-sm font-semibold text-white">guest pass types</p>
                 <button
@@ -828,7 +828,7 @@ export default function ProductsPage() {
             </div>
 
             {/* ── Coupons ───────────────────────────────────────────────────── */}
-            <div className="bg-white/[0.03] border border-white/5 rounded-xl overflow-hidden max-h-[420px] flex flex-col">
+            <div className="bg-white/[0.03] border border-white/5 rounded-xl overflow-hidden h-full flex flex-col">
               <div className="px-5 py-4 border-b border-neutral-800 flex items-center justify-between shrink-0">
                 <p className="text-sm font-semibold text-white">coupons</p>
                 <button
