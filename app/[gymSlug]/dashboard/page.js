@@ -147,6 +147,8 @@ export default function DashboardPage() {
   const [removeTarget,   setRemoveTarget]   = useState(null) // member to confirm-remove
   const [removing,       setRemoving]       = useState(false)
   const [removeError,    setRemoveError]    = useState(null)
+  const [actionError,    setActionError]    = useState(null) // e.g. reverse-cancel failure
+  const [successBanner,  setSuccessBanner]  = useState(null) // string | null, auto-dismisses
 
   const timerRef     = useRef(null)
   const doorTimerRef = useRef(null)
@@ -185,6 +187,7 @@ export default function DashboardPage() {
 
   async function handleReverseCancel(memberId) {
     setUpdatingStatus(true)
+    setActionError(null)
     try {
       const token = localStorage.getItem('ik_token')
       const res = await fetch(`/api/${gymSlug}/reverse-cancel`, {
@@ -192,12 +195,19 @@ export default function DashboardPage() {
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body:    JSON.stringify({ memberId }),
       })
-      if (!res.ok) throw new Error('Failed')
-      const { member: updated } = await res.json()
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(json.error || 'Request failed')
+      const { member: updated } = json
       setMembers(prev => prev.map(m => m.id === memberId ? { ...m, ...updated } : m))
       setSelectedMember(prev => prev?.id === memberId ? { ...prev, ...updated } : prev)
-    } catch {
-      // non-fatal — leave UI as-is
+      setSuccessBanner(
+        json.codeReissued
+          ? `cancellation reversed — their old code was revoked, new code: ${json.accessCode}`
+          : 'cancellation reversed — their existing door code is unaffected'
+      )
+      setTimeout(() => setSuccessBanner(null), 8000)
+    } catch (err) {
+      setActionError(err.message || 'something went wrong — please try again')
     } finally {
       setUpdatingStatus(false)
     }
@@ -341,6 +351,19 @@ export default function DashboardPage() {
         <h1 className="text-sm font-semibold text-white">dashboard</h1>
 
       </header>
+
+      {/* Success / error banners (e.g. reverse-cancellation result) */}
+      {successBanner && (
+        <div className="shrink-0 px-6 py-2 bg-emerald-500/10 border-b border-emerald-500/20">
+          <p className="text-xs text-emerald-400">{successBanner}</p>
+        </div>
+      )}
+      {actionError && (
+        <div className="shrink-0 px-6 py-2 bg-red-500/10 border-b border-red-500/20 flex items-center justify-between gap-3">
+          <p className="text-xs text-red-400">{actionError}</p>
+          <button onClick={() => setActionError(null)} className="text-xs text-red-400/70 hover:text-red-400 shrink-0">dismiss</button>
+        </div>
+      )}
 
       {/* ── Body ─────────────────────────────────────────────────────────── */}
       <main className="flex-1 flex flex-col p-4 md:p-5 pb-4 md:pb-5 gap-4 overflow-y-auto lg:overflow-hidden lg:min-h-0">
