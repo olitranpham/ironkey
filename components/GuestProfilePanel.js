@@ -58,12 +58,47 @@ export function GSection({ icon: Icon, title, children }) {
   )
 }
 
+// Full-screen image preview — replaces opening the data: URL in a new tab,
+// which Chrome blocks (renders a blank tab) for data: URIs.
+function ImageLightbox({ src, onClose }) {
+  useEffect(() => {
+    function onKeyDown(e) {
+      if (e.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [onClose])
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center"
+      style={{ backgroundColor: 'rgba(0,0,0,.85)' }}
+      onClick={onClose}
+    >
+      <button
+        onClick={onClose}
+        aria-label="close"
+        className="absolute top-4 right-4 text-white/70 hover:text-white transition-colors"
+      >
+        <X size={24} />
+      </button>
+      <img
+        src={src}
+        alt="student id"
+        style={{ maxWidth: '90vw', maxHeight: '90vh', objectFit: 'contain' }}
+        onClick={e => e.stopPropagation()}
+      />
+    </div>
+  )
+}
+
 // ── GuestProfilePanel ─────────────────────────────────────────────────────────
 
 export function GuestProfilePanel({ profile, passTypeBorder, onClose, onSaveCode, saving, onSavePassesLeft, onSaveProfile, source, onDelete, onRemoveGuest, removingGuest }) {
   const [codeInput,    setCodeInput]    = useState(profile.accessCode ?? '')
   const [passEdits,    setPassEdits]    = useState({})
   const [savingPassId, setSavingPassId] = useState(null)
+  const [lightboxSrc,  setLightboxSrc]  = useState(null)
 
   // Contact
   const [nameInput,  setNameInput]  = useState(profile.name  ?? '')
@@ -395,13 +430,13 @@ export function GuestProfilePanel({ profile, passTypeBorder, onClose, onSaveCode
                       <td className="px-3 py-2.5 text-neutral-500 whitespace-nowrap">{fmtDate(p.usedAt)}</td>
                       <td className="px-3 py-2.5">
                         {p.studentIdImage ? (
-                          <a href={p.studentIdImage} target="_blank" rel="noopener noreferrer">
+                          <button type="button" onClick={() => setLightboxSrc(p.studentIdImage)}>
                             <img
                               src={p.studentIdImage}
                               alt="student id"
                               className="w-8 h-8 rounded object-cover border border-neutral-700 hover:border-neutral-500 transition-colors"
                             />
-                          </a>
+                          </button>
                         ) : (
                           <span className="text-neutral-700">—</span>
                         )}
@@ -437,6 +472,10 @@ export function GuestProfilePanel({ profile, passTypeBorder, onClose, onSaveCode
             remove member
           </button>
         </div>
+      )}
+
+      {lightboxSrc && (
+        <ImageLightbox src={lightboxSrc} onClose={() => setLightboxSrc(null)} />
       )}
     </div>
   )

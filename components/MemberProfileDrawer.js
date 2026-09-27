@@ -96,6 +96,40 @@ export function DrawerField({ label, value, mono = false, children }) {
   )
 }
 
+// Full-screen image preview — replaces opening the data: URL in a new tab,
+// which Chrome blocks (renders a blank tab) for data: URIs.
+function ImageLightbox({ src, onClose }) {
+  useEffect(() => {
+    function onKeyDown(e) {
+      if (e.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [onClose])
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center"
+      style={{ backgroundColor: 'rgba(0,0,0,.85)' }}
+      onClick={onClose}
+    >
+      <button
+        onClick={onClose}
+        aria-label="close"
+        className="absolute top-4 right-4 text-white/70 hover:text-white transition-colors"
+      >
+        <X size={24} />
+      </button>
+      <img
+        src={src}
+        alt="student id"
+        style={{ maxWidth: '90vw', maxHeight: '90vh', objectFit: 'contain' }}
+        onClick={e => e.stopPropagation()}
+      />
+    </div>
+  )
+}
+
 // ── Drawer content ────────────────────────────────────────────────────────────
 
 function DrawerContent({ member, gymSlug, membershipBorder, onClose, onStatusChange, onSaveAccessCode, onSaveField, onDeleteCode, onRemoveMember, onReverseCancel, updating, simplified }) {
@@ -160,8 +194,8 @@ function DrawerContent({ member, gymSlug, membershipBorder, onClose, onStatusCha
   // a base64 photo, not something to ship in bulk to every list load), so it
   // isn't present on the `member` prop — fetch the single member record
   // (which does include it) whenever the drawer opens for someone new.
-  const [studentIdImage,        setStudentIdImage]        = useState(null)
-  const [savingStudentIdStatus, setSavingStudentIdStatus] = useState(null) // 'approved' | 'rejected' | null
+  const [studentIdImage,         setStudentIdImage]         = useState(null)
+  const [studentIdLightboxOpen,  setStudentIdLightboxOpen]  = useState(false)
 
   // Keep codeInput in sync when the member prop changes (different member opened,
   // or same member's accessCode updated by parent after a successful save).
@@ -367,13 +401,6 @@ function DrawerContent({ member, gymSlug, membershipBorder, onClose, onStatusCha
     setSavingCategory(true)
     await onSaveField(member.id, { studentCategory: studentCategoryInput })
     setSavingCategory(false)
-  }
-
-  async function handleStudentIdReview(status) {
-    if (!onSaveField) return
-    setSavingStudentIdStatus(status)
-    await onSaveField(member.id, { studentIdStatus: status })
-    setSavingStudentIdStatus(null)
   }
 
   async function handleDeleteCode() {
@@ -779,44 +806,18 @@ function DrawerContent({ member, gymSlug, membershipBorder, onClose, onStatusCha
           {/* Student ID photo — only present once a student plan buyer has
               actually uploaded one; nothing renders otherwise. */}
           {studentIdImage && (
-            <>
-              <DrawerField label="student id">
-                <a href={studentIdImage} target="_blank" rel="noopener noreferrer" className="ml-4">
-                  <img
-                    src={studentIdImage}
-                    alt="student id"
-                    className="w-10 h-10 rounded object-cover border border-neutral-700 hover:border-neutral-500 transition-colors"
-                  />
-                </a>
-              </DrawerField>
-              <DrawerField label="id status" value={member.studentIdStatus ?? 'pending'} />
-              {member.studentIdReviewedBy && (
-                <DrawerField
-                  label="reviewed by"
-                  value={`${member.studentIdReviewedBy}${member.studentIdReviewedAt ? ` — ${fmtDate(member.studentIdReviewedAt)}` : ''}`}
+            <DrawerField label="student id">
+              <button type="button" onClick={() => setStudentIdLightboxOpen(true)} className="ml-4">
+                <img
+                  src={studentIdImage}
+                  alt="student id"
+                  className="w-10 h-10 rounded object-cover border border-neutral-700 hover:border-neutral-500 transition-colors"
                 />
-              )}
-              {onSaveField && (
-                <DrawerField label="review">
-                  <div className="flex items-center gap-2 ml-4">
-                    <button
-                      onClick={() => handleStudentIdReview('approved')}
-                      disabled={Boolean(savingStudentIdStatus)}
-                      className="text-[10px] px-2 py-1 rounded bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                    >
-                      {savingStudentIdStatus === 'approved' ? '…' : 'approve'}
-                    </button>
-                    <button
-                      onClick={() => handleStudentIdReview('rejected')}
-                      disabled={Boolean(savingStudentIdStatus)}
-                      className="text-[10px] px-2 py-1 rounded bg-red-500/10 text-red-400 hover:bg-red-500/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                    >
-                      {savingStudentIdStatus === 'rejected' ? '…' : 'reject'}
-                    </button>
-                  </div>
-                </DrawerField>
-              )}
-            </>
+              </button>
+            </DrawerField>
+          )}
+          {studentIdLightboxOpen && (
+            <ImageLightbox src={studentIdImage} onClose={() => setStudentIdLightboxOpen(false)} />
           )}
 
           {/* Access code — inline editor */}
