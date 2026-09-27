@@ -156,6 +156,13 @@ function DrawerContent({ member, gymSlug, membershipBorder, onClose, onStatusCha
   const [studentCategoryInput, setStudentCategoryInput] = useState(member.studentCategory ?? '')
   const [savingCategory,       setSavingCategory]       = useState(false)
 
+  // studentIdImage is deliberately left out of the /all list response (it's
+  // a base64 photo, not something to ship in bulk to every list load), so it
+  // isn't present on the `member` prop — fetch the single member record
+  // (which does include it) whenever the drawer opens for someone new.
+  const [studentIdImage,        setStudentIdImage]        = useState(null)
+  const [savingStudentIdStatus, setSavingStudentIdStatus] = useState(null) // 'approved' | 'rejected' | null
+
   // Keep codeInput in sync when the member prop changes (different member opened,
   // or same member's accessCode updated by parent after a successful save).
   useEffect(() => {
@@ -203,6 +210,23 @@ function DrawerContent({ member, gymSlug, membershipBorder, onClose, onStatusCha
       .catch(err => {
         console.error('[MemberProfileDrawer] events fetch threw memberId=%s', member.id, err)
         setEvents([])
+      })
+  }, [member.id, gymSlug, simplified])
+
+  // Fetch the full member record for studentIdImage whenever the member
+  // changes (skip in simplified mode) — see note on the state above.
+  useEffect(() => {
+    if (simplified || !gymSlug || !member.id) return
+    setStudentIdImage(null)
+    const token = localStorage.getItem('ik_token')
+    fetch(`/api/${gymSlug}/members/${member.id}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => setStudentIdImage(data?.member?.studentIdImage ?? null))
+      .catch(err => {
+        console.error('[MemberProfileDrawer] student id fetch threw memberId=%s', member.id, err)
+        setStudentIdImage(null)
       })
   }, [member.id, gymSlug, simplified])
 
@@ -343,6 +367,13 @@ function DrawerContent({ member, gymSlug, membershipBorder, onClose, onStatusCha
     setSavingCategory(true)
     await onSaveField(member.id, { studentCategory: studentCategoryInput })
     setSavingCategory(false)
+  }
+
+  async function handleStudentIdReview(status) {
+    if (!onSaveField) return
+    setSavingStudentIdStatus(status)
+    await onSaveField(member.id, { studentIdStatus: status })
+    setSavingStudentIdStatus(null)
   }
 
   async function handleDeleteCode() {
@@ -742,6 +773,49 @@ function DrawerContent({ member, gymSlug, membershipBorder, onClose, onStatusCha
                   )}
                 </div>
               </DrawerField>
+            </>
+          )}
+
+          {/* Student ID photo — only present once a student plan buyer has
+              actually uploaded one; nothing renders otherwise. */}
+          {studentIdImage && (
+            <>
+              <DrawerField label="student id">
+                <a href={studentIdImage} target="_blank" rel="noopener noreferrer" className="ml-4">
+                  <img
+                    src={studentIdImage}
+                    alt="student id"
+                    className="w-10 h-10 rounded object-cover border border-neutral-700 hover:border-neutral-500 transition-colors"
+                  />
+                </a>
+              </DrawerField>
+              <DrawerField label="id status" value={member.studentIdStatus ?? 'pending'} />
+              {member.studentIdReviewedBy && (
+                <DrawerField
+                  label="reviewed by"
+                  value={`${member.studentIdReviewedBy}${member.studentIdReviewedAt ? ` — ${fmtDate(member.studentIdReviewedAt)}` : ''}`}
+                />
+              )}
+              {onSaveField && (
+                <DrawerField label="review">
+                  <div className="flex items-center gap-2 ml-4">
+                    <button
+                      onClick={() => handleStudentIdReview('approved')}
+                      disabled={Boolean(savingStudentIdStatus)}
+                      className="text-[10px] px-2 py-1 rounded bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                    >
+                      {savingStudentIdStatus === 'approved' ? '…' : 'approve'}
+                    </button>
+                    <button
+                      onClick={() => handleStudentIdReview('rejected')}
+                      disabled={Boolean(savingStudentIdStatus)}
+                      className="text-[10px] px-2 py-1 rounded bg-red-500/10 text-red-400 hover:bg-red-500/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                    >
+                      {savingStudentIdStatus === 'rejected' ? '…' : 'reject'}
+                    </button>
+                  </div>
+                </DrawerField>
+              )}
             </>
           )}
 

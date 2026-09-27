@@ -475,6 +475,9 @@ export default function MembersPage() {
                                 cancellation scheduled{m.cancelEffectiveDate ? ` — ${fmtDate(m.cancelEffectiveDate)}` : ''}
                               </p>
                             )}
+                            {m.studentIdStatus === 'pending' && (
+                              <p className="text-[10px] text-sky-400/70 leading-tight mt-0.5">id pending</p>
+                            )}
                           </div>
                         </div>
                       </td>

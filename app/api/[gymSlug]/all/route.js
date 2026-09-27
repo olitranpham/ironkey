@@ -73,6 +73,7 @@ export async function GET(request, { params }) {
         gradSemester:         true,
         gradYear:             true,
         studentCategory:      true,
+        studentIdStatus:      true,
       },
     })
 

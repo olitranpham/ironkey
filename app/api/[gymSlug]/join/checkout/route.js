@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import prisma from '@/lib/prisma'
+import { planRequiresStudentId } from '@/lib/studentIdPlans'
 
 // Rutgers Powerlifting Club — one-off $5 non-recurring membership for
 // hydra-athletic-co. Stripe rejects a one-time price as a line item in
@@ -61,6 +62,22 @@ export async function POST(request, { params }) {
     if (!gym.stripeSecretKey) return NextResponse.json({ error: 'Stripe not configured' }, { status: 400 })
 
     const stripe = new Stripe(gym.stripeSecretKey, { apiVersion: '2024-06-20' })
+
+    // Re-check the student-ID requirement server-side rather than trusting
+    // whatever the client claims — the client only decides whether to show
+    // the upload UI, not whether checkout is actually allowed to proceed.
+    if (priceId) {
+      const price = await stripe.prices.retrieve(priceId, { expand: ['product'] })
+      if (planRequiresStudentId(gymSlug, price.product?.id)) {
+        const normalizedEmail = email.trim().toLowerCase()
+        const upload = await prisma.studentIdUpload.findFirst({
+          where: { gymId: gym.id, email: normalizedEmail },
+        })
+        if (!upload) {
+          return NextResponse.json({ error: 'A student ID photo upload is required for this membership plan' }, { status: 400 })
+        }
+      }
+    }
 
     // Build base URL for redirect URLs — prefer explicit env var so mobile Safari
     // (which sometimes omits the Origin header on same-origin fetches) always gets

@@ -296,6 +296,7 @@ export default function JoinPage() {
     guardianRelationship:  '',
     priceId:               '',
     membershipType:        '',
+    requiresStudentId:     false,
     addonPriceId:          '',
     groupTrainingPriceId:  '',
     waiver:                false,
@@ -303,7 +304,7 @@ export default function JoinPage() {
 
   const isTriumph  = gymSlug === 'triumph-barbell'
   const isHydra    = gymSlug === 'hydra-athletic-co'
-  const isStudent  = form.membershipType.toLowerCase().includes('student')
+  const isStudent  = form.requiresStudentId
   const age        = form.dob ? calculateAge(form.dob) : null
   const isMinor    = age !== null && age < 18
   useEffect(() => {
@@ -336,7 +337,7 @@ export default function JoinPage() {
           } else {
             defaultPlan = membershipPlans.find(p => p.name.toLowerCase().includes('general')) ?? membershipPlans[0]
           }
-          setForm(f => ({ ...f, priceId: defaultPlan.priceId, membershipType: defaultPlan.membershipType }))
+          setForm(f => ({ ...f, priceId: defaultPlan.priceId, membershipType: defaultPlan.membershipType, requiresStudentId: defaultPlan.requiresStudentId ?? false }))
         }
       })
       .catch(() => setError('Could not load membership options.'))
@@ -349,9 +350,9 @@ export default function JoinPage() {
 
   function selectPlan(priceId) {
     const plan = [...membershipPlans, ...ptPlans, ...programmingPlans].find(p => p.priceId === priceId)
-    setForm(f => ({ ...f, priceId, membershipType: plan?.membershipType ?? '' }))
+    setForm(f => ({ ...f, priceId, membershipType: plan?.membershipType ?? '', requiresStudentId: plan?.requiresStudentId ?? false }))
     // Clear student fields if switching away from a student plan
-    if (!plan?.membershipType?.toLowerCase().includes('student')) {
+    if (!plan?.requiresStudentId) {
       setStudentIdFile(null)
       setGradSemester('')
       setGradYear('')
@@ -833,7 +834,7 @@ export default function JoinPage() {
                       setForm(f => ({ ...f, groupTrainingPriceId: '' }))
                     } else {
                       // Deselect PT — clear priceId so user must pick a regular plan
-                      setForm(f => ({ ...f, priceId: '', membershipType: '' }))
+                      setForm(f => ({ ...f, priceId: '', membershipType: '', requiresStudentId: false }))
                     }
                   }}
                   className={SELECT}
@@ -987,7 +988,7 @@ export default function JoinPage() {
                     if (e.target.value) {
                       selectPlan(e.target.value)
                     } else {
-                      setForm(f => ({ ...f, priceId: '', membershipType: '' }))
+                      setForm(f => ({ ...f, priceId: '', membershipType: '', requiresStudentId: false }))
                     }
                   }}
                   className={SELECT}
@@ -1027,7 +1028,7 @@ export default function JoinPage() {
                     if (e.target.value) {
                       selectPlan(e.target.value)
                     } else {
-                      setForm(f => ({ ...f, priceId: '', membershipType: '' }))
+                      setForm(f => ({ ...f, priceId: '', membershipType: '', requiresStudentId: false }))
                     }
                   }}
                   className={SELECT}

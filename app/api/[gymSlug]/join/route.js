@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import prisma from '@/lib/prisma'
+import { planRequiresStudentId } from '@/lib/studentIdPlans'
 
 // Hydra's bundled Student/Military/Police/EMT membership product — matched by
 // ID rather than name so a staff rename (e.g. to "student membership") can't
@@ -54,6 +55,7 @@ export async function GET(request, { params }) {
           interval:       p.recurring.interval,
           intervalCount:  p.recurring.interval_count ?? 1,
           membershipType: name,
+          requiresStudentId: planRequiresStudentId(gymSlug, p.product?.id),
         }
       }
 
@@ -143,6 +145,7 @@ export async function GET(request, { params }) {
             interval:       null,
             intervalCount:  1,
             membershipType: rutgersPrice.nickname ?? rutgersPrice.product?.name ?? 'Rutgers Powerlifting',
+            requiresStudentId: false,
           })
           membershipPlans.sort((a, b) => a.amount - b.amount)
         }

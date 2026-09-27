@@ -119,6 +119,9 @@ model Member {
 
   // Student membership fields
   studentIdImage String? // base64 data URL of uploaded student ID photo
+  studentIdStatus     String?   // "pending" | "approved" | "rejected"
+  studentIdReviewedAt DateTime?
+  studentIdReviewedBy String?   // GymUser email
 
   // Student graduation tracking — captured at signup via the join flow, and
   // editable afterward from the member profile drawer

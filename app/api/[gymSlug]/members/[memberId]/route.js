@@ -6,6 +6,7 @@ import { normalizeGradSemester } from '@/lib/gradSemester'
 const SEAM_API = 'https://connect.getseam.com'
 const VALID_STATUSES         = ['ACTIVE', 'FROZEN', 'CANCELED']
 const VALID_STUDENT_CATEGORIES = ['Student', 'Military', 'EMT']
+const VALID_STUDENT_ID_STATUSES = ['pending', 'approved', 'rejected']
 
 const MEMBER_SELECT = {
   id: true, firstName: true, lastName: true, email: true, phone: true,
@@ -18,6 +19,7 @@ const MEMBER_SELECT = {
   stripeCustomerId: true, stripeSubscriptionId: true,
   hearAboutUs: true,
   gradSemester: true, gradYear: true, studentCategory: true,
+  studentIdImage: true, studentIdStatus: true, studentIdReviewedAt: true, studentIdReviewedBy: true,
 }
 
 /**
@@ -67,7 +69,7 @@ export async function PATCH(request, { params }) {
             dateOfBirth, address, emergencyContactName, emergencyContactPhone,
             emergencyContactRelationship, membershipType,
             stripeCustomerId, stripeSubscriptionId,
-            gradSemester, gradYear, studentCategory,
+            gradSemester, gradYear, studentCategory, studentIdStatus,
             guardianName, guardianEmail, guardianPhone, guardianRelationship } = body
 
     console.log('[members/patch] memberId=%s gymId=%s body=%j', memberId, gymId, body)
@@ -169,6 +171,28 @@ export async function PATCH(request, { params }) {
         return NextResponse.json({ error: 'Invalid studentCategory' }, { status: 400 })
       }
       data.studentCategory = studentCategory === '' ? null : studentCategory
+    }
+
+    // Student ID review (approve/reject) — resolve the gym from the URL
+    // gymSlug (already done above), confirm the member belongs to it
+    // (existing findFirst below), and additionally confirm the caller's own
+    // JWT gymId matches, same pattern as stripe/connect DELETE — this is a
+    // reviewer decision on sensitive PII, not a routine field edit.
+    if (studentIdStatus !== undefined) {
+      if (!VALID_STUDENT_ID_STATUSES.includes(studentIdStatus)) {
+        return NextResponse.json({ error: 'Invalid studentIdStatus' }, { status: 400 })
+      }
+      const jwtGymId = request.headers.get('x-gym-id')
+      if (jwtGymId !== gymId) {
+        return NextResponse.json({ error: 'Gym mismatch' }, { status: 403 })
+      }
+      const reviewerId = request.headers.get('x-gym-user-id')
+      const reviewer = reviewerId
+        ? await prisma.gymUser.findUnique({ where: { id: reviewerId }, select: { email: true } })
+        : null
+      data.studentIdStatus     = studentIdStatus
+      data.studentIdReviewedAt = now
+      data.studentIdReviewedBy = reviewer?.email ?? null
     }
 
     const member = await prisma.member.update({

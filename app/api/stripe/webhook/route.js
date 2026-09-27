@@ -483,6 +483,7 @@ export async function POST(request) {
           gradSemester:                 parsedGradSemester,
           gradYear:                     Number.isNaN(parsedGradYear) ? null : parsedGradYear,
           studentIdImage:               studentIdImage,
+          studentIdStatus:              studentIdImage ? 'pending' : null,
           hearAboutUs:                  meta.hearAboutUs           || null,
           isMinor:                      isMinor,
           guardianName:                 isMinor ? (meta.guardianName         || null) : null,
@@ -503,7 +504,7 @@ export async function POST(request) {
           dateAccessed:        new Date(),
           ...(parsedGradSemester ? { gradSemester: parsedGradSemester } : {}),
           ...(parsedGradYear && !Number.isNaN(parsedGradYear) ? { gradYear: parsedGradYear } : {}),
-          ...(studentIdImage          ? { studentIdImage }                               : {}),
+          ...(studentIdImage          ? { studentIdImage, studentIdStatus: 'pending' }    : {}),
           ...(meta.hearAboutUs        ? { hearAboutUs: meta.hearAboutUs }               : {}),
           ...(isMinor ? {
             isMinor:              true,

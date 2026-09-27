@@ -555,7 +555,12 @@ function MemberDirectory({ members, membershipBorder, search, setSearch, activeT
                         <div className="w-7 h-7 rounded-full bg-white flex items-center justify-center shrink-0">
                           <span className="text-black font-medium text-[10px] select-none">{initials || '?'}</span>
                         </div>
-                        <p className="text-white text-sm">{m.firstName} {m.lastName}</p>
+                        <div className="min-w-0">
+                          <p className="text-white text-sm">{m.firstName} {m.lastName}</p>
+                          {m.studentIdStatus === 'pending' && (
+                            <p className="text-[10px] text-sky-400/70 leading-tight mt-0.5">id pending</p>
+                          )}
+                        </div>
                       </div>
                     </td>
                     <td className="px-5 py-3 text-right whitespace-nowrap">
