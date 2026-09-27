@@ -502,6 +502,9 @@ export async function POST(request) {
           stripeSubscriptionId: subId ?? member.stripeSubscriptionId,
           priceId:             priceId ?? member.priceId,
           dateAccessed:        new Date(),
+          // Only set when the form actually submitted a phone this time —
+          // never overwrite an existing stored phone with null/blank.
+          ...(phone ? { phone } : {}),
           ...(parsedGradSemester ? { gradSemester: parsedGradSemester } : {}),
           ...(parsedGradYear && !Number.isNaN(parsedGradYear) ? { gradYear: parsedGradYear } : {}),
           ...(studentIdImage          ? { studentIdImage, studentIdStatus: 'pending' }    : {}),
