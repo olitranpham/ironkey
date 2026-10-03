@@ -27,6 +27,8 @@ export async function GET(request, { params }) {
   url.searchParams.set('scope', 'read_write')
   url.searchParams.set('state', gymSlug)
   url.searchParams.set('redirect_uri', redirectUri)
+  url.searchParams.set('stripe_landing', 'login')
+  url.searchParams.set('always_prompt', 'true')
 
   return NextResponse.redirect(url.toString())
 }
