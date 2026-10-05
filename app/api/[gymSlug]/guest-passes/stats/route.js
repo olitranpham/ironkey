@@ -48,7 +48,7 @@ export async function GET(request, { params }) {
     let y = first[0], m = first[1]
     while (true) {
       const key    = `${y}-${String(m).padStart(2, '0')}`
-      const label  = new Date(y, m - 1, 1).toLocaleDateString('en-US', { month: 'short' }).toLowerCase()
+      const label  = new Date(y, m - 1, 1).toLocaleDateString('en-US', { month: 'short', year: 'numeric', timeZone: 'UTC' }).toLowerCase()
       data.push({ month: label, passes: counts[key] ?? 0 })
       if (key === endKey) break
       m++
