@@ -4,8 +4,8 @@ import { signToken } from '@/lib/auth'
 
 /**
  * POST /api/admin/gyms/[gymId]/impersonate
- * Returns a short-lived JWT scoped to the gym's owner so the super-admin
- * can open that gym's staff portal directly.
+ * Returns a short-lived (1h) JWT scoped to the gym's owner so the super-admin
+ * can open that gym's staff portal directly. Carries impersonatedBy: 'SUPERADMIN'.
  */
 export async function POST(request, { params }) {
   try {
@@ -23,7 +23,10 @@ export async function POST(request, { params }) {
       return NextResponse.json({ error: 'No users found for this gym' }, { status: 404 })
     }
 
-    const token = signToken({ id: user.id, gymId: gym.id, role: user.role })
+    const token = signToken(
+      { id: user.id, gymId: gym.id, role: user.role, impersonatedBy: 'SUPERADMIN' },
+      { expiresIn: '1h' },
+    )
 
     return NextResponse.json({
       token,
