@@ -10,6 +10,18 @@ import { intakeMember } from '@/lib/memberIntake'
 import { intakeGuestPass } from '@/lib/guestPassIntake'
 import { writeAudit } from '@/lib/audit'
 import { generateUniquePin } from '@/lib/pins'
+import { postWebhook } from '@/lib/guestCodeDelivery'
+
+/**
+ * Deliver a purchase payload (with the door code) to a Zapier webhook and wait
+ * up to 5 s. Never fails the Stripe webhook: a non-2xx / timeout / missing URL
+ * is logged (gym slug + status) and audited as code.delivery_failed.
+ */
+async function deliverOrAudit(gym, url, payload, kind, targetType, targetId) {
+  const { ok, status } = await postWebhook(url, gym.slug, payload, kind)
+  if (!ok) writeAudit({ gym, user: null }, 'code.delivery_failed', targetType, targetId, { kind, status })
+  return ok
+}
 
 const SEAM_API = 'https://connect.getseam.com'
 
@@ -318,23 +330,15 @@ export async function POST(request) {
       }
 
       const zapierGuestUrl = gym.zapierGuestWebhookUrl || process.env.ZAPIER_GUEST_WEBHOOK_URL
-      console.log('[platform/webhook] firing Zapier guest webhook:', zapierGuestUrl)
-      if (zapierGuestUrl) {
-        fetch(zapierGuestUrl, {
-          method:  'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body:    JSON.stringify({
-            name: guestName, email, accessCode, passType, passesLeft: savedPassesLeft, firstTime, alreadyActive,
-            isMinor:               guestIsMinor,
-            guardianName:          guestIsMinor ? (meta.guardianName         || null) : null,
-            guardianEmail:         guestIsMinor ? (meta.guardianEmail        || null) : null,
-            guardianPhone:         guestIsMinor ? (meta.guardianPhone        || null) : null,
-            guardianRelationship:  guestIsMinor ? (meta.guardianRelationship || null) : null,
-          }),
-        })
-          .then(r => console.log('[platform/webhook] Zapier guest webhook status:', r.status))
-          .catch(e => console.error('[platform/webhook] Zapier guest webhook error:', e.message))
-      }
+      console.log('[platform/webhook] firing Zapier guest webhook (configured=%s)', Boolean(zapierGuestUrl))
+      await deliverOrAudit(gym, zapierGuestUrl, {
+        name: guestName, email, accessCode, passType, passesLeft: savedPassesLeft, firstTime, alreadyActive,
+        isMinor:               guestIsMinor,
+        guardianName:          guestIsMinor ? (meta.guardianName         || null) : null,
+        guardianEmail:         guestIsMinor ? (meta.guardianEmail        || null) : null,
+        guardianPhone:         guestIsMinor ? (meta.guardianPhone        || null) : null,
+        guardianRelationship:  guestIsMinor ? (meta.guardianRelationship || null) : null,
+      }, 'guest', 'Guest', guestProfile?.id ?? null)
 
       return NextResponse.json({ received: true })
     }
@@ -580,22 +584,14 @@ export async function POST(request) {
       }
 
       const zapierMemberUrlKisi = gym.zapierMemberWebhookUrl || process.env.ZAPIER_MEMBER_WEBHOOK_URL
-      if (zapierMemberUrlKisi) {
-        fetch(zapierMemberUrlKisi, {
-          method:  'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body:    JSON.stringify({
-            firstName, lastName, email, accessCode: null, membershipType,
-            isMinor,
-            guardianName:         isMinor ? (meta.guardianName         || null) : null,
-            guardianEmail:        isMinor ? (meta.guardianEmail        || null) : null,
-            guardianPhone:        isMinor ? (meta.guardianPhone        || null) : null,
-            guardianRelationship: isMinor ? (meta.guardianRelationship || null) : null,
-          }),
-        })
-          .then(r => console.log('[platform/webhook] Zapier member webhook status:', r.status))
-          .catch(e => console.error('[platform/webhook] Zapier member webhook error:', e.message))
-      }
+      await deliverOrAudit(gym, zapierMemberUrlKisi, {
+        firstName, lastName, email, accessCode: null, membershipType,
+        isMinor,
+        guardianName:         isMinor ? (meta.guardianName         || null) : null,
+        guardianEmail:        isMinor ? (meta.guardianEmail        || null) : null,
+        guardianPhone:        isMinor ? (meta.guardianPhone        || null) : null,
+        guardianRelationship: isMinor ? (meta.guardianRelationship || null) : null,
+      }, 'member', 'Member', member.id)
 
       return NextResponse.json({ received: true })
     }
@@ -625,24 +621,16 @@ export async function POST(request) {
     }
 
     const zapierMemberUrl = gym.zapierMemberWebhookUrl || process.env.ZAPIER_MEMBER_WEBHOOK_URL
-    console.log('[platform/webhook] firing Zapier member webhook:', zapierMemberUrl)
+    console.log('[platform/webhook] firing Zapier member webhook (configured=%s)', Boolean(zapierMemberUrl))
     console.log('[platform/webhook] Zapier member payload: firstName=%s lastName=%s email=%s accessCode=%s membershipType=%s isMinor=%s', firstName, lastName, email, maskPin(accessCode), membershipType, isMinor)
-    if (zapierMemberUrl) {
-      fetch(zapierMemberUrl, {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({
-          firstName, lastName, email, accessCode, membershipType,
-          isMinor,
-          guardianName:         isMinor ? (meta.guardianName         || null) : null,
-          guardianEmail:        isMinor ? (meta.guardianEmail        || null) : null,
-          guardianPhone:        isMinor ? (meta.guardianPhone        || null) : null,
-          guardianRelationship: isMinor ? (meta.guardianRelationship || null) : null,
-        }),
-      })
-        .then(r => console.log('[platform/webhook] Zapier member webhook status:', r.status))
-        .catch(e => console.error('[platform/webhook] Zapier member webhook error:', e.message))
-    }
+    await deliverOrAudit(gym, zapierMemberUrl, {
+      firstName, lastName, email, accessCode, membershipType,
+      isMinor,
+      guardianName:         isMinor ? (meta.guardianName         || null) : null,
+      guardianEmail:        isMinor ? (meta.guardianEmail        || null) : null,
+      guardianPhone:        isMinor ? (meta.guardianPhone        || null) : null,
+      guardianRelationship: isMinor ? (meta.guardianRelationship || null) : null,
+    }, 'member', 'Member', member.id)
 
     if (memberSeamApiKey && !isRutgersPowerliftingOneOff) {
       const deviceId    = memberSeamDeviceId
