@@ -4,6 +4,7 @@ import { deleteSeamCodeByPin } from '@/lib/seam'
 import { maskPin, redactObject } from '@/lib/redact'
 import { intakeGuestPass } from '@/lib/guestPassIntake'
 import { generateUniquePin, DEFAULT_PIN_LENGTH } from '@/lib/pins'
+import { maskEmail, findValidSeamCode } from '@/lib/guestCodeDelivery'
 import { limitRequest } from '@/lib/rateLimit'
 
 const SEAM_API = 'https://connect.getseam.com'
@@ -15,18 +16,19 @@ const MAX_DUPLICATE_RETRIES = 5
  * Create a 24-hr code for `pin` on the lock. Seam's duplicate_access_code
  * means the PIN is already taken on the lock — that is a failure, never
  * success: retry with a fresh collision-checked PIN (up to 5 times).
- * @returns {Promise<{ ok: boolean, pin: string }>} pin may differ from the one passed in
+ * @returns {Promise<{ ok: boolean, pin: string, codeId?: string | null, endsAt?: string }>} pin may differ from the one passed in
  */
 async function createGuestSeamCode({ seamHeaders, deviceId, gymId, pin, name, seamCodes = [], logPrefix }) {
   const tried   = new Set()
   let candidate = pin
   for (let attempt = 1; attempt <= MAX_DUPLICATE_RETRIES; attempt++) {
+    const endsAt        = new Date(Date.now() + DAY_MS).toISOString()
     const createPayload = {
       device_id: deviceId,
       name,
       code:      candidate,
       starts_at: new Date().toISOString(),
-      ends_at:   new Date(Date.now() + DAY_MS).toISOString(),
+      ends_at:   endsAt,
     }
     console.log('%s Seam create payload — %j', logPrefix, redactObject(createPayload))
     const createRes  = await fetch(`${SEAM_API}/access_codes/create`, {
@@ -36,7 +38,7 @@ async function createGuestSeamCode({ seamHeaders, deviceId, gymId, pin, name, se
     const createJson = await createRes.json().catch(() => ({}))
     console.log('%s Seam create response — status=%d body=%j', logPrefix, createRes.status, redactObject(createJson))
 
-    if (createRes.ok) return { ok: true, pin: candidate }
+    if (createRes.ok) return { ok: true, pin: candidate, codeId: createJson.access_code?.access_code_id ?? null, endsAt }
     if (createJson?.error?.type !== 'duplicate_access_code') return { ok: false, pin: candidate }
 
     tried.add(candidate)
@@ -46,38 +48,6 @@ async function createGuestSeamCode({ seamHeaders, deviceId, gymId, pin, name, se
   return { ok: false, pin: candidate }
 }
 
-const PASS_TYPE_LABEL = {
-  SINGLE:     'Day Pass',
-  THREE_PACK: '3-Pack',
-  FIVE_PACK:  '5-Pack',
-  TEN_PACK:   '10-Pack',
-}
-
-
-/**
- * Looks up an existing Seam access code for the given PIN and returns it if
- * it's still within its active window (no ends_at, or ends_at in the
- * future). Used to detect a repeat check-in within the same 24-hour window
- * so the delete/recreate cycle can be skipped entirely — their access is
- * already live, touching it would just reset the window for no reason.
- */
-async function findValidSeamCode(seamHeaders, deviceId, pin) {
-  try {
-    const listRes = await fetch(`${SEAM_API}/access_codes/list`, {
-      method: 'POST', headers: seamHeaders,
-      body:   JSON.stringify({ device_id: deviceId }),
-    })
-    if (!listRes.ok) return null
-    const listJson = await listRes.json()
-    const code = listJson.access_codes?.find(c => String(c.code).trim() === String(pin).trim())
-    if (!code) return null
-    const stillValid = !code.ends_at || new Date(code.ends_at) > new Date()
-    return stillValid ? code : null
-  } catch (err) {
-    console.error('[checkin] findValidSeamCode error:', err.message)
-    return null
-  }
-}
 
 // Records the check-in as a single guest pass (direct call — previously an HTTP POST to /guest-passes)
 function notifyZapier(gymSlug, { name, email, phone, accessCode }) {
@@ -157,6 +127,7 @@ export async function POST(request, { params }) {
       // ── Refresh 24-hr Seam code on every check-in ───────────────────────
       let alreadyActive = false
       let codeFailed    = false
+      let codeExpiresAt = null
       console.log('[checkin] Seam gate check — newCount=%s profile=%s seamApiKey=%s seamDeviceId=%s',
         newCount, profile?.id ?? 'null', gym.seamApiKey ? '(set)' : 'null', gym.seamDeviceId ?? 'null')
 
@@ -170,6 +141,7 @@ export async function POST(request, { params }) {
 
         if (validCode) {
           alreadyActive = true
+          codeExpiresAt = validCode.ends_at ?? null
           console.log('[checkin] repeat check-in within window — code already valid, skipping refresh — pin=%s ends_at=%s', maskPin(storedPin), validCode.ends_at)
         } else {
           // Step 1: snapshot the lock's codes, and delete this guest's own
@@ -210,6 +182,7 @@ export async function POST(request, { params }) {
               logPrefix: newCount === 0 ? '[checkin] exhausted —' : '[checkin]',
             })
             if (result.ok) {
+              codeExpiresAt = result.endsAt
               if (result.pin !== profile.accessCode) {
                 await prisma.guest.update({ where: { id: profile.id }, data: { accessCode: result.pin } })
                 profile = { ...profile, accessCode: result.pin }
@@ -242,9 +215,9 @@ export async function POST(request, { params }) {
           method:  'POST',
           headers: { 'Content-Type': 'application/json' },
           body:    JSON.stringify({
-            name:       profile?.name ?? name,
-            email,
-            accessCode: profile?.accessCode ?? null,
+            name:       profile.name,
+            email:      profile.email,   // always the profile's email, never the request's
+            accessCode: profile.accessCode ?? null,
             passType:   updated.passType,
             passesLeft: updated.passesLeft,
             type:       'checkin',
@@ -254,11 +227,12 @@ export async function POST(request, { params }) {
           .catch(e => console.error('[checkin] Zapier guest webhook error:', e.message))
       }
 
-      return NextResponse.json({ ok: true, passesLeft: updated.passesLeft, passType: updated.passType, passTypeLabel: PASS_TYPE_LABEL[updated.passType] ?? updated.passType, accessCode: profile?.accessCode ?? null, alreadyActive })
+      // The code is never returned — it's emailed by the gym's guest webhook
+      return NextResponse.json({ ok: true, sentTo: maskEmail(profile.email), passesLeft: updated.passesLeft, expiresAt: codeExpiresAt })
     }
 
     // ── No pack found — create a single-use record and deactivate immediately
-    await prisma.guestVisit.create({
+    const singleVisit = await prisma.guestVisit.create({
       data: {
         gymId:          gym.id,
         guestProfileId: profile?.id ?? null,
@@ -278,7 +252,7 @@ export async function POST(request, { params }) {
 
     // ── Notify Zapier (fire-and-forget) ─────────────────────────────────
     if (profile?.accessCode) {
-      notifyZapier(gymSlug, { name: profile.name, email, phone: body.phone, accessCode: profile.accessCode })
+      notifyZapier(gymSlug, { name: profile.name, email: profile.email, phone: body.phone, accessCode: profile.accessCode })
     }
 
     // ── Fire Zapier guest webhook (check-in) ─────────────────────────────
@@ -287,9 +261,9 @@ export async function POST(request, { params }) {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({
-          name:       profile?.name ?? name,
-          email,
-          accessCode: profile?.accessCode ?? null,
+          name:       profile.name,
+          email:      profile.email,   // always the profile's email, never the request's
+          accessCode: profile.accessCode ?? null,
           passType:   'SINGLE',
           passesLeft: null,
           type:       'checkin',
@@ -299,7 +273,7 @@ export async function POST(request, { params }) {
         .catch(e => console.error('[checkin] Zapier guest webhook error:', e.message))
     }
 
-    return NextResponse.json({ ok: true, passesLeft: null, passType: 'SINGLE', passTypeLabel: 'Day Pass', accessCode: profile?.accessCode ?? null, alreadyActive: false })
+    return NextResponse.json({ ok: true, sentTo: maskEmail(profile.email), passesLeft: null, expiresAt: singleVisit.expiresAt })
   } catch (error) {
     console.error('[guest-passes/checkin]', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
