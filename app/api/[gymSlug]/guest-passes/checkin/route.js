@@ -63,8 +63,8 @@ export async function POST(request, { params }) {
 
     console.log('[checkin] POST gymSlug=%s email=%s', gymSlug, email)
 
-    if (!email && !name) {
-      return NextResponse.json({ error: 'email or name is required' }, { status: 400 })
+    if (!email) {
+      return NextResponse.json({ error: 'email is required' }, { status: 400 })
     }
 
     const gym = await prisma.gym.findUnique({
@@ -75,14 +75,17 @@ export async function POST(request, { params }) {
       return NextResponse.json({ error: 'Gym not found' }, { status: 404 })
     }
 
-    // ── Upsert guest profile (global — keyed by email) ──────────────────────
-    let profile = null
-    if (email) {
-      profile = await prisma.guest.upsert({
-        where:  { email },
-        update: { name: name || undefined },
-        create: { name: name || email, email },
-      })
+    // ── Guest profile (global — keyed by email) ─────────────────────────────
+    // Request fields are used only to create a NEW profile; an existing
+    // profile is never modified by a check-in.
+    let profile = await prisma.guest.findUnique({ where: { email } })
+    if (!profile) {
+      profile = await prisma.guest.create({ data: { name: name || email, email } })
+        .catch(async (err) => {
+          // Concurrent first check-in created it — use that one, unmodified
+          if (err.code === 'P2002') return prisma.guest.findUnique({ where: { email } })
+          throw err
+        })
     }
 
     // ── Look up most recent pack with passes remaining ────────────────────────
