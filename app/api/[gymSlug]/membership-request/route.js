@@ -13,6 +13,9 @@ export async function GET(request, { params }) {
     const { searchParams } = new URL(request.url)
     const email = (searchParams.get('email') ?? '').trim().toLowerCase()
 
+    const limited = await limitRequest(request, 'membership-request:GET', email)
+    if (limited) return limited
+
     if (!email) return NextResponse.json({ error: 'email is required' }, { status: 400 })
 
     const gym = await prisma.gym.findUnique({ where: { slug: gymSlug }, select: { id: true } })
