@@ -82,7 +82,8 @@ export async function PATCH(request, { params }) {
     const body = await request.json()
     const { type } = body
 
-    console.log('[settings PATCH] type=%s body=%j', type, body)
+    // Field names only — body carries API keys and passwords.
+    console.log('[settings PATCH] type=%s fields=%j', type, Object.keys(body).filter(k => k !== 'type'))
 
     // ── Gym info ────────────────────────────────────────────────────────────
     if (type === 'gym') {
