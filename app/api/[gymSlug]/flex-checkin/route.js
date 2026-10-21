@@ -89,6 +89,12 @@ async function createSeam24hrCode(apiKey, deviceId, pin, memberName) {
   }
 }
 
+// Generic "not eligible" response for unknown / non-flex / inactive emails
+const NO_ACTIVE_FLEX = () => NextResponse.json(
+  { error: 'no active flex membership found for that email' },
+  { status: 404 },
+)
+
 /**
  * GET /api/[gymSlug]/flex-checkin?email=...
  * Public — looks up a flex member by email and returns their current monthly check-in count.
@@ -121,17 +127,10 @@ export async function GET(request, { params }) {
       },
     })
 
-    if (!member || !member.membershipType?.toLowerCase().includes('flex')) {
-      return NextResponse.json(
-        { error: 'no flex membership found for that email' },
-        { status: 404 },
-      )
-    }
-    if (member.status !== 'ACTIVE') {
-      return NextResponse.json(
-        { error: 'your flex membership is not currently active' },
-        { status: 400 },
-      )
+    // Same response whether the email is unknown, on a non-flex plan, or
+    // inactive — so this endpoint doesn't reveal who is a member.
+    if (!member || !member.membershipType?.toLowerCase().includes('flex') || member.status !== 'ACTIVE') {
+      return NO_ACTIVE_FLEX()
     }
 
     const { currentCount } = resolveCount(member)
@@ -182,17 +181,10 @@ export async function POST(request, { params }) {
       where: { gymId_email: { gymId: gym.id, email } },
     })
 
-    if (!member || !member.membershipType?.toLowerCase().includes('flex')) {
-      return NextResponse.json(
-        { error: 'no flex membership found for that email' },
-        { status: 404 },
-      )
-    }
-    if (member.status !== 'ACTIVE') {
-      return NextResponse.json(
-        { error: 'your flex membership is not currently active' },
-        { status: 400 },
-      )
+    // Same response whether the email is unknown, on a non-flex plan, or
+    // inactive — so this endpoint doesn't reveal who is a member.
+    if (!member || !member.membershipType?.toLowerCase().includes('flex') || member.status !== 'ACTIVE') {
+      return NO_ACTIVE_FLEX()
     }
 
     const { currentCount, needsReset, monthStart } = resolveCount(member)

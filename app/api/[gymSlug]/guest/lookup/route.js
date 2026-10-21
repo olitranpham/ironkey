@@ -8,6 +8,10 @@ import { limitRequest } from '@/lib/rateLimit'
  * Checks whether the guest has signed a GuestWaiver for this specific gym.
  * Body: { email }
  * Returns: { profile, hasSignedWaiver, passesLeft, packs }
+ *
+ * A guest with no waiver and no passes at THIS gym gets exactly the same
+ * response as an unknown email (profile: null), so the lookup doesn't reveal
+ * that the email belongs to a guest of another gym.
  */
 export async function POST(request, { params }) {
   try {
@@ -34,15 +38,20 @@ export async function POST(request, { params }) {
       select: { id: true, name: true, email: true },
     })
 
-    if (!profile) {
-      return NextResponse.json({ profile: null, hasSignedWaiver: false, passesLeft: 0, packs: [] })
-    }
+    const NOT_FOUND = { profile: null, hasSignedWaiver: false, passesLeft: 0, packs: [] }
+    if (!profile) return NextResponse.json(NOT_FOUND)
 
     // Check if this guest has signed the waiver for THIS gym
-    const waiver = await prisma.guestWaiver.findUnique({
-      where: { guestProfileId_gymId: { guestProfileId: profile.id, gymId: gym.id } },
-    })
+    const [waiver, passesHere] = await Promise.all([
+      prisma.guestWaiver.findUnique({
+        where: { guestProfileId_gymId: { guestProfileId: profile.id, gymId: gym.id } },
+      }),
+      prisma.guestVisit.count({ where: { gymId: gym.id, guestProfileId: profile.id } }),
+    ])
     const hasSignedWaiver = Boolean(waiver)
+
+    // Known globally but never at this gym → indistinguishable from unknown
+    if (!hasSignedWaiver && passesHere === 0) return NextResponse.json(NOT_FOUND)
 
     // Fetch active packs for this gym
     const activePasses = await prisma.guestVisit.findMany({
