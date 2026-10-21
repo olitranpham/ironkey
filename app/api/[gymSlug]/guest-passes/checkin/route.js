@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { deleteSeamCodeByPin } from '@/lib/seam'
+import { maskPin, redactObject } from '@/lib/redact'
 
 const SEAM_API = 'https://connect.getseam.com'
 
@@ -120,7 +121,7 @@ export async function POST(request, { params }) {
         let accessCode = profile.accessCode
         if (!accessCode) {
           accessCode = String(Math.floor(1000 + Math.random() * 9000))
-          console.log('[checkin] generated missing accessCode=%s for guest=%s', accessCode, email)
+          console.log('[checkin] generated missing accessCode=%s for guest=%s', maskPin(accessCode), email)
         }
 
         const seamHeaders = { Authorization: `Bearer ${gym.seamApiKey}`, 'Content-Type': 'application/json' }
@@ -132,7 +133,7 @@ export async function POST(request, { params }) {
 
         if (validCode) {
           alreadyActive = true
-          console.log('[checkin] repeat check-in within window — code already valid, skipping refresh — pin=%s ends_at=%s', pin, validCode.ends_at)
+          console.log('[checkin] repeat check-in within window — code already valid, skipping refresh — pin=%s ends_at=%s', maskPin(pin), validCode.ends_at)
         } else {
         // Step 1: delete any existing code for this PIN (best-effort — never blocks create)
         try {
@@ -147,9 +148,9 @@ export async function POST(request, { params }) {
               method: 'POST', headers: seamHeaders,
               body:   JSON.stringify({ access_code_id: oldCode.access_code_id }),
             })
-            console.log('[checkin] deleted old Seam code — id=%s code=%s', oldCode.access_code_id, pin)
+            console.log('[checkin] deleted old Seam code — id=%s code=%s', oldCode.access_code_id, maskPin(pin))
           } else {
-            console.log('[checkin] no existing Seam code found for pin=%s', pin)
+            console.log('[checkin] no existing Seam code found for pin=%s', maskPin(pin))
           }
         } catch (deleteErr) {
           console.error('[checkin] Seam delete step error (continuing to create):', deleteErr.message)
@@ -166,16 +167,16 @@ export async function POST(request, { params }) {
             starts_at: startsAt,
             ends_at:   endsAt,
           }
-          console.log('[checkin] Seam create payload — %j', createPayload)
+          console.log('[checkin] Seam create payload — %j', redactObject(createPayload))
           const createRes  = await fetch(`${SEAM_API}/access_codes/create`, {
             method: 'POST', headers: seamHeaders,
             body:   JSON.stringify(createPayload),
           })
           const createJson = await createRes.json()
-          console.log('[checkin] Seam create response — status=%d body=%j', createRes.status, createJson)
+          console.log('[checkin] Seam create response — status=%d body=%j', createRes.status, redactObject(createJson))
           if (!createRes.ok && createJson?.error?.type === 'duplicate_access_code') {
             alreadyActive = true
-            console.log('[checkin] duplicate_access_code — code already active for pin=%s', pin)
+            console.log('[checkin] duplicate_access_code — code already active for pin=%s', maskPin(pin))
           }
         } catch (createErr) {
           console.error('[checkin] Seam create step error:', createErr.message)
@@ -199,7 +200,7 @@ export async function POST(request, { params }) {
 
         if (validCode) {
           alreadyActive = true
-          console.log('[checkin] exhausted — repeat check-in within window, code already valid, skipping refresh — pin=%s ends_at=%s', pin, validCode.ends_at)
+          console.log('[checkin] exhausted — repeat check-in within window, code already valid, skipping refresh — pin=%s ends_at=%s', maskPin(pin), validCode.ends_at)
         } else {
         // Delete existing code first
         try {
@@ -214,7 +215,7 @@ export async function POST(request, { params }) {
               method: 'POST', headers: seamHeaders,
               body:   JSON.stringify({ access_code_id: oldCode.access_code_id }),
             })
-            console.log('[checkin] exhausted — deleted old Seam code id=%s code=%s', oldCode.access_code_id, pin)
+            console.log('[checkin] exhausted — deleted old Seam code id=%s code=%s', oldCode.access_code_id, maskPin(pin))
           }
         } catch (deleteErr) {
           console.error('[checkin] exhausted — Seam delete error (continuing to create):', deleteErr.message)
@@ -231,13 +232,13 @@ export async function POST(request, { params }) {
             starts_at: startsAt,
             ends_at:   endsAt,
           }
-          console.log('[checkin] exhausted — creating final 24-hr Seam code — %j', createPayload)
+          console.log('[checkin] exhausted — creating final 24-hr Seam code — %j', redactObject(createPayload))
           const createRes  = await fetch(`${SEAM_API}/access_codes/create`, {
             method: 'POST', headers: seamHeaders,
             body:   JSON.stringify(createPayload),
           })
           const createJson = await createRes.json()
-          console.log('[checkin] exhausted — Seam create response status=%d body=%j', createRes.status, createJson)
+          console.log('[checkin] exhausted — Seam create response status=%d body=%j', createRes.status, redactObject(createJson))
         } catch (createErr) {
           console.error('[checkin] exhausted — Seam create error:', createErr.message)
         }

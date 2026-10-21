@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import prisma from '@/lib/prisma'
 import { withGymContext } from '@/lib/auth/gymContext'
+import { maskSecret } from '@/lib/redact'
 
 /**
  * Given a billing period end (Unix timestamp) and the subscription object,
@@ -47,7 +48,7 @@ export async function POST(request, { params }) {
     const subId     = existing.stripeSubscriptionId
     const stripeKey = gym?.stripeSecretKey
 
-    console.log('[cancel] memberId:', memberId, '| subId:', subId, '| stripeKey set:', Boolean(stripeKey), '| key prefix:', stripeKey?.slice(0, 8) ?? 'n/a')
+    console.log('[cancel] memberId:', memberId, '| subId:', subId, '| stripeKey set:', Boolean(stripeKey), '| key prefix:', maskSecret(stripeKey))
 
     let stripeWarning = null
     let effectiveAtSecs = null // when the cancellation actually takes effect, for cancelEffectiveDate

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { listEvents as listKisiEvents } from '@/lib/kisi'
 import { withGymContext } from '@/lib/auth/gymContext'
+import { redactJsonText } from '@/lib/redact'
 
 const SEAM_API = 'https://connect.getseam.com'
 
@@ -111,7 +112,7 @@ export async function GET(request, { params }) {
 
     if (!eventsRes.ok) {
       const text = await eventsRes.text()
-      console.error('[seam/events] Seam events error:', eventsRes.status, text)
+      console.error('[seam/events] Seam events error:', eventsRes.status, redactJsonText(text))
       return NextResponse.json({ error: 'Seam API error' }, { status: 502 })
     }
 

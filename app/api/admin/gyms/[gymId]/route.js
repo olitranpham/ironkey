@@ -36,7 +36,7 @@ export async function PATCH(request, { params }) {
     if (body.zapierOverdueWebhookUrl !== undefined) data.zapierOverdueWebhookUrl = body.zapierOverdueWebhookUrl.trim() || null
     if (body.zapierMembershipRequestWebhookUrl !== undefined) data.zapierMembershipRequestWebhookUrl = body.zapierMembershipRequestWebhookUrl.trim() || null
 
-    console.log('[admin/gyms PATCH] gymId=%s incoming body seamDeviceId=%j writing=%j', gymId, body.seamDeviceId, data)
+    console.log('[admin/gyms PATCH] gymId=%s writing fields=%j', gymId, Object.keys(data))
 
     if (Object.keys(data).length === 0) {
       return NextResponse.json({ error: 'Nothing to update' }, { status: 400 })

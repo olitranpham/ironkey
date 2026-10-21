@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import prisma from '@/lib/prisma'
 import { deleteSeamCodeByPin } from '@/lib/seam'
+import { maskPin } from '@/lib/redact'
 
 /**
  * POST /api/[gymSlug]/stripe/webhook
@@ -72,7 +73,7 @@ export async function POST(request, { params }) {
       return NextResponse.json({ received: true })
     }
 
-    console.log('[webhook] subscription deleted for member:', member.id, '| accessCode:', member.accessCode)
+    console.log('[webhook] subscription deleted for member:', member.id, '| accessCode:', maskPin(member.accessCode))
 
     // ── Delete Seam access code ─────────────────────────────────────────────
     if (member.accessCode && gym.seamApiKey) {

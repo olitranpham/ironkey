@@ -3,6 +3,7 @@ import Stripe from 'stripe'
 import prisma from '@/lib/prisma'
 import { withGymContext } from '@/lib/auth/gymContext'
 import { ensureKisiMembership } from '@/lib/kisi'
+import { maskSecret, maskPin } from '@/lib/redact'
 
 const SEAM_API = 'https://connect.getseam.com'
 
@@ -29,7 +30,7 @@ export async function POST(request, { params }) {
     const subId     = existing.stripeSubscriptionId
     const stripeKey = gym?.stripeSecretKey
 
-    console.log('[resume] memberId:', memberId, '| subId:', subId, '| stripeKey set:', Boolean(stripeKey), '| key prefix:', stripeKey?.slice(0, 8) ?? 'n/a')
+    console.log('[resume] memberId:', memberId, '| subId:', subId, '| stripeKey set:', Boolean(stripeKey), '| key prefix:', maskSecret(stripeKey))
 
     let stripeWarning = null
 
@@ -77,7 +78,7 @@ export async function POST(request, { params }) {
       const accessCode   = existing.accessCode
       const fullName     = `${existing.firstName} ${existing.lastName}`.trim()
 
-      console.log('[resume] Seam — accessCode:', accessCode, '| deviceId:', seamDeviceId, '| key set:', Boolean(seamKey))
+      console.log('[resume] Seam — accessCode:', maskPin(accessCode), '| deviceId:', seamDeviceId, '| key set:', Boolean(seamKey))
 
       if (seamKey && seamDeviceId && accessCode) {
         try {
@@ -97,7 +98,7 @@ export async function POST(request, { params }) {
           console.error('[resume] Seam error:', seamErr.message)
         }
       } else {
-        console.warn('[resume] Skipping Seam — accessCode:', accessCode, '| deviceId:', seamDeviceId, '| key present:', Boolean(seamKey))
+        console.warn('[resume] Skipping Seam — accessCode:', maskPin(accessCode), '| deviceId:', seamDeviceId, '| key present:', Boolean(seamKey))
       }
     }
 

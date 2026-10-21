@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { deleteSeamCodeByPin, waitForAccessCodeGone, generateUniqueAccessCode } from '@/lib/seam'
+import { maskPin, redactObject } from '@/lib/redact'
 
 const SEAM_API = 'https://connect.getseam.com'
 
@@ -84,7 +85,7 @@ export async function POST(request) {
         if (deleted) {
           const gone = await waitForAccessCodeGone(gym.seamApiKey, gym.seamDeviceId, accessCode, { maxAttempts: 8, intervalMs: 1000 })
           if (!gone) {
-            console.warn('[rep-gym-pass/checkin] delete did not propagate within timeout — pin=%s — will attempt create and fall back to a new code if still blocked', accessCode)
+            console.warn('[rep-gym-pass/checkin] delete did not propagate within timeout — pin=%s — will attempt create and fall back to a new code if still blocked', maskPin(accessCode))
           }
         }
 
@@ -122,7 +123,7 @@ export async function POST(request) {
         }
 
         if (!createRes.ok) {
-          console.error('[rep-gym-pass/checkin] Seam create failed:', JSON.stringify(createJson))
+          console.error('[rep-gym-pass/checkin] Seam create failed:', JSON.stringify(redactObject(createJson)))
           return NextResponse.json({ error: 'provisioning_failed', detail: createJson.error?.message ?? 'seam error' }, { status: 500 })
         }
         console.log('[rep-gym-pass/checkin] Seam code created: access_code_id=%s', createJson.access_code?.access_code_id)

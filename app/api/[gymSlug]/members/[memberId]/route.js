@@ -4,6 +4,7 @@ import { deleteSeamCodeByPin } from '@/lib/seam'
 import { ensureKisiMembership, revokeAccess as revokeKisiAccess, grantAccess as grantKisiAccess, groupIdForMembershipType } from '@/lib/kisi'
 import { normalizeGradSemester } from '@/lib/gradSemester'
 import { withGymContext } from '@/lib/auth/gymContext'
+import { maskPin, redactJsonText } from '@/lib/redact'
 
 const SEAM_API = 'https://connect.getseam.com'
 const VALID_STATUSES         = ['ACTIVE', 'FROZEN', 'CANCELED']
@@ -82,7 +83,7 @@ export async function PATCH(request, { params }) {
             resendKisiInvite,
             guardianName, guardianEmail, guardianPhone, guardianRelationship } = body
 
-    console.log('[members/patch] memberId=%s gymId=%s body=%j', memberId, gymId, body)
+    console.log('[members/patch] memberId=%s gymId=%s fields=%j', memberId, gymId, Object.keys(body))
 
     const existing = await prisma.member.findFirst({
       where: { id: memberId, gymId },
@@ -225,7 +226,7 @@ export async function PATCH(request, { params }) {
       select: MEMBER_SELECT,
     })
 
-    console.log('[members/patch] DB updated — accessCode=%s', member.accessCode)
+    console.log('[members/patch] DB updated — accessCode=%s', maskPin(member.accessCode))
 
     // ── Log membership event if status changed ───────────────────────────────
     if (status !== undefined && status !== existing.status) {
@@ -275,7 +276,7 @@ export async function PATCH(request, { params }) {
             )
 
             if (existingSeamCode) {
-              console.log('[members/patch] seam update — code_id=%s newCode=%s', existingSeamCode.access_code_id, data.accessCode)
+              console.log('[members/patch] seam update — code_id=%s newCode=%s', existingSeamCode.access_code_id, maskPin(data.accessCode))
               const updateRes = await fetch(`${SEAM_API}/access_codes/update`, {
                 method:  'POST',
                 headers: seamHeaders,
@@ -283,12 +284,12 @@ export async function PATCH(request, { params }) {
               })
               if (!updateRes.ok) {
                 const text = await updateRes.text()
-                console.error('[members/patch] seam update failed:', updateRes.status, text)
+                console.error('[members/patch] seam update failed:', updateRes.status, redactJsonText(text))
               } else {
                 console.log('[members/patch] seam update OK')
               }
             } else if (data.accessCode) {
-              console.log('[members/patch] seam create — device=%s code=%s name="%s"', deviceId, data.accessCode, existing.firstName + ' ' + existing.lastName)
+              console.log('[members/patch] seam create — device=%s code=%s name="%s"', deviceId, maskPin(data.accessCode), existing.firstName + ' ' + existing.lastName)
               const createRes = await fetch(`${SEAM_API}/access_codes/create`, {
                 method:  'POST',
                 headers: seamHeaders,
@@ -300,7 +301,7 @@ export async function PATCH(request, { params }) {
               })
               if (!createRes.ok) {
                 const text = await createRes.text()
-                console.error('[members/patch] seam create failed:', createRes.status, text)
+                console.error('[members/patch] seam create failed:', createRes.status, redactJsonText(text))
               } else {
                 console.log('[members/patch] seam create OK')
               }
@@ -355,10 +356,10 @@ export async function DELETE(request, { params }) {
 
       if (member.accessCode && apiKey && deviceId) {
         const { ok } = await deleteSeamCodeByPin(apiKey, member.accessCode, deviceId, '[members DELETE]')
-        console.log('[members DELETE] Seam delete — pin=%s ok=%s memberId=%s', member.accessCode, ok, memberId)
+        console.log('[members DELETE] Seam delete — pin=%s ok=%s memberId=%s', maskPin(member.accessCode), ok, memberId)
       } else {
         console.log('[members DELETE] skipping Seam — accessCode=%s apiKey=%s deviceId=%s',
-          member.accessCode ?? 'none',
+          member.accessCode ? maskPin(member.accessCode) : 'none',
           apiKey   ? '(set)' : 'MISSING',
           deviceId ? '(set)' : 'MISSING',
         )

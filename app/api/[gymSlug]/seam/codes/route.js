@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { generateUniqueAccessCode } from '@/lib/seam'
 import { withGymContext } from '@/lib/auth/gymContext'
+import { maskPin, redactJsonText } from '@/lib/redact'
 
 const SEAM_API = 'https://connect.getseam.com'
 
@@ -59,7 +60,7 @@ export async function GET(request, { params }) {
 
       if (!devicesRes.ok) {
         const text = await devicesRes.text()
-        console.error('[seam/codes GET] devices error:', devicesRes.status, text)
+        console.error('[seam/codes GET] devices error:', devicesRes.status, redactJsonText(text))
         return NextResponse.json({ error: 'Seam API error fetching devices' }, { status: 502 })
       }
 
@@ -83,7 +84,7 @@ export async function GET(request, { params }) {
         if (!r) return []
         if (!r.ok) {
           const text = await r.text().catch(() => '')
-          console.error('[seam/codes GET] access_codes/list failed for device', device.device_id, r.status, text)
+          console.error('[seam/codes GET] access_codes/list failed for device', device.device_id, r.status, redactJsonText(text))
           return []
         }
         const body = await r.json().catch(() => ({}))
@@ -260,8 +261,8 @@ export async function GET(request, { params }) {
       Promise.all(
         syncUpdates.map(u =>
           prisma.member.update({ where: { id: u.id }, data: { accessCode: u.code } })
-            .then(() => console.log(`[seam/codes sync] wrote ${u.code} → "${u.name}"`))
-            .catch(e  => console.error(`[seam/codes sync] failed for "${u.name}":`, e.message))
+            .then(() => console.log('[seam/codes sync] wrote %s → member %s', maskPin(u.code), u.id))
+            .catch(e  => console.error('[seam/codes sync] failed for member %s:', u.id, e.message))
         )
       )
     }
@@ -335,7 +336,7 @@ export async function POST(request, { params }) {
       })
       if (!seamRes.ok) {
         const text = await seamRes.text()
-        console.error('[seam/codes POST] update error:', seamRes.status, text)
+        console.error('[seam/codes POST] update error:', seamRes.status, redactJsonText(text))
         return NextResponse.json({ error: 'Failed to update code on lock' }, { status: 502 })
       }
     } else {

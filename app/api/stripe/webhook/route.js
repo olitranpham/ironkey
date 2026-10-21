@@ -5,6 +5,7 @@ import { deleteSeamCodeByPin, generateUniqueAccessCode } from '@/lib/seam'
 import { ensureKisiMembership, revokeAccess as revokeKisiAccess } from '@/lib/kisi'
 import { formatPhone } from '@/lib/phone'
 import { normalizeGradSemester } from '@/lib/gradSemester'
+import { maskPin, redactJsonText } from '@/lib/redact'
 
 const SEAM_API = 'https://connect.getseam.com'
 
@@ -190,9 +191,9 @@ export async function POST(request) {
             data:  { accessCode },
           })
         }
-        console.log('[platform/webhook] generated accessCode', accessCode, 'for new guest', email)
+        console.log('[platform/webhook] generated accessCode', maskPin(accessCode), 'for new guest', email)
       } else {
-        console.log('[platform/webhook] reusing accessCode', accessCode, 'for returning guest', email)
+        console.log('[platform/webhook] reusing accessCode', maskPin(accessCode), 'for returning guest', email)
       }
 
       // ── Program time-bound Seam access code for guest (24-hour window) ────────
@@ -235,7 +236,7 @@ export async function POST(request) {
                 .then(r => {
                   const errType = r.error?.type ?? null
                   const isDuplicate = errType === 'duplicate_access_code'
-                  console.log('[platform/webhook] Seam guest code — device=%s code=%s passType=%s result=%s', dev.device_id, accessCode, passType, isDuplicate ? 'already_active (duplicate)' : (r.access_code?.access_code_id ?? errType ?? 'unknown'))
+                  console.log('[platform/webhook] Seam guest code — device=%s code=%s passType=%s result=%s', dev.device_id, maskPin(accessCode), passType, isDuplicate ? 'already_active (duplicate)' : (r.access_code?.access_code_id ?? errType ?? 'unknown'))
                   return { deviceId: dev.device_id, alreadyActive: isDuplicate, success: isDuplicate || Boolean(r.access_code?.access_code_id) }
                 })
                 .catch(e => { console.error('[platform/webhook] Seam guest code error:', e.message); return { alreadyActive: false, success: false } })
@@ -267,7 +268,7 @@ export async function POST(request) {
           }),
         })
         if (!zapRes.ok) {
-          console.error('[platform/webhook] guest-passes notify failed:', zapRes.status, await zapRes.text())
+          console.error('[platform/webhook] guest-passes notify failed:', zapRes.status, redactJsonText(await zapRes.text()))
         } else {
           const zapJson = await zapRes.json()
           savedPassesLeft = zapJson.pass?.passesLeft ?? savedPassesLeft
@@ -596,14 +597,14 @@ export async function POST(request) {
         where: { id: member.id },
         data:  { accessCode },
       })
-      console.log('[platform/webhook] access code generated for member:', member.id, '| code:', accessCode)
+      console.log('[platform/webhook] access code generated for member:', member.id, '| code:', maskPin(accessCode))
     } else {
       console.log('[platform/webhook] Rutgers Powerlifting one-off — skipping access code generation for member:', member.id)
     }
 
     const zapierMemberUrl = gym.zapierMemberWebhookUrl || process.env.ZAPIER_MEMBER_WEBHOOK_URL
     console.log('[platform/webhook] firing Zapier member webhook:', zapierMemberUrl)
-    console.log('[platform/webhook] Zapier member payload: firstName=%s lastName=%s email=%s accessCode=%s membershipType=%s isMinor=%s', firstName, lastName, email, accessCode, membershipType, isMinor)
+    console.log('[platform/webhook] Zapier member payload: firstName=%s lastName=%s email=%s accessCode=%s membershipType=%s isMinor=%s', firstName, lastName, email, maskPin(accessCode), membershipType, isMinor)
     if (zapierMemberUrl) {
       fetch(zapierMemberUrl, {
         method:  'POST',
@@ -750,7 +751,7 @@ export async function POST(request) {
       return NextResponse.json({ received: true })
     }
 
-    console.log('[platform/webhook] subscription deleted for member:', member.id, '| accessCode:', member.accessCode)
+    console.log('[platform/webhook] subscription deleted for member:', member.id, '| accessCode:', maskPin(member.accessCode))
 
     if (gym.accessProvider === 'KISI') {
       await revokeKisiAccess(gym, member.kisiRoleAssignmentId)

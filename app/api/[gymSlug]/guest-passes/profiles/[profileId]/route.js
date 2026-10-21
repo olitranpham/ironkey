@@ -3,6 +3,7 @@ import prisma from '@/lib/prisma'
 import { formatPhone } from '@/lib/phone'
 import { deleteSeamCodeByPin } from '@/lib/seam'
 import { withGymContext } from '@/lib/auth/gymContext'
+import { maskPin } from '@/lib/redact'
 
 /**
  * PATCH /api/[gymSlug]/guest-passes/profiles/[profileId]
@@ -121,9 +122,9 @@ export async function DELETE(request, { params }) {
       const deviceId = gym.seamDeviceId ?? process.env.SEAM_DEVICE_ID
       if (profile.accessCode && apiKey) {
         const { ok } = await deleteSeamCodeByPin(apiKey, profile.accessCode, deviceId, '[guest-profile DELETE full]')
-        console.log('[guest-profile DELETE full] Seam delete — pin=%s ok=%s profileId=%s', profile.accessCode, ok, profileId)
+        console.log('[guest-profile DELETE full] Seam delete — pin=%s ok=%s profileId=%s', maskPin(profile.accessCode), ok, profileId)
       } else {
-        console.log('[guest-profile DELETE full] skipping Seam — accessCode=%s apiKey=%s', profile.accessCode ?? 'none', apiKey ? '(set)' : 'MISSING')
+        console.log('[guest-profile DELETE full] skipping Seam — accessCode=%s apiKey=%s', profile.accessCode ? maskPin(profile.accessCode) : 'none', apiKey ? '(set)' : 'MISSING')
       }
 
       // GuestWaiver has no cascade on Guest — must clear it before the Guest delete.
@@ -150,9 +151,9 @@ export async function DELETE(request, { params }) {
     const deviceId = gym.seamDeviceId ?? process.env.SEAM_DEVICE_ID
     if (profile.accessCode && apiKey) {
       const { ok } = await deleteSeamCodeByPin(apiKey, profile.accessCode, deviceId, '[guest-profile DELETE]')
-      console.log('[guest-profile DELETE] Seam delete — pin=%s ok=%s profileId=%s', profile.accessCode, ok, profileId)
+      console.log('[guest-profile DELETE] Seam delete — pin=%s ok=%s profileId=%s', maskPin(profile.accessCode), ok, profileId)
     } else {
-      console.log('[guest-profile DELETE] skipping Seam — accessCode=%s apiKey=%s', profile.accessCode ?? 'none', apiKey ? '(set)' : 'MISSING')
+      console.log('[guest-profile DELETE] skipping Seam — accessCode=%s apiKey=%s', profile.accessCode ? maskPin(profile.accessCode) : 'none', apiKey ? '(set)' : 'MISSING')
     }
 
     // ── Delete this gym's partner check-in records ──────────────────────────

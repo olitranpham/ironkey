@@ -4,6 +4,7 @@ import prisma from '@/lib/prisma'
 import { generateUniqueAccessCode, isAccessCodeLiveOnSeam } from '@/lib/seam'
 import { ensureKisiMembership } from '@/lib/kisi'
 import { withGymContext } from '@/lib/auth/gymContext'
+import { maskPin, redactJsonText } from '@/lib/redact'
 
 const SEAM_API = 'https://connect.getseam.com'
 
@@ -149,7 +150,7 @@ export async function POST(request, { params }) {
           })
           if (!createRes.ok) {
             const text = await createRes.text()
-            console.error('[reverse-cancel] Seam create failed:', createRes.status, text)
+            console.error('[reverse-cancel] Seam create failed:', createRes.status, redactJsonText(text))
             // Non-fatal — the DB/Stripe reversal already succeeded; the code
             // just won't be live on the lock yet. Surfaced in the response.
           }
@@ -162,7 +163,7 @@ export async function POST(request, { params }) {
       data: { memberId, gymId, type: 'cancellation_reversed' },
     })
 
-    console.log('[reverse-cancel] done — memberId:', memberId, '| codeReissued:', codeReissued, '| accessCode:', accessCode)
+    console.log('[reverse-cancel] done — memberId:', memberId, '| codeReissued:', codeReissued, '| accessCode:', maskPin(accessCode))
 
     return NextResponse.json({ member: updated, codeReissued, accessCode })
   } catch (error) {

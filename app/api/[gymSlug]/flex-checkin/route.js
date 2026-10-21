@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
+import { maskPin, redactObject } from '@/lib/redact'
 
 const SEAM_API        = 'https://connect.getseam.com'
 const MAX_FLEX_CHECKINS = 5
@@ -35,9 +36,9 @@ async function deleteSeamCodeByPin(apiKey, deviceId, pin) {
         method: 'POST', headers: seamHeaders,
         body:   JSON.stringify({ access_code_id: oldCode.access_code_id }),
       })
-      console.log('[flex-checkin] deleted Seam code id=%s pin=%s', oldCode.access_code_id, pin)
+      console.log('[flex-checkin] deleted Seam code id=%s pin=%s', oldCode.access_code_id, maskPin(pin))
     } else {
-      console.log('[flex-checkin] no existing Seam code found for pin=%s', pin)
+      console.log('[flex-checkin] no existing Seam code found for pin=%s', maskPin(pin))
     }
   } catch (err) {
     console.error('[flex-checkin] Seam delete error (non-fatal):', err.message)
@@ -75,13 +76,13 @@ async function createSeam24hrCode(apiKey, deviceId, pin, memberName) {
     const startsAt    = new Date().toISOString()
     const endsAt      = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
     const payload     = { device_id: deviceId, name: memberName, code: String(pin).trim(), starts_at: startsAt, ends_at: endsAt }
-    console.log('[flex-checkin] creating 24-hr Seam code — %j', payload)
+    console.log('[flex-checkin] creating 24-hr Seam code — %j', redactObject(payload))
     const res  = await fetch(`${SEAM_API}/access_codes/create`, {
       method: 'POST', headers: seamHeaders,
       body:   JSON.stringify(payload),
     })
     const json = await res.json()
-    console.log('[flex-checkin] Seam create response status=%d body=%j', res.status, json)
+    console.log('[flex-checkin] Seam create response status=%d body=%j', res.status, redactObject(json))
   } catch (err) {
     console.error('[flex-checkin] Seam create error (non-fatal):', err.message)
   }
@@ -220,7 +221,7 @@ export async function POST(request, { params }) {
 
       if (validCode) {
         alreadyActive = true
-        console.log('[flex-checkin] repeat check-in within window — code already valid, skipping refresh — pin=%s ends_at=%s', pin, validCode.ends_at)
+        console.log('[flex-checkin] repeat check-in within window — code already valid, skipping refresh — pin=%s ends_at=%s', maskPin(pin), validCode.ends_at)
       } else {
         // Always delete the existing code first (clears any previous 24-hr window)
         await deleteSeamCodeByPin(gym.seamApiKey, gym.seamDeviceId, pin)

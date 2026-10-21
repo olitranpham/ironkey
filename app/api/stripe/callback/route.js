@@ -57,13 +57,13 @@ export async function GET(request) {
     const tokenData = await tokenRes.json()
 
     if (!tokenRes.ok || tokenData.error) {
-      console.error('[stripe/callback] token exchange failed:', tokenData)
+      console.error('[stripe/callback] token exchange failed: type=%s message=%s', tokenData.error ?? `http_${tokenRes.status}`, tokenData.error_description ?? '')
       return NextResponse.redirect(
         `${appUrl}/${gymSlug}/settings?stripe_error=${encodeURIComponent(tokenData.error_description ?? 'token_exchange_failed')}`,
       )
     }
 
-    console.log('[stripe/callback] tokenData:', JSON.stringify(tokenData, null, 2))
+    console.log('[stripe/callback] connected: stripe_user_id=%s scope=%s livemode=%s', tokenData.stripe_user_id, tokenData.scope, tokenData.livemode)
 
     const stripeAccountId = tokenData.stripe_user_id
 

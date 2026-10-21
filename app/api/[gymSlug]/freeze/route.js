@@ -4,6 +4,7 @@ import prisma from '@/lib/prisma'
 import { withGymContext } from '@/lib/auth/gymContext'
 import { deleteSeamCodeByPin } from '@/lib/seam'
 import { revokeAccess as revokeKisiAccess } from '@/lib/kisi'
+import { maskSecret, maskPin } from '@/lib/redact'
 
 export async function POST(request, { params }) {
   try {
@@ -37,7 +38,7 @@ export async function POST(request, { params }) {
     // This gym uses Model A (gym's own key stored in stripeSecretKey, no stripeAccount option passed)
     console.log('[freeze] memberId:', memberId, '| subId:', subId)
     console.log('[freeze] Stripe init model: Stripe(gym.stripeSecretKey) — NO stripeAccount header')
-    console.log('[freeze] key prefix:', stripeKey?.slice(0, 8) ?? 'n/a', '| stripeAccountId (for reference):', stripeAccountId ?? 'n/a')
+    console.log('[freeze] key prefix:', maskSecret(stripeKey), '| stripeAccountId (for reference):', stripeAccountId ?? 'n/a')
     console.log('[freeze] freezeEndDate (maxFreeze):', freezeEnd.toISOString())
 
     let stripeWarning = null
@@ -80,7 +81,7 @@ export async function POST(request, { params }) {
       if (seamKey && accessCode) {
         await deleteSeamCodeByPin(seamKey, accessCode, seamDeviceId, '[freeze]')
       } else {
-        console.warn('[freeze] Skipping Seam — accessCode:', accessCode, '| key present:', Boolean(seamKey))
+        console.warn('[freeze] Skipping Seam — accessCode:', maskPin(accessCode), '| key present:', Boolean(seamKey))
       }
     }
 

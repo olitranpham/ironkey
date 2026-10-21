@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { listEvents as listKisiEvents } from '@/lib/kisi'
 import { withGymContext } from '@/lib/auth/gymContext'
+import { redactJsonText } from '@/lib/redact'
 
 const SEAM_API = 'https://connect.getseam.com'
 
@@ -72,7 +73,7 @@ export async function GET(request, { params }) {
       body: JSON.stringify(scopeBody),
     })
     if (!codesRes.ok) {
-      console.error('[members/visits] access_codes/list failed:', codesRes.status, await codesRes.text())
+      console.error('[members/visits] access_codes/list failed:', codesRes.status, redactJsonText(await codesRes.text()))
       return NextResponse.json({ visits: [] })
     }
     const { access_codes = [] } = await codesRes.json()
@@ -98,7 +99,7 @@ export async function GET(request, { params }) {
       }),
     })
     if (!eventsRes.ok) {
-      console.error('[members/visits] events/list failed:', eventsRes.status, await eventsRes.text())
+      console.error('[members/visits] events/list failed:', eventsRes.status, redactJsonText(await eventsRes.text()))
       return NextResponse.json({ visits: [] })
     }
     const { events = [] } = await eventsRes.json()
