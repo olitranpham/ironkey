@@ -4,6 +4,15 @@ import { verifyTokenEdge, extractBearerToken } from '@/lib/jwt-edge'
 export async function middleware(request) {
   const { pathname } = request.nextUrl
 
+  // ── Strip client-supplied identity headers ───────────────────────────────
+  // x-gym-* are only ever set below from a verified JWT. Removing them on
+  // every request means no route — public or protected — can see spoofed values.
+  const requestHeaders = new Headers(request.headers)
+  for (const name of [...requestHeaders.keys()]) {
+    if (name.toLowerCase().startsWith('x-gym-')) requestHeaders.delete(name)
+  }
+  const next = () => NextResponse.next({ request: { headers: requestHeaders } })
+
   // ── Public routes ────────────────────────────────────────────────────────
   if (
     pathname === '/api/v1/checkin' ||
@@ -22,7 +31,7 @@ export async function middleware(request) {
     /^\/api\/[^/]+\/concessions(\/|$)/.test(pathname) ||
     (request.method === 'POST' && /^\/api\/[^/]+\/overdue-cancel$/.test(pathname))
   ) {
-    return NextResponse.next()
+    return next()
   }
 
   // ── All other /api/* routes require a valid JWT ───────────────────────────
@@ -43,16 +52,16 @@ export async function middleware(request) {
     if (payload.role !== 'SUPERADMIN') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
-    return NextResponse.next()
+    return next()
   }
 
-  // ── Gym routes — forward identity headers ─────────────────────────────────
-  const requestHeaders = new Headers(request.headers)
-  requestHeaders.set('x-gym-user-id', payload.id)
-  requestHeaders.set('x-gym-id',      payload.gymId)
-  requestHeaders.set('x-gym-role',    payload.role)
+  // ── Gym routes — forward identity headers from the verified JWT ───────────
+  if (payload.id)    requestHeaders.set('x-gym-user-id', String(payload.id))
+  if (payload.gymId) requestHeaders.set('x-gym-id',      String(payload.gymId))
+  if (payload.role)  requestHeaders.set('x-gym-role',    String(payload.role))
+  if (payload.impersonatedBy) requestHeaders.set('x-gym-impersonated-by', String(payload.impersonatedBy))
 
-  return NextResponse.next({ request: { headers: requestHeaders } })
+  return next()
 }
 
 export const config = {
