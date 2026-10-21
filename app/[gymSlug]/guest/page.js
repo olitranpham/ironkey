@@ -533,6 +533,12 @@ export default function GuestPage() {
       })
       const json = await res.json()
       console.log('[guest/checkin] response status=%d body=%o', res.status, json)
+      // No active pass (e.g. used up since the lookup) → show the "buy a pass" panel
+      if (res.status === 402 && json.needsPass) {
+        setLookupResult(prev => ({ ...(prev ?? {}), passesLeft: 0, packs: [] }))
+        setStep('checkin-confirm')
+        return
+      }
       if (!res.ok) throw new Error(json.error ?? 'check-in failed')
       setCheckinResult(json)
       setStep('checkin-done')
@@ -1182,8 +1188,7 @@ export default function GuestPage() {
             ) : (
               <>
                 <div className="text-center py-2">
-                  <p className="text-sm text-neutral-400">no passes remaining.</p>
-                  <p className="text-xs text-neutral-600 mt-1">purchase a new pass to continue.</p>
+                  <p className="text-sm text-neutral-400">no active pass. buy one below.</p>
                 </div>
                 <button
                   onClick={() => {
