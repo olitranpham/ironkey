@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import prisma from '@/lib/prisma'
+import { withGymContext } from '@/lib/auth/gymContext'
 
 function itemStatus(quantity, lowStockAt) {
   if (quantity === 0)           return 'out'
@@ -11,6 +12,8 @@ function itemStatus(quantity, lowStockAt) {
 export async function GET(request, { params }) {
   try {
     const { gymSlug } = await params
+    const { errorResponse } = await withGymContext(request, gymSlug)
+    if (errorResponse) return errorResponse
 
     const gym = await prisma.gym.findUnique({ where: { slug: gymSlug }, select: { id: true } })
     if (!gym) return NextResponse.json({ error: 'Gym not found' }, { status: 404 })
@@ -34,6 +37,8 @@ export async function GET(request, { params }) {
 export async function POST(request, { params }) {
   try {
     const { gymSlug } = await params
+    const { errorResponse } = await withGymContext(request, gymSlug)
+    if (errorResponse) return errorResponse
     const body = await request.json()
     const { name, category, quantity, lowStockAt, unitCost, notes, price, sectionLabel } = body
 

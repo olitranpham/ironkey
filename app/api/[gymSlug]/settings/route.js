@@ -1,14 +1,18 @@
 import { NextResponse } from 'next/server'
 import bcrypt from 'bcryptjs'
 import prisma from '@/lib/prisma'
+import { withGymContext } from '@/lib/auth/gymContext'
 
 /**
  * GET /api/[gymSlug]/settings
  * Returns gym settings (keys masked to boolean presence — never exposed in plaintext).
  */
-export async function GET(request) {
+export async function GET(request, { params }) {
   try {
-    const gymId = request.headers.get('x-gym-id')
+    const { gymSlug } = await params
+    const { ctx, errorResponse } = await withGymContext(request, gymSlug)
+    if (errorResponse) return errorResponse
+    const gymId = ctx.gym.id
 
     const gym = await prisma.gym.findUnique({
       where:  { id: gymId },
@@ -49,17 +53,16 @@ export async function GET(request) {
  * Key fields: non-empty string → update, empty/absent → keep existing.
  * There is no explicit-clear path through this API (use a dedicated disconnect action).
  */
-export async function PATCH(request) {
+export async function PATCH(request, { params }) {
   try {
-    const gymId  = request.headers.get('x-gym-id')
-    const userId = request.headers.get('x-gym-user-id')
-    const role   = (request.headers.get('x-gym-role') ?? '').toUpperCase()
+    const { gymSlug } = await params
+    const { ctx, errorResponse } = await withGymContext(request, gymSlug)
+    if (errorResponse) return errorResponse
+    const gymId  = ctx.gym.id
+    const userId = ctx.user.id
+    const role   = (ctx.user.role ?? '').toUpperCase()
 
     console.log('[settings PATCH] gymId=%s userId=%s role=%s', gymId, userId, role)
-
-    if (!gymId) {
-      return NextResponse.json({ error: 'Missing gym context' }, { status: 400 })
-    }
 
     if (role !== 'OWNER') {
       return NextResponse.json({ error: 'Only the gym owner can update settings' }, { status: 403 })

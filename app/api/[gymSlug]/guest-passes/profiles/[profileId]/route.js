@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { formatPhone } from '@/lib/phone'
 import { deleteSeamCodeByPin } from '@/lib/seam'
+import { withGymContext } from '@/lib/auth/gymContext'
 
 /**
  * PATCH /api/[gymSlug]/guest-passes/profiles/[profileId]
@@ -11,6 +12,8 @@ import { deleteSeamCodeByPin } from '@/lib/seam'
 export async function PATCH(request, { params }) {
   try {
     const { gymSlug, profileId } = await params
+    const { errorResponse } = await withGymContext(request, gymSlug)
+    if (errorResponse) return errorResponse
     const body = await request.json()
 
     const gym = await prisma.gym.findUnique({ where: { slug: gymSlug }, select: { id: true } })
@@ -92,6 +95,8 @@ export async function PATCH(request, { params }) {
 export async function DELETE(request, { params }) {
   try {
     const { gymSlug, profileId } = await params
+    const { errorResponse } = await withGymContext(request, gymSlug)
+    if (errorResponse) return errorResponse
     const { searchParams } = new URL(request.url)
     const full = searchParams.get('full') === 'true'
 

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import prisma from '@/lib/prisma'
+import { withGymContext } from '@/lib/auth/gymContext'
 
 /**
  * POST /api/[gymSlug]/stripe/resolve
@@ -11,9 +12,12 @@ import prisma from '@/lib/prisma'
  * the subscription's past_due status so they stop appearing as overdue.
  * Also sets the member's DB status to ACTIVE.
  */
-export async function POST(request) {
+export async function POST(request, { params }) {
   try {
-    const gymId              = request.headers.get('x-gym-id')
+    const { gymSlug } = await params
+    const { ctx, errorResponse } = await withGymContext(request, gymSlug)
+    if (errorResponse) return errorResponse
+    const gymId              = ctx.gym.id
     const { memberId, invoiceId } = await request.json()
 
     if (!memberId) return NextResponse.json({ error: 'memberId is required' }, { status: 400 })

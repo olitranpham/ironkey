@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import prisma from '@/lib/prisma'
+import { withGymContext } from '@/lib/auth/gymContext'
 
 async function getGym(gymSlug) {
   return prisma.gym.findUnique({
@@ -24,6 +25,8 @@ function formatDiscount(coupon) {
 export async function GET(request, { params }) {
   try {
     const { gymSlug } = await params
+    const { errorResponse } = await withGymContext(request, gymSlug)
+    if (errorResponse) return errorResponse
     const gym = await getGym(gymSlug)
     if (!gym)                return NextResponse.json({ error: 'Gym not found' },         { status: 404 })
     if (!gym.stripeSecretKey) return NextResponse.json({ error: 'Stripe not configured' }, { status: 400 })
@@ -88,6 +91,8 @@ export async function GET(request, { params }) {
 export async function POST(request, { params }) {
   try {
     const { gymSlug } = await params
+    const { errorResponse } = await withGymContext(request, gymSlug)
+    if (errorResponse) return errorResponse
     const body = await request.json()
     const {
       code, discountType, value, duration, durationInMonths,

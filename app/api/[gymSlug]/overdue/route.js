@@ -1,14 +1,18 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
+import { withGymContext } from '@/lib/auth/gymContext'
 
 /**
  * POST /api/[gymSlug]/overdue
  * Body: { memberId }
  * Marks an ACTIVE member as OVERDUE.
  */
-export async function POST(request) {
+export async function POST(request, { params }) {
   try {
-    const gymId    = request.headers.get('x-gym-id')
+    const { gymSlug } = await params
+    const { ctx, errorResponse } = await withGymContext(request, gymSlug)
+    if (errorResponse) return errorResponse
+    const gymId    = ctx.gym.id
     const { memberId } = await request.json()
 
     if (!memberId) {

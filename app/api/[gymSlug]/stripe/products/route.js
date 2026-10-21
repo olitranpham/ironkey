@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import prisma from '@/lib/prisma'
+import { withGymContext } from '@/lib/auth/gymContext'
 
 // Legacy guest-pass products (created before this page existed) are only
 // identifiable by name — mirrors the keyword list in /api/[gymSlug]/guest.
@@ -75,6 +76,8 @@ async function getGym(gymSlug) {
 export async function GET(request, { params }) {
   try {
     const { gymSlug } = await params
+    const { errorResponse } = await withGymContext(request, gymSlug)
+    if (errorResponse) return errorResponse
     const gym = await getGym(gymSlug)
     if (!gym)                return NextResponse.json({ error: 'Gym not found' },         { status: 404 })
     if (!gym.stripeSecretKey) return NextResponse.json({ error: 'Stripe not configured' }, { status: 400 })
@@ -196,6 +199,8 @@ export async function GET(request, { params }) {
 export async function POST(request, { params }) {
   try {
     const { gymSlug } = await params
+    const { errorResponse } = await withGymContext(request, gymSlug)
+    if (errorResponse) return errorResponse
     const body = await request.json()
     const { kind, name, price } = body
 

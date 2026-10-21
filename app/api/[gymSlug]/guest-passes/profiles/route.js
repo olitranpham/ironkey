@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
+import { withGymContext } from '@/lib/auth/gymContext'
 
 /**
  * GET /api/[gymSlug]/guest-passes/profiles?email=...
@@ -10,6 +11,8 @@ import prisma from '@/lib/prisma'
 export async function GET(request, { params }) {
   try {
     const { gymSlug } = await params
+    const { errorResponse } = await withGymContext(request, gymSlug)
+    if (errorResponse) return errorResponse
     const { searchParams } = new URL(request.url)
     const email = searchParams.get('email')?.trim().toLowerCase()
     if (!email) return NextResponse.json({ error: 'email required' }, { status: 400 })

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import prisma from '@/lib/prisma'
+import { withGymContext } from '@/lib/auth/gymContext'
 
 async function getGym(gymSlug) {
   return prisma.gym.findUnique({
@@ -19,6 +20,8 @@ async function getGym(gymSlug) {
 export async function PATCH(request, { params }) {
   try {
     const { gymSlug, promotionCodeId } = await params
+    const { errorResponse } = await withGymContext(request, gymSlug)
+    if (errorResponse) return errorResponse
     const body = await request.json()
 
     if (typeof body.active !== 'boolean') {

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import prisma from '@/lib/prisma'
+import { withGymContext } from '@/lib/auth/gymContext'
 
 /**
  * POST /api/[gymSlug]/stripe/retry
@@ -8,9 +9,12 @@ import prisma from '@/lib/prisma'
  *
  * Retries payment on an open Stripe invoice via the gym's connected account.
  */
-export async function POST(request) {
+export async function POST(request, { params }) {
   try {
-    const gymId = request.headers.get('x-gym-id')
+    const { gymSlug } = await params
+    const { ctx, errorResponse } = await withGymContext(request, gymSlug)
+    if (errorResponse) return errorResponse
+    const gymId = ctx.gym.id
     const { invoiceId } = await request.json()
 
     if (!invoiceId) {

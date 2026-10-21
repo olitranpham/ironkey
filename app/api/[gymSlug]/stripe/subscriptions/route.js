@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import prisma from '@/lib/prisma'
+import { withGymContext } from '@/lib/auth/gymContext'
 
 // ── Cache ─────────────────────────────────────────────────────────────────────
 
@@ -23,6 +24,8 @@ const CACHE_TTL = 5 * 60 * 1000  // 5 minutes
 export async function GET(request, { params }) {
   try {
     const { gymSlug } = await params
+    const { errorResponse } = await withGymContext(request, gymSlug)
+    if (errorResponse) return errorResponse
 
     const cached = subCache.get(gymSlug)
     if (cached && Date.now() - cached.ts < CACHE_TTL) {

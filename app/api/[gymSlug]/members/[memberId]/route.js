@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { deleteSeamCodeByPin } from '@/lib/seam'
 import { normalizeGradSemester } from '@/lib/gradSemester'
+import { withGymContext } from '@/lib/auth/gymContext'
 
 const SEAM_API = 'https://connect.getseam.com'
 const VALID_STATUSES         = ['ACTIVE', 'FROZEN', 'CANCELED']
@@ -28,6 +29,8 @@ const MEMBER_SELECT = {
 export async function GET(request, { params }) {
   try {
     const { gymSlug, memberId } = params
+    const { errorResponse } = await withGymContext(request, gymSlug)
+    if (errorResponse) return errorResponse
 
     const gym = await prisma.gym.findUnique({ where: { slug: gymSlug }, select: { id: true } })
     if (!gym) return NextResponse.json({ error: 'Gym not found' }, { status: 404 })
@@ -58,6 +61,8 @@ export async function GET(request, { params }) {
 export async function PATCH(request, { params }) {
   try {
     const { gymSlug, memberId } = params
+    const { errorResponse } = await withGymContext(request, gymSlug)
+    if (errorResponse) return errorResponse
     const body                  = await request.json()
 
     const gym = await prisma.gym.findUnique({ where: { slug: gymSlug }, select: { id: true } })
@@ -282,6 +287,8 @@ export async function PATCH(request, { params }) {
 export async function DELETE(request, { params }) {
   try {
     const { gymSlug, memberId } = params
+    const { errorResponse } = await withGymContext(request, gymSlug)
+    if (errorResponse) return errorResponse
 
     const gym = await prisma.gym.findUnique({
       where:  { slug: gymSlug },

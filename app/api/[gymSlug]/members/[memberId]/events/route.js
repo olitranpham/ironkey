@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
+import { withGymContext } from '@/lib/auth/gymContext'
 
 /**
  * GET /api/[gymSlug]/members/[memberId]/events
@@ -10,6 +11,8 @@ import prisma from '@/lib/prisma'
 export async function GET(request, { params }) {
   try {
     const { gymSlug, memberId } = params
+    const { errorResponse } = await withGymContext(request, gymSlug)
+    if (errorResponse) return errorResponse
 
     const [gym, member] = await Promise.all([
       prisma.gym.findUnique({ where: { slug: gymSlug }, select: { id: true } }),

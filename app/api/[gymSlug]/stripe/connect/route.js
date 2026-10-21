@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import prisma from '@/lib/prisma'
+import { withGymContext } from '@/lib/auth/gymContext'
 
 const STRIPE_OAUTH_URL = 'https://connect.stripe.com/oauth/authorize'
 
@@ -41,8 +42,10 @@ export async function GET(request, { params }) {
 export async function DELETE(request, { params }) {
   try {
     const { gymSlug } = await params
-    const gymId = request.headers.get('x-gym-id')
-    const role  = (request.headers.get('x-gym-role') ?? '').toUpperCase()
+    const { ctx, errorResponse } = await withGymContext(request, gymSlug)
+    if (errorResponse) return errorResponse
+    const gymId = ctx.gym.id
+    const role  = (ctx.user.role ?? '').toUpperCase()
 
     if (role !== 'OWNER') {
       return NextResponse.json({ error: 'Only the gym owner can disconnect Stripe' }, { status: 403 })
@@ -52,13 +55,6 @@ export async function DELETE(request, { params }) {
       where:  { id: gymId },
       select: { slug: true, stripeAccountId: true },
     })
-
-    // Defense in depth — the JWT's gymId must actually belong to the gym in
-    // the URL, so an authenticated owner of one gym can't pass a different
-    // gym's slug and disconnect that gym's Stripe account.
-    if (!gym || gym.slug !== gymSlug) {
-      return NextResponse.json({ error: 'Gym mismatch' }, { status: 403 })
-    }
 
     // Revoke the OAuth grant on Stripe's side (fire-and-forget — DB update is authoritative)
     if (gym?.stripeAccountId && process.env.STRIPE_CLIENT_ID && process.env.STRIPE_SECRET_KEY) {

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
+import { withGymContext } from '@/lib/auth/gymContext'
 
 function itemStatus(quantity, lowStockAt) {
   if (quantity === 0)         return 'out'
@@ -26,6 +27,8 @@ async function getItem(gymSlug, id) {
 export async function PATCH(request, { params }) {
   try {
     const { gymSlug, id } = await params
+    const { errorResponse } = await withGymContext(request, gymSlug)
+    if (errorResponse) return errorResponse
     const { gym, item } = await getItem(gymSlug, id)
     if (!gym)  return NextResponse.json({ error: 'Gym not found' },  { status: 404 })
     if (!item) return NextResponse.json({ error: 'Item not found' }, { status: 404 })
@@ -82,6 +85,8 @@ export async function PATCH(request, { params }) {
 export async function DELETE(request, { params }) {
   try {
     const { gymSlug, id } = await params
+    const { errorResponse } = await withGymContext(request, gymSlug)
+    if (errorResponse) return errorResponse
     const { gym, item } = await getItem(gymSlug, id)
     if (!gym)  return NextResponse.json({ error: 'Gym not found' },  { status: 404 })
     if (!item) return NextResponse.json({ error: 'Item not found' }, { status: 404 })

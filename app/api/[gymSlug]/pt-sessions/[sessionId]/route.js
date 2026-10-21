@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
+import { withGymContext } from '@/lib/auth/gymContext'
 
 const MEMBER_SELECT = { id: true, firstName: true, lastName: true }
 
@@ -10,6 +11,8 @@ function flattenMembers(session) {
 export async function PATCH(request, { params }) {
   try {
     const { gymSlug, sessionId } = await params
+    const { errorResponse } = await withGymContext(request, gymSlug)
+    if (errorResponse) return errorResponse
     const body = await request.json()
 
     const gym = await prisma.gym.findUnique({ where: { slug: gymSlug }, select: { id: true } })
@@ -52,6 +55,8 @@ export async function PATCH(request, { params }) {
 export async function DELETE(request, { params }) {
   try {
     const { gymSlug, sessionId } = await params
+    const { errorResponse } = await withGymContext(request, gymSlug)
+    if (errorResponse) return errorResponse
 
     const gym = await prisma.gym.findUnique({ where: { slug: gymSlug }, select: { id: true } })
     if (!gym) return NextResponse.json({ error: 'Gym not found' }, { status: 404 })

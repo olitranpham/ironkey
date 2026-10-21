@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import bcrypt from 'bcryptjs'
 import prisma from '@/lib/prisma'
+import { withGymContext } from '@/lib/auth/gymContext'
 
 /**
  * POST /api/[gymSlug]/settings/password
@@ -9,13 +10,12 @@ import prisma from '@/lib/prisma'
  * Verifies the caller's current password, then hashes and saves the new one.
  * Any authenticated user may change their own password.
  */
-export async function POST(request) {
+export async function POST(request, { params }) {
   try {
-    const userId = request.headers.get('x-gym-user-id')
-
-    if (!userId) {
-      return NextResponse.json({ error: 'Missing user context' }, { status: 400 })
-    }
+    const { gymSlug } = await params
+    const { ctx, errorResponse } = await withGymContext(request, gymSlug)
+    if (errorResponse) return errorResponse
+    const userId = ctx.user.id
 
     const { currentPassword, newPassword } = await request.json()
 

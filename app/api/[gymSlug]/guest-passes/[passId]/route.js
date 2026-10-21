@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
+import { withGymContext } from '@/lib/auth/gymContext'
 
 /**
  * PATCH /api/[gymSlug]/guest-passes/[passId]
@@ -9,6 +10,8 @@ import prisma from '@/lib/prisma'
 export async function PATCH(request, { params }) {
   try {
     const { gymSlug, passId } = await params
+    const { errorResponse } = await withGymContext(request, gymSlug)
+    if (errorResponse) return errorResponse
     const body = await request.json()
 
     const gym = await prisma.gym.findUnique({ where: { slug: gymSlug }, select: { id: true } })

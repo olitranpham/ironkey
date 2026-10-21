@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
+import { withGymContext } from '@/lib/auth/gymContext'
 
 const SEAM_API = 'https://connect.getseam.com'
 
@@ -15,6 +16,8 @@ const SEAM_API = 'https://connect.getseam.com'
 export async function GET(request, { params }) {
   try {
     const { gymSlug, memberId } = await params
+    const { errorResponse } = await withGymContext(request, gymSlug)
+    if (errorResponse) return errorResponse
 
     const gym = await prisma.gym.findUnique({ where: { slug: gymSlug } })
     if (!gym) return NextResponse.json({ error: 'Gym not found' }, { status: 404 })

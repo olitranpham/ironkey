@@ -1,12 +1,16 @@
 import { NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import prisma from '@/lib/prisma'
+import { withGymContext } from '@/lib/auth/gymContext'
 
 const SEAM_API = 'https://connect.getseam.com'
 
-export async function POST(request) {
+export async function POST(request, { params }) {
   try {
-    const gymId        = request.headers.get('x-gym-id')
+    const { gymSlug } = await params
+    const { ctx, errorResponse } = await withGymContext(request, gymSlug)
+    if (errorResponse) return errorResponse
+    const gymId        = ctx.gym.id
     const { memberId } = await request.json()
 
     if (!memberId) return NextResponse.json({ error: 'memberId required' }, { status: 400 })

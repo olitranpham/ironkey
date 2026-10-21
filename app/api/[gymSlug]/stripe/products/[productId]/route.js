@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import prisma from '@/lib/prisma'
+import { withGymContext } from '@/lib/auth/gymContext'
 
 /**
  * PATCH /api/[gymSlug]/stripe/products/[productId]
@@ -43,6 +44,8 @@ import prisma from '@/lib/prisma'
 export async function PATCH(request, { params }) {
   try {
     const { gymSlug, productId } = await params
+    const { errorResponse } = await withGymContext(request, gymSlug)
+    if (errorResponse) return errorResponse
     const body = await request.json()
 
     const gym = await prisma.gym.findUnique({

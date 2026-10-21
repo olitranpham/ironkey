@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import prisma from '@/lib/prisma'
+import { withGymContext } from '@/lib/auth/gymContext'
 
 // ── Server-side cache ─────────────────────────────────────────────────────────
 
@@ -72,6 +73,9 @@ export async function GET(request, { params }) {
   const cached = revenueCache.get(gymSlug)
 
   try {
+    const { errorResponse } = await withGymContext(request, gymSlug)
+    if (errorResponse) return errorResponse
+
     // Fresh cache — return immediately without touching Stripe.
     // Only serve cache entries that have a non-empty monthly array; if the
     // cached entry was written when monthly was [] (e.g. no entries at the time),

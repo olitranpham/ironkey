@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import prisma from '@/lib/prisma'
 import { generateUniqueAccessCode, isAccessCodeLiveOnSeam } from '@/lib/seam'
+import { withGymContext } from '@/lib/auth/gymContext'
 
 const SEAM_API = 'https://connect.getseam.com'
 
@@ -15,20 +16,19 @@ const SEAM_API = 'https://connect.getseam.com'
 export async function POST(request, { params }) {
   try {
     const { gymSlug } = await params
+    const { ctx, errorResponse } = await withGymContext(request, gymSlug)
+    if (errorResponse) return errorResponse
 
-    const role = (request.headers.get('x-gym-role') ?? '').toUpperCase()
+    const role = (ctx.user.role ?? '').toUpperCase()
     if (role !== 'OWNER' && role !== 'ADMIN') {
       return NextResponse.json({ error: 'Only gym staff can reverse a cancellation' }, { status: 403 })
     }
 
-    const gymId = request.headers.get('x-gym-id')
+    const gymId = ctx.gym.id
     const gym = await prisma.gym.findUnique({
       where:  { id: gymId },
       select: { slug: true, stripeSecretKey: true, seamApiKey: true, seamDeviceId: true },
     })
-    if (!gym || gym.slug !== gymSlug) {
-      return NextResponse.json({ error: 'Gym mismatch' }, { status: 403 })
-    }
 
     const { memberId } = await request.json()
     if (!memberId) return NextResponse.json({ error: 'memberId required' }, { status: 400 })
