@@ -65,7 +65,7 @@ export async function POST(request) {
 
     let accessCode = guestProfile.accessCode
     if (!accessCode) {
-      accessCode = await generateUniquePin(gym.id)
+      accessCode = await generateUniquePin(gym.id, undefined, { guestId: guestProfile.id })
       await prisma.guest.update({ where: { id: guestProfile.id }, data: { accessCode } })
     }
 
@@ -119,6 +119,7 @@ export async function POST(request) {
           console.warn('[rep-gym-pass/checkin] duplicate_access_code — falling back to a new code (retry %d/3) for guest=%s', retry, user_email)
           accessCode = await generateUniqueAccessCode({
             prisma, gymId: gym.id, apiKey: gym.seamApiKey, deviceId: gym.seamDeviceId, logPrefix: '[rep-gym-pass/checkin]',
+            guestId: guestProfile.id,
           })
           await prisma.guest.update({ where: { id: guestProfile.id }, data: { accessCode } })
           ;({ res: createRes, json: createJson } = await createSeamCode(accessCode))

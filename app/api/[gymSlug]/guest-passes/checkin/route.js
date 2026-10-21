@@ -16,7 +16,7 @@ const MAX_DUPLICATE_RETRIES = 5
  * success: retry with a fresh collision-checked PIN (up to 5 times).
  * @returns {Promise<{ ok: boolean, pin: string, codeId?: string | null, endsAt?: string }>} pin may differ from the one passed in
  */
-async function createGuestSeamCode({ seamHeaders, deviceId, gymId, pin, name, seamCodes = [], logPrefix }) {
+async function createGuestSeamCode({ seamHeaders, deviceId, gymId, guestId, pin, name, seamCodes = [], logPrefix }) {
   const tried   = new Set()
   let candidate = pin
   for (let attempt = 1; attempt <= MAX_DUPLICATE_RETRIES; attempt++) {
@@ -41,7 +41,7 @@ async function createGuestSeamCode({ seamHeaders, deviceId, gymId, pin, name, se
 
     tried.add(candidate)
     console.warn('%s duplicate_access_code for pin=%s — retrying with a new PIN (attempt %d/%d)', logPrefix, maskPin(candidate), attempt, MAX_DUPLICATE_RETRIES)
-    candidate = await generateUniquePin(gymId, candidate.length, { seamCodes, exclude: tried })
+    candidate = await generateUniquePin(gymId, candidate.length, { seamCodes, exclude: tried, guestId })
   }
   return { ok: false, pin: candidate }
 }
@@ -214,11 +214,11 @@ export async function POST(request, { params }) {
         // collision-checked PIN; duplicates are retried with a new PIN.
         try {
           const pin = storedPin
-            ?? await generateUniquePin(gym.id, DEFAULT_PIN_LENGTH, { seamCodes })
+            ?? await generateUniquePin(gym.id, DEFAULT_PIN_LENGTH, { seamCodes, guestId: profile.id })
           if (!storedPin) console.log('[checkin] generated accessCode=%s for guest=%s', maskPin(pin), email)
 
           const result = await createGuestSeamCode({
-            seamHeaders, deviceId: gym.seamDeviceId, gymId: gym.id,
+            seamHeaders, deviceId: gym.seamDeviceId, gymId: gym.id, guestId: profile.id,
             pin, name: profile.name || email, seamCodes,
             logPrefix: newCount === 0 ? '[checkin] exhausted —' : '[checkin]',
           })

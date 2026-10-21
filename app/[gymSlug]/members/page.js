@@ -184,6 +184,7 @@ export default function MembersPage() {
       setSelectedMember(prev => prev?.id === memberId ? { ...prev, ...updated } : prev)
     } catch (err) {
       console.error('[handleSaveAccessCode] caught:', err.message)
+      alert(err.message)   // e.g. 409 "code already in use"
     }
   }
 

@@ -180,12 +180,15 @@ export default function DoorAccessPage() {
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body:    JSON.stringify({ accessCode: code }),
       })
-      if (!res.ok) throw new Error('Failed')
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}))
+        throw new Error(j.error || 'could not save the code')
+      }
       const { member: updated } = await res.json()
       setSelectedMember(prev => prev?.id === memberId ? { ...prev, ...updated } : prev)
       fetchCodes()
-    } catch {
-      // non-fatal
+    } catch (err) {
+      alert(err.message)   // e.g. 409 "code already in use"
     }
   }
 
@@ -305,12 +308,15 @@ export default function DoorAccessPage() {
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body:    JSON.stringify({ memberId: changeModal.memberId, codeId: changeModal.id, code: newCode || undefined }),
       })
-      if (!res.ok) throw new Error('Request failed')
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}))
+        throw new Error(j.error || 'something went wrong — please try again')
+      }
       setChangeModal(null)
       setNewCode('')
       fetchCodes()
-    } catch {
-      setActionError('something went wrong — please try again')
+    } catch (err) {
+      setActionError(err.message)
     } finally {
       setActionLoading(false)
     }

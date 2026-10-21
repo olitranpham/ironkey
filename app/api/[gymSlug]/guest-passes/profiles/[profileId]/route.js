@@ -5,6 +5,7 @@ import { deleteSeamCodeByPin } from '@/lib/seam'
 import { requirePermission, can, forbidden } from '@/lib/permissions'
 import { maskPin } from '@/lib/redact'
 import { writeAudit } from '@/lib/audit'
+import { isPinInUse, PIN_IN_USE_ERROR } from '@/lib/pins'
 
 /**
  * PATCH /api/[gymSlug]/guest-passes/profiles/[profileId]
@@ -37,6 +38,14 @@ export async function PATCH(request, { params }) {
       if (repCheckinCount === 0) {
         return NextResponse.json({ error: 'Profile not found' }, { status: 404 })
       }
+    }
+
+    // A manually entered guest code must not collide with any member, guest or
+    // partner code at this gym or any other gym this guest has passes at
+    // (guest codes are global). The guest's own current code is ignored.
+    if (body.accessCode && String(body.accessCode).trim() !== profile.accessCode
+        && await isPinInUse(gym.id, body.accessCode, { guestId: profileId })) {
+      return NextResponse.json({ error: PIN_IN_USE_ERROR }, { status: 409 })
     }
 
     const data = {}

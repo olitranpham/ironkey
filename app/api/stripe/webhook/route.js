@@ -188,7 +188,7 @@ export async function POST(request) {
 
       let accessCode = guestProfile?.accessCode ?? null
       if (!accessCode) {
-        accessCode = await generateUniquePin(gym.id)
+        accessCode = await generateUniquePin(gym.id, undefined, { guestId: guestProfile?.id ?? null })
         if (guestProfile) {
           await prisma.guest.update({
             where: { id: guestProfile.id },
@@ -262,7 +262,7 @@ export async function POST(request) {
               break
             }
             const previous = accessCode
-            accessCode = await generateUniquePin(gym.id, previous.length, { exclude: tried })
+            accessCode = await generateUniquePin(gym.id, previous.length, { exclude: tried, guestId: guestProfile?.id ?? null })
             console.warn('[platform/webhook] duplicate_access_code for pin=%s — retrying with %s', maskPin(previous), maskPin(accessCode))
             if (guestProfile) {
               await prisma.guest.update({ where: { id: guestProfile.id }, data: { accessCode } })

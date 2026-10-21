@@ -222,12 +222,15 @@ export default function GuestPassesPage() {
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body:    JSON.stringify({ accessCode: code }),
       })
-      if (!res.ok) throw new Error('Failed')
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}))
+        throw new Error(j.error || 'could not save the code')
+      }
       const { profile: updated } = await res.json()
       setProfiles(prev => prev.map(p => p.id === profileId ? { ...p, ...updated } : p))
       setSelectedProfile(prev => prev?.id === profileId ? { ...prev, ...updated } : prev)
-    } catch {
-      // non-fatal
+    } catch (err) {
+      alert(err.message)   // e.g. 409 "code already in use"
     } finally {
       setSavingCode(false)
     }

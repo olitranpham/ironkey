@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { generateUniqueAccessCode } from '@/lib/seam'
+import { isPinInUse, PIN_IN_USE_ERROR } from '@/lib/pins'
 import { requirePermission } from '@/lib/permissions'
 import { maskPin, redactJsonText } from '@/lib/redact'
 import { writeAudit } from '@/lib/audit'
@@ -314,11 +315,15 @@ export async function POST(request, { params }) {
       return NextResponse.json({ error: 'Seam not configured' }, { status: 422 })
     }
 
+    // A code explicitly supplied by the caller must not collide with any
+    // member, guest or partner code at this gym (this member's own is fine).
+    if (code && String(code).trim() !== member.accessCode && await isPinInUse(gym.id, code, { memberId })) {
+      return NextResponse.json({ error: PIN_IN_USE_ERROR }, { status: 409 })
+    }
+
     // Generate a 4-digit code if none provided — checked for collisions
-    // against this gym's Member rows and whatever's currently active on
-    // Seam. A code explicitly supplied by the caller is left as-is (a
-    // deliberate manual override, not an auto-generation the collision
-    // check applies to).
+    // against this gym's member/guest/partner codes and whatever's currently
+    // active on Seam.
     const accessCode = code || await generateUniqueAccessCode({
       prisma, gymId: gym.id, apiKey, deviceId, logPrefix: '[seam/codes POST]',
     })

@@ -85,15 +85,18 @@ export default function PartnerCheckinsPage() {
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body:    JSON.stringify({ accessCode: code }),
       })
-      if (!res.ok) throw new Error('Failed')
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}))
+        throw new Error(j.error || 'could not save the code')
+      }
       const { profile: updated } = await res.json()
       setSelectedProfile(prev => prev?.id === profileId ? { ...prev, ...updated } : prev)
       // Update access code displayed in the table rows
       setCheckins(prev => prev.map(c =>
         c.userEmail === updated.email ? { ...c, accessCode: updated.accessCode ?? c.accessCode } : c
       ))
-    } catch {
-      // non-fatal
+    } catch (err) {
+      alert(err.message)   // e.g. 409 "code already in use"
     } finally {
       setSavingCode(false)
     }

@@ -5,6 +5,7 @@ import { ensureKisiMembership, revokeAccess as revokeKisiAccess, grantAccess as 
 import { normalizeGradSemester } from '@/lib/gradSemester'
 import { requirePermission, can, forbidden, trainerMemberScope, trainerMemberView } from '@/lib/permissions'
 import { maskPin, redactJsonText } from '@/lib/redact'
+import { isPinInUse, PIN_IN_USE_ERROR } from '@/lib/pins'
 import { writeAudit } from '@/lib/audit'
 
 const SEAM_API = 'https://connect.getseam.com'
@@ -113,6 +114,14 @@ export async function PATCH(request, { params }) {
     // Re-pointing a member at a different Stripe customer/subscription is a billing action.
     if ((stripeCustomerId !== undefined || stripeSubscriptionId !== undefined) && !can(ctx.user, 'billing.act')) {
       return forbidden()
+    }
+
+    // A manually entered code must not collide with any member, guest or
+    // partner code at this gym (the member's own current code is ignored).
+    if (accessCode !== undefined && accessCode !== '' && String(accessCode).trim() !== existing.accessCode) {
+      if (await isPinInUse(gymId, accessCode, { memberId })) {
+        return NextResponse.json({ error: PIN_IN_USE_ERROR }, { status: 409 })
+      }
     }
 
     const now  = new Date()
