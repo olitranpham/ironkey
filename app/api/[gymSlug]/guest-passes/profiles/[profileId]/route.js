@@ -4,6 +4,7 @@ import { formatPhone } from '@/lib/phone'
 import { deleteSeamCodeByPin } from '@/lib/seam'
 import { requirePermission, can, forbidden } from '@/lib/permissions'
 import { maskPin } from '@/lib/redact'
+import { writeAudit } from '@/lib/audit'
 
 /**
  * PATCH /api/[gymSlug]/guest-passes/profiles/[profileId]
@@ -139,6 +140,7 @@ export async function DELETE(request, { params }) {
       await prisma.guest.delete({ where: { id: profileId } })
 
       console.log('[guest-profile DELETE full] deleted profileId=%s passesDeleted=%d', profileId, passesDeleted)
+      writeAudit(ctx, 'guest.delete_full', 'Guest', profileId, { passesDeleted })
       return NextResponse.json({ ok: true, profileDeleted: true, passesDeleted })
     }
 

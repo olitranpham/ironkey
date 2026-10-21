@@ -3,6 +3,7 @@ import Stripe from 'stripe'
 import prisma from '@/lib/prisma'
 import { requirePermission } from '@/lib/permissions'
 import { maskSecret } from '@/lib/redact'
+import { writeAudit } from '@/lib/audit'
 
 /**
  * Given a billing period end (Unix timestamp) and the subscription object,
@@ -133,6 +134,7 @@ export async function POST(request, { params }) {
       })
     }
 
+    writeAudit(ctx, 'member.cancel', 'Member', memberId)
     return NextResponse.json({ member })
   } catch (error) {
     console.error('[cancel]', error)

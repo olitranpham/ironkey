@@ -5,6 +5,7 @@ import { requirePermission } from '@/lib/permissions'
 import { deleteSeamCodeByPin } from '@/lib/seam'
 import { revokeAccess as revokeKisiAccess } from '@/lib/kisi'
 import { maskSecret, maskPin } from '@/lib/redact'
+import { writeAudit } from '@/lib/audit'
 
 export async function POST(request, { params }) {
   try {
@@ -108,6 +109,7 @@ export async function POST(request, { params }) {
       })
     }
 
+    writeAudit(ctx, 'member.freeze', 'Member', memberId)
     return NextResponse.json({ member })
   } catch (error) {
     console.error('[freeze]', error)

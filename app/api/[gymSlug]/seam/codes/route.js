@@ -3,6 +3,7 @@ import prisma from '@/lib/prisma'
 import { generateUniqueAccessCode } from '@/lib/seam'
 import { requirePermission } from '@/lib/permissions'
 import { maskPin, redactJsonText } from '@/lib/redact'
+import { writeAudit } from '@/lib/audit'
 
 const SEAM_API = 'https://connect.getseam.com'
 
@@ -284,7 +285,7 @@ export async function GET(request, { params }) {
 export async function POST(request, { params }) {
   try {
     const { gymSlug } = await params
-    const { errorResponse } = await requirePermission(request, gymSlug, 'door.manage')
+    const { ctx, errorResponse } = await requirePermission(request, gymSlug, 'door.manage')
     if (errorResponse) return errorResponse
     const { memberId, codeId, code } = await request.json()
 
@@ -381,6 +382,7 @@ export async function POST(request, { params }) {
       data:  { accessCode },
     })
 
+    writeAudit(ctx, 'door.code.create', 'Member', updated.id, { seamCodeId: codeId ?? null })
     return NextResponse.json({ memberId: updated.id, accessCode: updated.accessCode })
   } catch (error) {
     console.error('[seam/codes POST]', error)

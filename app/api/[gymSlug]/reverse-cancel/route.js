@@ -5,6 +5,7 @@ import { generateUniqueAccessCode, isAccessCodeLiveOnSeam } from '@/lib/seam'
 import { ensureKisiMembership } from '@/lib/kisi'
 import { requirePermission } from '@/lib/permissions'
 import { maskPin, redactJsonText } from '@/lib/redact'
+import { writeAudit } from '@/lib/audit'
 
 const SEAM_API = 'https://connect.getseam.com'
 
@@ -160,6 +161,7 @@ export async function POST(request, { params }) {
 
     console.log('[reverse-cancel] done — memberId:', memberId, '| codeReissued:', codeReissued, '| accessCode:', maskPin(accessCode))
 
+    writeAudit(ctx, 'member.reverse_cancel', 'Member', memberId, { codeReissued })
     return NextResponse.json({ member: updated, codeReissued, accessCode })
   } catch (error) {
     console.error('[reverse-cancel]', error)

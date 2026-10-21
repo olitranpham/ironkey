@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import prisma from '@/lib/prisma'
 import { requirePermission } from '@/lib/permissions'
+import { writeAudit } from '@/lib/audit'
 
 /**
  * POST /api/[gymSlug]/stripe/retry
@@ -52,6 +53,7 @@ export async function POST(request, { params }) {
       })
     }
 
+    writeAudit(ctx, 'billing.retry', 'Invoice', invoiceId, { status: paid.status })
     return NextResponse.json({ invoice: { id: paid.id, status: paid.status } })
   } catch (error) {
     console.error('[stripe/retry]', error)

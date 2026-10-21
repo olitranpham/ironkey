@@ -5,6 +5,7 @@ import { ensureKisiMembership, revokeAccess as revokeKisiAccess, grantAccess as 
 import { normalizeGradSemester } from '@/lib/gradSemester'
 import { requirePermission, can, forbidden, trainerMemberScope, trainerMemberView } from '@/lib/permissions'
 import { maskPin, redactJsonText } from '@/lib/redact'
+import { writeAudit } from '@/lib/audit'
 
 const SEAM_API = 'https://connect.getseam.com'
 const VALID_STATUSES         = ['ACTIVE', 'FROZEN', 'CANCELED']
@@ -244,6 +245,15 @@ export async function PATCH(request, { params }) {
 
     console.log('[members/patch] DB updated — accessCode=%s', maskPin(member.accessCode))
 
+    // ── Audit ────────────────────────────────────────────────────────────────
+    if (status !== undefined && status !== existing.status) {
+      const action = status === 'FROZEN' ? 'member.freeze' : status === 'CANCELED' ? 'member.cancel' : 'member.resume'
+      writeAudit(ctx, action, 'Member', memberId, { via: 'status_patch', from: existing.status, to: status })
+    }
+    if (accessCode !== undefined && data.accessCode !== existing.accessCode) {
+      writeAudit(ctx, 'member.access_code_change', 'Member', memberId, { via: 'member_patch', cleared: data.accessCode === null })
+    }
+
     // ── Log membership event if status changed ───────────────────────────────
     if (status !== undefined && status !== existing.status) {
       let eventType
@@ -389,6 +399,7 @@ export async function DELETE(request, { params }) {
     await prisma.member.delete({ where: { id: memberId } })
 
     console.log('[members DELETE] deleted memberId=%s gymId=%s', memberId, gym.id)
+    writeAudit(ctx, 'member.delete', 'Member', memberId)
     return NextResponse.json({ ok: true })
   } catch (error) {
     console.error('[members DELETE]', error)

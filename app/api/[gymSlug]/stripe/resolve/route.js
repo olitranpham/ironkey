@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import prisma from '@/lib/prisma'
 import { requirePermission } from '@/lib/permissions'
+import { writeAudit } from '@/lib/audit'
 
 /**
  * POST /api/[gymSlug]/stripe/resolve
@@ -46,6 +47,7 @@ export async function POST(request, { params }) {
       data:  { status: 'ACTIVE' },
     })
 
+    writeAudit(ctx, 'billing.resolve', 'Member', memberId, invoiceId ? { invoiceId } : null)
     return NextResponse.json({ member: updated })
   } catch (error) {
     console.error('[stripe/resolve]', error)

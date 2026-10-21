@@ -4,6 +4,7 @@ import prisma from '@/lib/prisma'
 import { requirePermission } from '@/lib/permissions'
 import { ensureKisiMembership } from '@/lib/kisi'
 import { maskSecret, maskPin } from '@/lib/redact'
+import { writeAudit } from '@/lib/audit'
 
 const SEAM_API = 'https://connect.getseam.com'
 
@@ -125,6 +126,7 @@ export async function POST(request, { params }) {
       })
     }
 
+    writeAudit(ctx, 'member.resume', 'Member', memberId)
     return NextResponse.json({ member })
   } catch (error) {
     console.error('[resume]', error)

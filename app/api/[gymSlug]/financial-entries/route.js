@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { requirePermission } from '@/lib/permissions'
+import { writeAudit } from '@/lib/audit'
 
 export async function GET(request, { params }) {
   try {
@@ -26,7 +27,7 @@ export async function GET(request, { params }) {
 export async function POST(request, { params }) {
   try {
     const { gymSlug } = await params
-    const { errorResponse } = await requirePermission(request, gymSlug, 'billing.act')
+    const { ctx, errorResponse } = await requirePermission(request, gymSlug, 'billing.act')
     if (errorResponse) return errorResponse
     const body = await request.json()
 
@@ -49,6 +50,7 @@ export async function POST(request, { params }) {
       },
     })
 
+    writeAudit(ctx, 'financial_entry.create', 'FinancialEntry', entry.id, { type: entry.type, category: entry.category, amount: entry.amount })
     return NextResponse.json({ entry }, { status: 201 })
   } catch (error) {
     console.error('[financial-entries POST]', error)

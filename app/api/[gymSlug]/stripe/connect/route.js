@@ -3,6 +3,7 @@ import Stripe from 'stripe'
 import prisma from '@/lib/prisma'
 import { requirePermission } from '@/lib/permissions'
 import { createStripeState } from '@/lib/stripeOAuthState'
+import { writeAudit } from '@/lib/audit'
 
 const STRIPE_OAUTH_URL = 'https://connect.stripe.com/oauth/authorize'
 
@@ -84,6 +85,7 @@ export async function DELETE(request, { params }) {
       data:  { stripeAccountId: null, stripeSecretKey: null },
     })
 
+    writeAudit(ctx, 'stripe.disconnect', 'Gym', gymId)
     return NextResponse.json({ ok: true })
   } catch (error) {
     console.error('[stripe/connect DELETE]', error.message)

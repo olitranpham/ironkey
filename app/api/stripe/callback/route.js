@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { verifyStripeState } from '@/lib/stripeOAuthState'
+import { writeAudit } from '@/lib/audit'
 
 /**
  * GET /api/stripe/callback
@@ -77,6 +78,7 @@ export async function GET(request) {
     })
 
     console.log('[stripe/callback] connected account %s saved for gym %s (user %s)', stripeAccountId, gymSlug, state.userId)
+    writeAudit({ gym, user: { id: state.userId } }, 'stripe.connect', 'Gym', gym.id, { stripeAccountId })
     return NextResponse.redirect(`${appUrl}/${gymSlug}/settings?stripe_connected=1`)
   } catch (err) {
     console.error('[stripe/callback]', err.message, err.stack)

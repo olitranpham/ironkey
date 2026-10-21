@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { requirePermission } from '@/lib/permissions'
+import { writeAudit } from '@/lib/audit'
 
 function itemStatus(quantity, lowStockAt) {
   if (quantity === 0)         return 'out'
@@ -79,6 +80,7 @@ export async function POST(request, { params }) {
       return { item, entry }
     })
 
+    if (entry) writeAudit(ctx, 'financial_entry.create', 'FinancialEntry', entry.id, { via: 'inventory_sale', itemId: id, quantity, amount: entry.amount })
     return NextResponse.json({
       item:  { ...item, status: itemStatus(item.quantity, item.lowStockAt) },
       entry,

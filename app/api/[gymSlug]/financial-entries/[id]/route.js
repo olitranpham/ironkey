@@ -1,11 +1,12 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { requirePermission } from '@/lib/permissions'
+import { writeAudit } from '@/lib/audit'
 
 export async function PATCH(request, { params }) {
   try {
     const { gymSlug, id } = await params
-    const { errorResponse } = await requirePermission(request, gymSlug, 'billing.act')
+    const { ctx, errorResponse } = await requirePermission(request, gymSlug, 'billing.act')
     if (errorResponse) return errorResponse
     const body = await request.json()
     const { type, category, amount, description, date } = body
@@ -27,6 +28,7 @@ export async function PATCH(request, { params }) {
       },
     })
 
+    writeAudit(ctx, 'financial_entry.update', 'FinancialEntry', id, { fields: Object.keys(body) })
     return NextResponse.json({ entry })
   } catch (error) {
     console.error('[financial-entries PATCH]', error)
@@ -37,7 +39,7 @@ export async function PATCH(request, { params }) {
 export async function DELETE(request, { params }) {
   try {
     const { gymSlug, id } = await params
-    const { errorResponse } = await requirePermission(request, gymSlug, 'billing.act')
+    const { ctx, errorResponse } = await requirePermission(request, gymSlug, 'billing.act')
     if (errorResponse) return errorResponse
 
     const gym = await prisma.gym.findUnique({ where: { slug: gymSlug }, select: { id: true } })
@@ -49,6 +51,7 @@ export async function DELETE(request, { params }) {
     }
 
     await prisma.financialEntry.delete({ where: { id } })
+    writeAudit(ctx, 'financial_entry.delete', 'FinancialEntry', id, { type: entry.type, category: entry.category, amount: entry.amount })
     return NextResponse.json({ ok: true })
   } catch (error) {
     console.error('[financial-entries DELETE]', error)

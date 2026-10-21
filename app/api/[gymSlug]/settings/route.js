@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs'
 import prisma from '@/lib/prisma'
 import { withGymContext } from '@/lib/auth/gymContext'
 import { requirePermission, can } from '@/lib/permissions'
+import { writeAudit } from '@/lib/audit'
 
 /**
  * GET /api/[gymSlug]/settings
@@ -95,6 +96,7 @@ export async function PATCH(request, { params }) {
         data:   { name: name.trim() },
         select: { name: true, slug: true },
       })
+      writeAudit(ctx, 'settings.update', 'Gym', gymId, { type, fields: ['name'] })
       return NextResponse.json({ settings: gym })
     }
 
@@ -117,6 +119,7 @@ export async function PATCH(request, { params }) {
       console.log('[settings PATCH] updating stripe fields: %j', Object.keys(data))
 
       await prisma.gym.update({ where: { id: gymId }, data })
+      writeAudit(ctx, 'settings.update', 'Gym', gymId, { type, fields: Object.keys(data) })
 
       const updated = await prisma.gym.findUnique({
         where:  { id: gymId },
@@ -147,6 +150,7 @@ export async function PATCH(request, { params }) {
       console.log('[settings PATCH] updating seam fields: %j', Object.keys(data))
 
       await prisma.gym.update({ where: { id: gymId }, data })
+      writeAudit(ctx, 'settings.update', 'Gym', gymId, { type, fields: Object.keys(data) })
 
       const updated = await prisma.gym.findUnique({
         where:  { id: gymId },
@@ -181,6 +185,7 @@ export async function PATCH(request, { params }) {
       console.log('[settings PATCH] updating kisi fields: %j', Object.keys(data))
 
       await prisma.gym.update({ where: { id: gymId }, data })
+      writeAudit(ctx, 'settings.update', 'Gym', gymId, { type, fields: Object.keys(data) })
 
       const updated = await prisma.gym.findUnique({
         where:  { id: gymId },
@@ -214,6 +219,7 @@ export async function PATCH(request, { params }) {
 
       const hashed = await bcrypt.hash(newPassword, 12)
       await prisma.gymUser.update({ where: { id: userId }, data: { password: hashed } })
+      writeAudit(ctx, 'settings.update', 'GymUser', userId, { type, fields: ['password'] })
 
       return NextResponse.json({ ok: true })
     }

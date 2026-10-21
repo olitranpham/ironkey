@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { deleteSeamCodeById } from '@/lib/seam'
 import { requirePermission } from '@/lib/permissions'
+import { writeAudit } from '@/lib/audit'
 
 /**
  * DELETE /api/[gymSlug]/seam/codes/[codeId]
@@ -11,7 +12,7 @@ import { requirePermission } from '@/lib/permissions'
 export async function DELETE(request, { params }) {
   try {
     const { gymSlug, codeId } = await params
-    const { errorResponse } = await requirePermission(request, gymSlug, 'door.manage')
+    const { ctx, errorResponse } = await requirePermission(request, gymSlug, 'door.manage')
     if (errorResponse) return errorResponse
     const pin = new URL(request.url).searchParams.get('code')
 
@@ -45,6 +46,7 @@ export async function DELETE(request, { params }) {
       console.log('[seam/codes DELETE] DB cleared — members=%d guests=%d codeId=%s', memberResult.count, guestResult.count, codeId)
     }
 
+    writeAudit(ctx, 'door.code.delete', 'SeamAccessCode', codeId)
     return NextResponse.json({ ok: true })
   } catch (error) {
     console.error('[seam/codes DELETE]', error)
