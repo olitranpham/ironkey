@@ -11,7 +11,7 @@ export default function JoinSuccessPage() {
 
   const [gymName,    setGymName]    = useState('')
   const [gymLogo,    setGymLogo]    = useState(null)
-  const [accessCode, setAccessCode] = useState(null)
+  const [sentTo,     setSentTo]     = useState(null)
   const [accessProvider, setAccessProvider] = useState('SEAM')
   const [loading,    setLoading]    = useState(Boolean(sessionId))
 
@@ -33,17 +33,18 @@ export default function JoinSuccessPage() {
       setLoading(false)
       return
     }
-    // Poll briefly to give the webhook time to fire and save the access code
+    // Poll briefly — the session must be paid and the webhook must have saved
+    // (and emailed) the code. The code itself is never returned.
     let attempts = 0
     const maxAttempts = 6
     const interval = 2000
 
     async function fetchResult() {
       try {
-        const res  = await fetch(`/api/${gymSlug}/join/session-result?session_id=${sessionId}`)
+        const res  = await fetch(`/api/${gymSlug}/join/session-result?session_id=${encodeURIComponent(sessionId)}`)
         const json = await res.json()
-        if (json.accessCode) {
-          setAccessCode(json.accessCode)
+        if (json.ok) {
+          setSentTo(json.sentTo)
           setLoading(false)
           return true
         }
@@ -91,7 +92,7 @@ export default function JoinSuccessPage() {
               check your email for an invite to the kisi app — download it to unlock the door.
             </p>
           </div>
-        ) : accessCode ? (
+        ) : sentTo ? (
           <div className="w-full bg-neutral-900 rounded-xl p-4 text-left space-y-3">
             {gymSlug === 'oasis-boston' && (
               <div className="flex items-center justify-between">
@@ -99,20 +100,11 @@ export default function JoinSuccessPage() {
                 <span className="text-lg font-bold text-white font-mono tracking-widest">4532</span>
               </div>
             )}
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-neutral-400">your door code</span>
-              <span className="text-lg font-bold text-white font-mono tracking-widest">{accessCode}</span>
-            </div>
-            <div className="border-t border-neutral-800 pt-3 space-y-2">
-              <p className="text-xs text-neutral-400 flex items-start gap-2">
-                <span className="text-neutral-500 shrink-0">•</span>
-                your access code is active and can be used at the entrance.
-              </p>
-              <p className="text-xs text-neutral-400 flex items-start gap-2">
-                <span className="text-neutral-500 shrink-0">•</span>
-                a copy of your code and additional information will be sent to your email shortly.
-              </p>
-            </div>
+            {/* The door code is never shown here — it's emailed to the member's address */}
+            <p className="text-sm text-neutral-300">
+              your access code was emailed to <span className="text-white font-semibold">{sentTo}</span>.
+              check your inbox (and spam).
+            </p>
           </div>
         ) : (
           <div className="w-full bg-neutral-900 rounded-xl p-4 text-left space-y-2">

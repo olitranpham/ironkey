@@ -11,10 +11,10 @@ export default function GuestSuccessPage() {
 
   const [gymName,    setGymName]    = useState('')
   const [gymLogo,    setGymLogo]    = useState(null)
-  const [accessCode, setAccessCode] = useState(null)
-  const [passesLeft, setPassesLeft] = useState(null)
-  const [passType,   setPassType]   = useState(null)
-  const [loading,    setLoading]    = useState(Boolean(sessionId))
+  const [sentTo,      setSentTo]      = useState(null)
+  const [loading,     setLoading]     = useState(Boolean(sessionId))
+  const [resendState, setResendState] = useState(null)   // null | 'sending' | 'sent'
+  const [resendError, setResendError] = useState(null)
 
   useEffect(() => {
     fetch(`/api/${gymSlug}/guest`)
@@ -28,19 +28,18 @@ export default function GuestSuccessPage() {
 
   useEffect(() => {
     if (!sessionId) return
-    // Poll briefly to give the webhook time to fire and save the access code
+    // Poll briefly — the session must be paid and the webhook must have saved
+    // (and emailed) the code. The code itself is never returned.
     let attempts = 0
     const maxAttempts = 6
     const interval = 2000
 
     async function fetchResult() {
       try {
-        const res  = await fetch(`/api/${gymSlug}/guest/session-result?session_id=${sessionId}`)
+        const res  = await fetch(`/api/${gymSlug}/guest/session-result?session_id=${encodeURIComponent(sessionId)}`)
         const json = await res.json()
-        if (json.accessCode) {
-          setAccessCode(json.accessCode)
-          setPassesLeft(json.passesLeft)
-          setPassType(json.passType)
+        if (json.ok) {
+          setSentTo(json.sentTo)
           setLoading(false)
           return true
         }
@@ -62,8 +61,23 @@ export default function GuestSuccessPage() {
     poll()
   }, [gymSlug, sessionId])
 
-  const isSingle     = passType === 'SINGLE' || passesLeft === null
-  const isReturning  = passesLeft !== null && !isSingle
+  async function handleResend() {
+    setResendState('sending')
+    setResendError(null)
+    try {
+      const res  = await fetch(`/api/${gymSlug}/guest-passes/checkin/resend`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ session_id: sessionId }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(json.error ?? 'could not resend — please contact admin@ironkeyentry.com')
+      setResendState('sent')
+    } catch (err) {
+      setResendState(null)
+      setResendError(err.message)
+    }
+  }
 
   return (
     <div className="min-h-screen bg-[#292929] flex flex-col items-center justify-center px-4">
@@ -84,7 +98,7 @@ export default function GuestSuccessPage() {
             <Loader2 size={14} className="text-neutral-500 animate-spin" />
             <span className="text-xs text-neutral-500">loading your pass info…</span>
           </div>
-        ) : accessCode ? (
+        ) : sentTo ? (
           <div className="w-full bg-neutral-900 rounded-xl p-4 text-left space-y-3">
             {gymSlug === 'oasis-boston' && (
               <div className="flex items-center justify-between">
@@ -92,39 +106,29 @@ export default function GuestSuccessPage() {
                 <span className="text-lg font-bold text-white font-mono tracking-widest">4532</span>
               </div>
             )}
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-neutral-400">your door code</span>
-              <span className="text-lg font-bold text-white font-mono tracking-widest">{accessCode}</span>
-            </div>
-            {!isSingle && passesLeft !== null && (
-              <div className="flex items-center justify-between border-t border-neutral-800 pt-3">
-                <span className="text-xs text-neutral-400">passes remaining</span>
-                <span className="text-sm font-semibold text-white">{passesLeft}</span>
-              </div>
+            {/* The door code is never shown here — it's emailed to the address on the profile */}
+            <p className="text-sm text-neutral-300">
+              your access code was emailed to <span className="text-white font-semibold">{sentTo}</span>.
+              check your inbox (and spam).
+            </p>
+            <button
+              type="button"
+              onClick={handleResend}
+              disabled={resendState === 'sending'}
+              className="text-xs px-3 py-1.5 rounded-lg border border-neutral-700 text-neutral-300 hover:text-white hover:border-neutral-500 disabled:opacity-40 transition-colors"
+            >
+              {resendState === 'sending' ? 'sending…' : 'resend'}
+            </button>
+            {resendState === 'sent' && (
+              <p className="text-xs text-emerald-400">if you have an active code, we've sent it again.</p>
             )}
-            <div className="border-t border-neutral-800 pt-3 space-y-2">
-              {isReturning ? (
-                <p className="text-xs text-neutral-400 flex items-start gap-2">
-                  <span className="text-neutral-500 shrink-0">•</span>
-                  your door code <span className="font-mono text-white">{accessCode}</span> is already active — you can use it to enter right now. your passes remaining have been updated.
-                </p>
-              ) : (
-                <p className="text-xs text-neutral-400 flex items-start gap-2">
-                  <span className="text-neutral-500 shrink-0">•</span>
-                  your access code is active and can be used at the entrance.
-                </p>
-              )}
-              <p className="text-xs text-neutral-400 flex items-start gap-2">
-                <span className="text-neutral-500 shrink-0">•</span>
-                a copy of your code and additional information will be sent to your email shortly.
-              </p>
-            </div>
+            {resendError && <p className="text-xs text-red-400">{resendError}</p>}
           </div>
         ) : (
           <div className="w-full bg-neutral-900 rounded-xl p-4 text-left space-y-2">
             <p className="text-xs text-neutral-400 flex items-start gap-2">
               <span className="text-neutral-500 shrink-0">•</span>
-              your guest pass is now active.
+              thanks — we're finishing up your pass.
             </p>
             <p className="text-xs text-neutral-400 flex items-start gap-2">
               <span className="text-neutral-500 shrink-0">•</span>

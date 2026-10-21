@@ -1,12 +1,18 @@
 import { NextResponse } from 'next/server'
-import Stripe from 'stripe'
 import prisma from '@/lib/prisma'
+import { verifyPaidCheckoutSession } from '@/lib/checkoutSession'
+import { maskEmail } from '@/lib/guestCodeDelivery'
+
+const PENDING = () => NextResponse.json({ ok: false, pending: true })
 
 /**
  * GET /api/[gymSlug]/guest/session-result?session_id=xxx
- * Public — called by the guest success page to show the guest their access code.
- * Retrieves the Stripe checkout session to get the guest email, then looks up
- * their GuestProfile for the access code and passes remaining.
+ * Public — polled by the guest success page after Stripe Checkout.
+ *
+ * Never returns the access code. Returns { ok: true, sentTo } once the
+ * session is a PAID checkout on this gym's Stripe account and the webhook has
+ * saved the guest's code (which it emails); otherwise { ok: false, pending: true }
+ * with no guest data.
  */
 export async function GET(request, { params }) {
   try {
@@ -14,38 +20,25 @@ export async function GET(request, { params }) {
     const { searchParams } = new URL(request.url)
     const sessionId     = searchParams.get('session_id')
 
-    if (!sessionId) return NextResponse.json({ error: 'session_id required' }, { status: 400 })
-
     const gym = await prisma.gym.findUnique({
       where:  { slug: gymSlug },
       select: { id: true, stripeSecretKey: true },
     })
-    if (!gym || !gym.stripeSecretKey) {
-      return NextResponse.json({ error: 'Gym not found' }, { status: 404 })
-    }
+    if (!gym) return NextResponse.json({ error: 'Gym not found' }, { status: 404 })
 
-    const stripe  = new Stripe(gym.stripeSecretKey, { apiVersion: '2024-06-20' })
-    const session = await stripe.checkout.sessions.retrieve(sessionId)
-    const email   = (session.customer_email ?? '').toLowerCase()
+    const verified = await verifyPaidCheckoutSession(gym, sessionId, 'guest')
+    if (!verified.ok) return PENDING()
 
-    if (!email) return NextResponse.json({ error: 'No email on session' }, { status: 400 })
-
-    const profile = await prisma.guest.findUnique({ where: { email } })
-
-    // Find most recent GuestVisit for this gym to get passesLeft
-    const latestVisit = await prisma.guestVisit.findFirst({
-      where:   { gymId: gym.id, guestEmail: { equals: email, mode: 'insensitive' } },
-      orderBy: { createdAt: 'desc' },
+    const profile = await prisma.guest.findUnique({
+      where:  { email: verified.email },
+      select: { email: true, accessCode: true },
     })
+    // Paid, but the webhook hasn't saved the code yet — keep polling
+    if (!profile?.accessCode) return PENDING()
 
-    return NextResponse.json({
-      email,
-      accessCode: profile?.accessCode ?? null,
-      passesLeft: latestVisit?.passesLeft ?? null,
-      passType:   latestVisit?.passType  ?? null,
-    })
+    return NextResponse.json({ ok: true, sentTo: maskEmail(profile.email) })
   } catch (error) {
-    console.error('[guest/session-result]', error)
+    console.error('[guest/session-result]', error.message)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
