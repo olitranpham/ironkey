@@ -522,3 +522,13 @@ model PTSession {
   @@index([gymId])
   @@index([trainerId])
 }
+
+// ─── RateLimit ───────────────────────────────────────────────────────────────
+// Fixed-window counters for public endpoints (see lib/rateLimit.js).
+// key = "<bucket>:<ip|email>:<value>"
+
+model RateLimit {
+  key         String   @id
+  count       Int
+  windowStart DateTime
+}

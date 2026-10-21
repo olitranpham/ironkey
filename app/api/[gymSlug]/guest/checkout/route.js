@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import prisma from '@/lib/prisma'
+import { limitRequest } from '@/lib/rateLimit'
 
 /**
  * POST /api/[gymSlug]/guest/checkout
@@ -26,6 +27,9 @@ export async function POST(request, { params }) {
       isNewGuest, studentIdUploadId,
       isMinor, guardianName, guardianEmail, guardianPhone, guardianRelationship,
     } = body
+
+    const limited = await limitRequest(request, 'guest-checkout', email)
+    if (limited) return limited
 
     if (!priceId || !email?.trim()) {
       return NextResponse.json({ error: 'priceId and email are required' }, { status: 400 })

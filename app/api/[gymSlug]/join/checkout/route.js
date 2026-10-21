@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import prisma from '@/lib/prisma'
 import { planRequiresStudentId } from '@/lib/studentIdPlans'
+import { limitRequest } from '@/lib/rateLimit'
 
 // Rutgers Powerlifting Club — one-off $5 non-recurring membership for
 // hydra-athletic-co. Stripe rejects a one-time price as a line item in
@@ -31,6 +32,9 @@ export async function POST(request, { params }) {
       studentIdUploadId, gradSemester, gradYear, hearAboutUs,
       isMinor, guardianName, guardianEmail, guardianPhone, guardianRelationship,
     } = body
+
+    const limited = await limitRequest(request, 'join-checkout', email)
+    if (limited) return limited
 
     if (!firstName || !lastName || !email || (!priceId && !groupTrainingPriceId)) {
       return NextResponse.json({ error: 'firstName, lastName, email, and a selected plan are required' }, { status: 400 })

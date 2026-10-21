@@ -4,6 +4,7 @@ import { deleteSeamCodeByPin } from '@/lib/seam'
 import { maskPin, redactObject } from '@/lib/redact'
 import { intakeGuestPass } from '@/lib/guestPassIntake'
 import { generateUniquePin, DEFAULT_PIN_LENGTH } from '@/lib/pins'
+import { limitRequest } from '@/lib/rateLimit'
 
 const SEAM_API = 'https://connect.getseam.com'
 
@@ -98,6 +99,9 @@ export async function POST(request, { params }) {
     const body = await request.json()
 
     const email = (body.email ?? '').trim().toLowerCase()
+
+    const limited = await limitRequest(request, 'guest-checkin', email)
+    if (limited) return limited
     const name  = (body.name  ?? '').trim()
 
     console.log('[checkin] POST gymSlug=%s email=%s', gymSlug, email)

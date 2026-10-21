@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
+import { limitRequest } from '@/lib/rateLimit'
 
 /**
  * POST /api/[gymSlug]/guest/lookup
@@ -12,6 +13,9 @@ export async function POST(request, { params }) {
   try {
     const { gymSlug } = await params
     const { email } = await request.json()
+
+    const limited = await limitRequest(request, 'guest-lookup', email)
+    if (limited) return limited
 
     if (!email?.trim()) {
       return NextResponse.json({ error: 'email is required' }, { status: 400 })

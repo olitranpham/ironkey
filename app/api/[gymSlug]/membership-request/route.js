@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
+import { limitRequest } from '@/lib/rateLimit'
 
 /**
  * GET /api/[gymSlug]/membership-request?email=...
@@ -57,6 +58,9 @@ export async function POST(request, { params }) {
     const body = await request.json()
 
     const email         = (body.email ?? '').trim().toLowerCase()
+
+    const limited = await limitRequest(request, 'membership-request:POST', email)
+    if (limited) return limited
     const requestType   = (body.requestType ?? '').trim().toLowerCase()
     const reason         = body.reason ? String(body.reason).trim() : null
     const requestedDate  = body.requestedDate ? new Date(body.requestedDate) : null

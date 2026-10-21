@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { maskPin, redactObject } from '@/lib/redact'
+import { limitRequest } from '@/lib/rateLimit'
 
 const SEAM_API        = 'https://connect.getseam.com'
 const MAX_FLEX_CHECKINS = 5
@@ -98,6 +99,9 @@ export async function GET(request, { params }) {
     const { searchParams } = new URL(request.url)
     const email = (searchParams.get('email') ?? '').trim().toLowerCase()
 
+    const limited = await limitRequest(request, 'flex-checkin:GET', email)
+    if (limited) return limited
+
     if (!email) {
       return NextResponse.json({ error: 'email is required' }, { status: 400 })
     }
@@ -160,6 +164,9 @@ export async function POST(request, { params }) {
     const { gymSlug } = await params
     const body  = await request.json()
     const email = (body.email ?? '').trim().toLowerCase()
+
+    const limited = await limitRequest(request, 'flex-checkin:POST', email)
+    if (limited) return limited
 
     if (!email) {
       return NextResponse.json({ error: 'email is required' }, { status: 400 })
