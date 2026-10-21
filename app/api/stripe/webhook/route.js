@@ -8,6 +8,7 @@ import { normalizeGradSemester } from '@/lib/gradSemester'
 import { maskPin, redactObject } from '@/lib/redact'
 import { intakeMember } from '@/lib/memberIntake'
 import { intakeGuestPass } from '@/lib/guestPassIntake'
+import { writeAudit } from '@/lib/audit'
 
 const SEAM_API = 'https://connect.getseam.com'
 
@@ -523,6 +524,11 @@ export async function POST(request) {
         },
       })
       console.log('[platform/webhook] updated existing member from checkout:', member.id, email)
+      if (memberBeforeUpdate.status !== 'ACTIVE') {
+        writeAudit({ gym, user: null }, 'member.reactivate', 'Member', member.id, {
+          via: 'stripe_checkout', from: memberBeforeUpdate.status, subscription: Boolean(subId),
+        })
+      }
     }
 
     await prisma.membershipEvent.create({
@@ -648,7 +654,8 @@ export async function POST(request) {
       }
     }
 
-    // Direct call — previously a fire-and-forget HTTP POST to /api/[gymSlug]/members
+    // Direct call — previously a fire-and-forget HTTP POST to /api/[gymSlug]/members.
+    // reactivate only when this checkout created a new (active) subscription.
     intakeMember(gymSlug, {
       firstName,
       lastName,
@@ -662,7 +669,7 @@ export async function POST(request) {
       membershipType:        membershipType.toLowerCase(),
       subId,
       accessCode,
-    })
+    }, { reactivate: Boolean(subId), via: 'stripe_checkout' })
       .then(({ status, json }) => { if (status >= 400) console.error('[platform/webhook] members notify failed:', status, json.error) })
       .catch(e => console.error('[platform/webhook] members notify error:', e.message))
   }
