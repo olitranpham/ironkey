@@ -280,7 +280,7 @@ export default function GuestPage() {
   const [lookupResult,    setLookupResult]     = useState(null)   // { profile, hasSignedWaiver, passesLeft, packs }
   const [returningName,   setReturningName]    = useState('')
   const [checkinResult,   setCheckinResult]    = useState(null)
-  const [flexMember,      setFlexMember]       = useState(null)   // { id, firstName, lastName, email, accessCode }
+  const [flexMember,      setFlexMember]       = useState(null)   // { firstName, lastName }
   const [flexResult,      setFlexResult]       = useState(null)   // { checkInsUsed, checkInsRemaining }
 
   // "Student Pass" is identified purely by name — no dedicated metadata tag

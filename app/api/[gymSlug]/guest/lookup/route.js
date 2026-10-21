@@ -7,7 +7,7 @@ import { limitRequest } from '@/lib/rateLimit'
  * Public — looks up a guest profile by email.
  * Checks whether the guest has signed a GuestWaiver for this specific gym.
  * Body: { email }
- * Returns: { profile, hasSignedWaiver, passesLeft, packs }
+ * Returns: { profile: { name } | null, hasSignedWaiver, passesLeft, packs }
  *
  * A guest with no waiver and no passes at THIS gym gets exactly the same
  * response as an unknown email (profile: null), so the lookup doesn't reveal
@@ -73,7 +73,7 @@ export async function POST(request, { params }) {
     }))
 
     return NextResponse.json({
-      profile:        { id: profile.id, name: profile.name, email: profile.email },
+      profile:        { name: profile.name },
       hasSignedWaiver,
       passesLeft,
       packs,

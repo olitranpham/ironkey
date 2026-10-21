@@ -121,8 +121,7 @@ export async function GET(request, { params }) {
     const member = await prisma.member.findUnique({
       where:  { gymId_email: { gymId: gym.id, email } },
       select: {
-        id: true, firstName: true, lastName: true, email: true,
-        accessCode: true, membershipType: true, status: true,
+        firstName: true, lastName: true, membershipType: true, status: true,
         flexCheckInCount: true, flexCheckInResetDate: true,
       },
     })
@@ -136,12 +135,10 @@ export async function GET(request, { params }) {
     const { currentCount } = resolveCount(member)
 
     return NextResponse.json({
+      // Only what the kiosk renders — never the door code, id or email
       member: {
-        id:        member.id,
         firstName: member.firstName,
         lastName:  member.lastName,
-        email:     member.email,
-        accessCode: member.accessCode,
       },
       checkInsUsed:      currentCount,
       checkInsRemaining: Math.max(0, MAX_FLEX_CHECKINS - currentCount),
