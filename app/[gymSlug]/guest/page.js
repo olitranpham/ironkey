@@ -280,6 +280,8 @@ export default function GuestPage() {
   const [lookupResult,    setLookupResult]     = useState(null)   // { profile, hasSignedWaiver, passesLeft, packs }
   const [returningName,   setReturningName]    = useState('')
   const [checkinResult,   setCheckinResult]    = useState(null)
+  const [resendState,     setResendState]      = useState(null)   // null | 'sending' | 'sent'
+  const [resendError,     setResendError]      = useState(null)
   const [flexMember,      setFlexMember]       = useState(null)   // { firstName, lastName }
   const [flexResult,      setFlexResult]       = useState(null)   // { checkInsUsed, checkInsRemaining }
 
@@ -539,6 +541,25 @@ export default function GuestPage() {
       setError(e.message)
     } finally {
       setSubmitting(false)
+    }
+  }
+
+  // ── Resend the current door code (emailed; never shown) ──────────────────
+  async function handleResendCode() {
+    setResendState('sending')
+    setResendError(null)
+    try {
+      const res  = await fetch(`/api/${gymSlug}/guest-passes/checkin/resend`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ email: lookupEmail.trim() }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(json.error ?? 'could not resend — please see the front desk.')
+      setResendState('sent')
+    } catch (err) {
+      setResendState(null)
+      setResendError(err.message)
     }
   }
 
@@ -1272,35 +1293,42 @@ export default function GuestPage() {
             <div className="w-14 h-14 rounded-full bg-emerald-500/15 flex items-center justify-center">
               <CheckCircle2 size={28} className="text-emerald-400" />
             </div>
-            {checkinResult?.alreadyActive ? (
-              <div>
-                <h2 className="text-xl font-bold text-white">you're already checked in</h2>
-                <p className="text-sm text-neutral-400 mt-2">
-                  your door code{' '}
-                  <span className="font-mono text-white font-semibold">{checkinResult.accessCode}</span>{' '}
-                  is still active. use it to enter.
+            <div>
+              <h2 className="text-xl font-bold text-white">checked in!</h2>
+              <p className="text-sm text-neutral-400 mt-1">
+                welcome{lookupResult?.profile?.name ? `, ${lookupResult.profile.name.split(' ')[0].toLowerCase()}` : ''}.
+              </p>
+            </div>
+            {/* The code is never shown here — it's emailed to the address on the profile */}
+            <div className="w-full bg-neutral-900 rounded-xl p-4 space-y-3">
+              <p className="text-sm text-neutral-300">
+                your access code was emailed to{' '}
+                <span className="text-white font-semibold">{checkinResult?.sentTo}</span>.
+                check your inbox (and spam).
+              </p>
+              <button
+                type="button"
+                onClick={handleResendCode}
+                disabled={resendState === 'sending'}
+                className="text-xs px-3 py-1.5 rounded-lg border border-neutral-700 text-neutral-300 hover:text-white hover:border-neutral-500 disabled:opacity-40 transition-colors"
+              >
+                {resendState === 'sending' ? 'sending…' : 'resend'}
+              </button>
+              {resendState === 'sent' && (
+                <p className="text-xs text-emerald-400">if you have an active code, we've sent it again.</p>
+              )}
+              {resendError && <p className="text-xs text-red-400">{resendError}</p>}
+            </div>
+            {checkinResult?.passesLeft != null && (
+              <div className="w-full bg-neutral-900 rounded-xl p-4">
+                <p className="text-xs text-neutral-400">
+                  <span className="text-white font-semibold">{checkinResult.passesLeft}</span>{' '}
+                  pass{checkinResult.passesLeft !== 1 ? 'es' : ''} remaining after this visit
                 </p>
               </div>
-            ) : (
-              <>
-                <div>
-                  <h2 className="text-xl font-bold text-white">checked in!</h2>
-                  <p className="text-sm text-neutral-400 mt-1">
-                    welcome{lookupResult?.profile?.name ? `, ${lookupResult.profile.name.split(' ')[0].toLowerCase()}` : ''}.
-                  </p>
-                </div>
-                {checkinResult?.passesLeft != null && (
-                  <div className="w-full bg-neutral-900 rounded-xl p-4">
-                    <p className="text-xs text-neutral-400">
-                      <span className="text-white font-semibold">{checkinResult.passesLeft}</span>{' '}
-                      pass{checkinResult.passesLeft !== 1 ? 'es' : ''} remaining after this visit
-                    </p>
-                  </div>
-                )}
-              </>
             )}
             <button
-              onClick={() => { setStep('intent'); setMode(null); setLookupEmail(''); setLookupResult(null); clearError() }}
+              onClick={() => { setStep('intent'); setMode(null); setLookupEmail(''); setLookupResult(null); setResendState(null); setResendError(null); clearError() }}
               className="text-xs text-neutral-500 hover:text-neutral-300 transition-colors"
             >
               done
