@@ -54,10 +54,13 @@ export default function DoorAccessPage() {
   const [addForm,       setAddForm]       = useState(EMPTY_FORM)
   const [addSubmitting, setAddSubmitting] = useState(false)
   const [addError,      setAddError]      = useState(null)
+  // After save: the code actually assigned (staff-only page, door.manage) — may differ from the typed one
+  const [addResult,     setAddResult]     = useState(null)   // { name, code, requested } | null
 
   function openAddModal() {
     setAddForm(EMPTY_FORM)
     setAddError(null)
+    setAddResult(null)
     setAddOpen(true)
   }
 
@@ -116,6 +119,10 @@ export default function DoorAccessPage() {
           memberStatus:   member.status,
           joinDate:       member.dateAccessed   ?? member.createdAt,
         }])
+        // Show the code that was really assigned — the server issues a new one
+        // if the typed code was already in use at this gym.
+        setAddResult({ name: fullName, code: member.accessCode ?? null, requested: addForm.accessCode.trim() })
+        return
       }
       setAddOpen(false)
     } catch (err) {
@@ -593,6 +600,31 @@ export default function DoorAccessPage() {
               </button>
             </div>
 
+            {addResult ? (
+              <div className="space-y-4">
+                <p className="text-sm text-neutral-300">
+                  <span className="text-white font-semibold">{addResult.name}</span> was added.
+                </p>
+                <div className="flex items-center justify-between bg-neutral-900 rounded-lg px-4 py-3">
+                  <span className="text-xs text-neutral-400">door code</span>
+                  <span className="text-lg font-bold text-white font-mono tracking-widest">{addResult.code ?? '—'}</span>
+                </div>
+                {addResult.code && addResult.requested && addResult.code !== addResult.requested && (
+                  <p className="text-xs text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
+                    the code you entered (<span className="font-mono">{addResult.requested}</span>) was already in use,
+                    so this member was assigned <span className="font-mono font-semibold">{addResult.code}</span> instead.
+                    give them this code.
+                  </p>
+                )}
+                <button
+                  type="button"
+                  onClick={() => { setAddOpen(false); setAddResult(null) }}
+                  className="w-full py-2 rounded-lg text-xs font-medium bg-white text-black hover:bg-neutral-200 transition-colors"
+                >
+                  done
+                </button>
+              </div>
+            ) : (
             <form onSubmit={handleAddSubmit} className="space-y-3">
 
               {/* Name row */}
@@ -668,6 +700,7 @@ export default function DoorAccessPage() {
               </div>
 
             </form>
+            )}
           </div>
         </div>
       )}
