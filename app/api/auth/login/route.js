@@ -1,13 +1,12 @@
 import { NextResponse } from 'next/server'
-import { timingSafeEqual } from 'crypto'
 import prisma from '@/lib/prisma'
-import { verifyPassword, signToken } from '@/lib/auth'
+import { verifyPassword, signToken, verifySuperadminCredentials } from '@/lib/auth'
 
 /**
  * POST /api/auth/login
  * Body: { email, password, gymSlug? }
  *
- * 1. If email/password match ADMIN_EMAIL/ADMIN_PASSWORD env vars → superadmin JWT, redirect to /admin
+ * 1. If email/password match ADMIN_EMAIL/ADMIN_PASSWORD_HASH env vars → superadmin JWT, redirect to /admin
  * 2. Otherwise look up gym user:
  *    - Single gym → return token + gym
  *    - Multiple gyms, no gymSlug → return { multipleGyms: true, gyms }
@@ -22,19 +21,9 @@ export async function POST(request) {
     }
 
     // ── Superadmin check (first) ──────────────────────────────────────────────
-    const adminEmail    = process.env.ADMIN_EMAIL
-    const adminPassword = process.env.ADMIN_PASSWORD
-
-    if (adminEmail && adminPassword) {
-      const emailMatch = email.length === adminEmail.length &&
-        timingSafeEqual(Buffer.from(email), Buffer.from(adminEmail))
-      const passwordMatch = password.length === adminPassword.length &&
-        timingSafeEqual(Buffer.from(password), Buffer.from(adminPassword))
-
-      if (emailMatch && passwordMatch) {
-        const token = signToken({ role: 'SUPERADMIN' })
-        return NextResponse.json({ token, superadmin: true })
-      }
+    if (await verifySuperadminCredentials(email, password)) {
+      const token = signToken({ role: 'SUPERADMIN' })
+      return NextResponse.json({ token, superadmin: true })
     }
 
     // ── Gym user lookup ───────────────────────────────────────────────────────
