@@ -26,6 +26,14 @@ model Gym {
   seamApiKey             String?
   seamDeviceId           String?
 
+  // Door-access provider selection — defaults to Seam for every existing
+  // gym; Kisi fields below are only read when accessProvider is KISI.
+  accessProvider    AccessProvider @default(SEAM)
+  kisiApiKey        String?
+  kisiPlaceId       String?
+  kisiMemberGroupId String?
+  kisiWeekendGroupId String?
+
   // REP Gym Pass integration
   repGymPassEnabled Boolean @default(false)
 
@@ -94,6 +102,10 @@ model Member {
   accessCode       String?
   seamDeviceId     String?
 
+  // Kisi — only set for members of a gym with accessProvider KISI
+  kisiUserId           String?
+  kisiRoleAssignmentId String?
+
   // Freeze window (Ironkey-native)
   freezeStartDate  DateTime?
   freezeEndDate    DateTime?
@@ -140,6 +152,11 @@ model Member {
   ptSessions       PTSessionMember[]
 
   @@unique([gymId, email])
+}
+
+enum AccessProvider {
+  SEAM
+  KISI
 }
 
 enum MemberStatus {

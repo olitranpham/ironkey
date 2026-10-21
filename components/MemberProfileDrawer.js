@@ -197,6 +197,13 @@ function DrawerContent({ member, gymSlug, membershipBorder, onClose, onStatusCha
   const [studentIdImage,         setStudentIdImage]         = useState(null)
   const [studentIdLightboxOpen,  setStudentIdLightboxOpen]  = useState(false)
 
+  // Door-access provider — defaults to 'SEAM' so every existing gym renders
+  // exactly as before while this resolves. Gym-level, not member-level, so
+  // it's keyed only on gymSlug, not member.id.
+  const [accessProvider, setAccessProvider] = useState('SEAM')
+  const [resendingInvite, setResendingInvite] = useState(false)
+  const [kisiStatus, setKisiStatus] = useState(null) // { kisiUserId, kisiRoleAssignmentId } | null while loading
+
   // Keep codeInput in sync when the member prop changes (different member opened,
   // or same member's accessCode updated by parent after a successful save).
   useEffect(() => {
@@ -247,20 +254,40 @@ function DrawerContent({ member, gymSlug, membershipBorder, onClose, onStatusCha
       })
   }, [member.id, gymSlug, simplified])
 
-  // Fetch the full member record for studentIdImage whenever the member
-  // changes (skip in simplified mode) — see note on the state above.
+  // Fetch the gym's door-access provider once per gym — toggles whether this
+  // drawer shows a PIN editor (Seam) or a Kisi invite status/resend button.
+  useEffect(() => {
+    if (!gymSlug) return
+    const token = localStorage.getItem('ik_token')
+    fetch(`/api/${gymSlug}/gym`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => setAccessProvider(data?.gym?.accessProvider ?? 'SEAM'))
+      .catch(() => setAccessProvider('SEAM'))
+  }, [gymSlug])
+
+  // Fetch the full member record for studentIdImage (and, for a Kisi gym,
+  // invite status) whenever the member changes (skip in simplified mode) —
+  // see note on the state above.
   useEffect(() => {
     if (simplified || !gymSlug || !member.id) return
     setStudentIdImage(null)
+    setKisiStatus(null)
     const token = localStorage.getItem('ik_token')
     fetch(`/api/${gymSlug}/members/${member.id}`, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then(r => r.ok ? r.json() : null)
-      .then(data => setStudentIdImage(data?.member?.studentIdImage ?? null))
+      .then(data => {
+        setStudentIdImage(data?.member?.studentIdImage ?? null)
+        setKisiStatus({
+          kisiUserId:           data?.member?.kisiUserId ?? null,
+          kisiRoleAssignmentId: data?.member?.kisiRoleAssignmentId ?? null,
+        })
+      })
       .catch(err => {
         console.error('[MemberProfileDrawer] student id fetch threw memberId=%s', member.id, err)
         setStudentIdImage(null)
+        setKisiStatus({ kisiUserId: null, kisiRoleAssignmentId: null })
       })
   }, [member.id, gymSlug, simplified])
 
@@ -293,6 +320,13 @@ function DrawerContent({ member, gymSlug, membershipBorder, onClose, onStatusCha
     setSavingCode(true)
     await onSaveAccessCode(member.id, codeInput.trim())
     setSavingCode(false)
+  }
+
+  async function handleResendInvite() {
+    if (!onSaveField) return
+    setResendingInvite(true)
+    await onSaveField(member.id, { resendKisiInvite: true })
+    setResendingInvite(false)
   }
 
   async function handleNameSave() {
@@ -820,34 +854,61 @@ function DrawerContent({ member, gymSlug, membershipBorder, onClose, onStatusCha
             <ImageLightbox src={studentIdImage} onClose={() => setStudentIdLightboxOpen(false)} />
           )}
 
-          {/* Access code — inline editor */}
-          <DrawerField label="access code">
-            <div className="flex items-center gap-2 ml-4">
-              <input
-                type="text"
-                value={codeInput}
-                onChange={e => setCodeInput(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                placeholder="——"
-                maxLength={6}
-                className="bg-[#252525] border border-neutral-700 rounded px-2 py-1 text-xs text-white placeholder-neutral-600 focus:outline-none focus:border-neutral-500 w-20 font-mono"
-              />
-              <button
-                onClick={() => setCodeInput(String(Math.floor(1000 + Math.random() * 9000)))}
-                className="text-[10px] px-2 py-1 rounded bg-white/5 text-neutral-400 hover:text-white hover:bg-white/10 transition-colors shrink-0"
-              >
-                gen
-              </button>
-              {onSaveAccessCode && (
+          {/* Access — Kisi gyms get an invite-status row instead of a PIN editor */}
+          {accessProvider === 'KISI' ? (
+            <DrawerField label="access">
+              <div className="flex items-center gap-2 ml-4">
+                <span className="text-xs text-white">
+                  access via kisi app
+                  {kisiStatus && (
+                    <span className="text-neutral-500">
+                      {' — '}
+                      {!kisiStatus.kisiUserId
+                        ? 'not yet invited'
+                        : kisiStatus.kisiRoleAssignmentId ? 'active' : 'invited, access pending'}
+                    </span>
+                  )}
+                </span>
+                {onSaveField && (
+                  <button
+                    onClick={handleResendInvite}
+                    disabled={resendingInvite}
+                    className="text-[10px] px-2 py-1 rounded bg-white/10 text-white hover:bg-white/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shrink-0"
+                  >
+                    {resendingInvite ? '…' : 'resend invite'}
+                  </button>
+                )}
+              </div>
+            </DrawerField>
+          ) : (
+            <DrawerField label="access code">
+              <div className="flex items-center gap-2 ml-4">
+                <input
+                  type="text"
+                  value={codeInput}
+                  onChange={e => setCodeInput(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  placeholder="——"
+                  maxLength={6}
+                  className="bg-[#252525] border border-neutral-700 rounded px-2 py-1 text-xs text-white placeholder-neutral-600 focus:outline-none focus:border-neutral-500 w-20 font-mono"
+                />
                 <button
-                  onClick={handleCodeSave}
-                  disabled={savingCode || codeInput.trim() === (member.accessCode ?? '')}
-                  className="text-[10px] px-2 py-1 rounded bg-white/10 text-white hover:bg-white/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shrink-0"
+                  onClick={() => setCodeInput(String(Math.floor(1000 + Math.random() * 9000)))}
+                  className="text-[10px] px-2 py-1 rounded bg-white/5 text-neutral-400 hover:text-white hover:bg-white/10 transition-colors shrink-0"
                 >
-                  {savingCode ? '…' : 'save'}
+                  gen
                 </button>
-              )}
-            </div>
-          </DrawerField>
+                {onSaveAccessCode && (
+                  <button
+                    onClick={handleCodeSave}
+                    disabled={savingCode || codeInput.trim() === (member.accessCode ?? '')}
+                    className="text-[10px] px-2 py-1 rounded bg-white/10 text-white hover:bg-white/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shrink-0"
+                  >
+                    {savingCode ? '…' : 'save'}
+                  </button>
+                )}
+              </div>
+            </DrawerField>
+          )}
 
           {/* Flex check-ins — oasis-boston only */}
           {gymSlug === 'oasis-boston' && member.membershipType?.toLowerCase().includes('flex') && (

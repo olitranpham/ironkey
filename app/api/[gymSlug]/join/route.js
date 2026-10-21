@@ -28,7 +28,7 @@ export async function GET(request, { params }) {
 
     const gym = await prisma.gym.findUnique({
       where:  { slug: gymSlug },
-      select: { id: true, name: true, logoUrl: true, stripeSecretKey: true },
+      select: { id: true, name: true, logoUrl: true, stripeSecretKey: true, accessProvider: true },
     })
     if (!gym) return NextResponse.json({ error: 'Gym not found' }, { status: 404 })
 
@@ -163,7 +163,7 @@ export async function GET(request, { params }) {
       }
     }
 
-    return NextResponse.json({ gym: { name: gym.name, slug: gymSlug, logoUrl: gym.logoUrl ?? null }, membershipPlans, addonPlans, ptPlans, programmingPlans, groupTrainingPlans })
+    return NextResponse.json({ gym: { name: gym.name, slug: gymSlug, logoUrl: gym.logoUrl ?? null, accessProvider: gym.accessProvider }, membershipPlans, addonPlans, ptPlans, programmingPlans, groupTrainingPlans })
   } catch (error) {
     console.error('[join GET]', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

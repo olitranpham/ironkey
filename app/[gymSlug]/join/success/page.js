@@ -12,6 +12,7 @@ export default function JoinSuccessPage() {
   const [gymName,    setGymName]    = useState('')
   const [gymLogo,    setGymLogo]    = useState(null)
   const [accessCode, setAccessCode] = useState(null)
+  const [accessProvider, setAccessProvider] = useState('SEAM')
   const [loading,    setLoading]    = useState(Boolean(sessionId))
 
   useEffect(() => {
@@ -20,12 +21,18 @@ export default function JoinSuccessPage() {
       .then(({ gym }) => {
         setGymName(gym?.name ?? gymSlug)
         setGymLogo(gym?.logoUrl ?? null)
+        setAccessProvider(gym?.accessProvider ?? 'SEAM')
       })
       .catch(() => {})
   }, [gymSlug])
 
   useEffect(() => {
     if (!sessionId) return
+    if (accessProvider === 'KISI') {
+      // No PIN to poll for — the Kisi grant/invite happens server-side.
+      setLoading(false)
+      return
+    }
     // Poll briefly to give the webhook time to fire and save the access code
     let attempts = 0
     const maxAttempts = 6
@@ -56,7 +63,7 @@ export default function JoinSuccessPage() {
     }
 
     poll()
-  }, [gymSlug, sessionId])
+  }, [gymSlug, sessionId, accessProvider])
 
   return (
     <div className="min-h-screen bg-[#292929] flex flex-col items-center justify-center px-4">
@@ -72,6 +79,17 @@ export default function JoinSuccessPage() {
           <div className="w-full bg-neutral-900 rounded-xl p-4 flex items-center justify-center gap-2">
             <Loader2 size={14} className="text-neutral-500 animate-spin" />
             <span className="text-xs text-neutral-500">loading your access code…</span>
+          </div>
+        ) : accessProvider === 'KISI' ? (
+          <div className="w-full bg-neutral-900 rounded-xl p-4 text-left space-y-2">
+            <p className="text-xs text-neutral-400 flex items-start gap-2">
+              <span className="text-neutral-500 shrink-0">•</span>
+              your membership is now active.
+            </p>
+            <p className="text-xs text-neutral-400 flex items-start gap-2">
+              <span className="text-neutral-500 shrink-0">•</span>
+              check your email for an invite to the kisi app — download it to unlock the door.
+            </p>
           </div>
         ) : accessCode ? (
           <div className="w-full bg-neutral-900 rounded-xl p-4 text-left space-y-3">

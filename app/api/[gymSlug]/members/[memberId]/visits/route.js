@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
+import { listEvents as listKisiEvents } from '@/lib/kisi'
 import { withGymContext } from '@/lib/auth/gymContext'
 
 const SEAM_API = 'https://connect.getseam.com'
@@ -24,11 +25,26 @@ export async function GET(request, { params }) {
 
     const member = await prisma.member.findUnique({
       where:  { id: memberId },
-      select: { id: true, gymId: true, accessCode: true },
+      select: { id: true, gymId: true, accessCode: true, kisiUserId: true },
     })
     if (!member || member.gymId !== gym.id) {
       return NextResponse.json({ error: 'Member not found' }, { status: 404 })
     }
+
+    if (gym.accessProvider === 'KISI') {
+      if (!member.kisiUserId) return NextResponse.json({ visits: [] })
+      // Same "go back far enough to effectively mean full history" approach
+      // as the Seam path below.
+      const since = new Date('2020-01-01T00:00:00Z').toISOString()
+      const rawEvents = await listKisiEvents(gym, since, member.kisiUserId)
+      // NOTE: field names are a best-effort guess — see seam/events/route.js
+      // for the same caveat on Kisi's unconfirmed /events response shape.
+      const visits = rawEvents
+        .map(ev => ({ id: ev.id ?? ev.event_id, createdAt: ev.created_at ?? ev.timestamp }))
+        .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+      return NextResponse.json({ visits })
+    }
+
     if (!member.accessCode) {
       return NextResponse.json({ visits: [] })
     }

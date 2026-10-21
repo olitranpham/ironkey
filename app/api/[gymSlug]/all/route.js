@@ -49,6 +49,8 @@ export async function GET(request, { params }) {
         status:         true,
         membershipType: true,
         accessCode:     true,
+        kisiUserId:           true,
+        kisiRoleAssignmentId: true,
         dateOfBirth:          true,
         address:              true,
         emergencyContactName:         true,

@@ -26,6 +26,8 @@ export async function GET(request, { params }) {
         seamDeviceId:          true,
         stripeAccountId:       true,
         repGymPassEnabled:     true,
+        accessProvider:        true,
+        kisiApiKey:            true,
       },
     })
 
@@ -41,6 +43,8 @@ export async function GET(request, { params }) {
         timezone: gym.timezone,
         logoUrl:  gym.logoUrl,
         hasSeam:          Boolean(gym.seamApiKey || gym.seamConnectedAccountId || gym.seamDeviceId),
+        hasKisi:          Boolean(gym.kisiApiKey),
+        accessProvider:   gym.accessProvider,
         hasStripe:        Boolean(gym.stripeAccountId),
         repGymPassEnabled: Boolean(gym.repGymPassEnabled),
       },

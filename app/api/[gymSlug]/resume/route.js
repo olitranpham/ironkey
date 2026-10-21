@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import prisma from '@/lib/prisma'
 import { withGymContext } from '@/lib/auth/gymContext'
+import { ensureKisiMembership } from '@/lib/kisi'
 
 const SEAM_API = 'https://connect.getseam.com'
 
@@ -19,7 +20,7 @@ export async function POST(request, { params }) {
       prisma.member.findFirst({ where: { id: memberId, gymId } }),
       prisma.gym.findUnique({
         where:  { id: gymId },
-        select: { stripeSecretKey: true, seamApiKey: true, seamDeviceId: true },
+        select: { stripeSecretKey: true, seamApiKey: true, seamDeviceId: true, accessProvider: true, kisiApiKey: true, kisiPlaceId: true, kisiMemberGroupId: true, kisiWeekendGroupId: true },
       }),
     ])
 
@@ -51,33 +52,53 @@ export async function POST(request, { params }) {
       console.warn('[resume] Skipping Stripe — subId:', subId, '| stripeKey present:', Boolean(stripeKey))
     }
 
-    // ── Recreate Seam access code ─────────────────────────────────────────
-    const seamKey      = gym?.seamApiKey ?? process.env.SEAM_API_KEY
-    const seamDeviceId = gym?.seamDeviceId
-    const accessCode   = existing.accessCode
-    const fullName     = `${existing.firstName} ${existing.lastName}`.trim()
-
-    console.log('[resume] Seam — accessCode:', accessCode, '| deviceId:', seamDeviceId, '| key set:', Boolean(seamKey))
-
-    if (seamKey && seamDeviceId && accessCode) {
+    if (gym?.accessProvider === 'KISI') {
+      // ── Re-grant Kisi access (same group as before the freeze) ───────────
       try {
-        const seamHeaders = { Authorization: `Bearer ${seamKey}`, 'Content-Type': 'application/json' }
-        const createRes = await fetch(`${SEAM_API}/access_codes/create`, {
-          method:  'POST',
-          headers: seamHeaders,
-          body:    JSON.stringify({
-            device_id: seamDeviceId,
-            name:      fullName,
-            code:      accessCode,
-          }),
+        const result = await ensureKisiMembership(gym, {
+          existingMember: existing,
+          email:          existing.email,
+          name:           `${existing.firstName} ${existing.lastName}`.trim(),
+          membershipType: existing.membershipType,
         })
-        const createBody = await createRes.json()
-        console.log('[resume] Seam create status:', createRes.status, '| access_code_id:', createBody.access_code?.access_code_id ?? 'n/a')
-      } catch (seamErr) {
-        console.error('[resume] Seam error:', seamErr.message)
+        if (result) {
+          await prisma.member.update({
+            where: { id: memberId },
+            data:  { kisiUserId: result.kisiUserId, kisiRoleAssignmentId: result.kisiRoleAssignmentId },
+          })
+        }
+      } catch (err) {
+        console.error('[resume] Kisi error:', err.message)
       }
     } else {
-      console.warn('[resume] Skipping Seam — accessCode:', accessCode, '| deviceId:', seamDeviceId, '| key present:', Boolean(seamKey))
+      // ── Recreate Seam access code ───────────────────────────────────────
+      const seamKey      = gym?.seamApiKey ?? process.env.SEAM_API_KEY
+      const seamDeviceId = gym?.seamDeviceId
+      const accessCode   = existing.accessCode
+      const fullName     = `${existing.firstName} ${existing.lastName}`.trim()
+
+      console.log('[resume] Seam — accessCode:', accessCode, '| deviceId:', seamDeviceId, '| key set:', Boolean(seamKey))
+
+      if (seamKey && seamDeviceId && accessCode) {
+        try {
+          const seamHeaders = { Authorization: `Bearer ${seamKey}`, 'Content-Type': 'application/json' }
+          const createRes = await fetch(`${SEAM_API}/access_codes/create`, {
+            method:  'POST',
+            headers: seamHeaders,
+            body:    JSON.stringify({
+              device_id: seamDeviceId,
+              name:      fullName,
+              code:      accessCode,
+            }),
+          })
+          const createBody = await createRes.json()
+          console.log('[resume] Seam create status:', createRes.status, '| access_code_id:', createBody.access_code?.access_code_id ?? 'n/a')
+        } catch (seamErr) {
+          console.error('[resume] Seam error:', seamErr.message)
+        }
+      } else {
+        console.warn('[resume] Skipping Seam — accessCode:', accessCode, '| deviceId:', seamDeviceId, '| key present:', Boolean(seamKey))
+      }
     }
 
     // ── Update DB ─────────────────────────────────────────────────────────

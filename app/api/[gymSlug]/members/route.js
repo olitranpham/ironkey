@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
+import { ensureKisiMembership } from '@/lib/kisi'
 import { formatPhone } from '@/lib/phone'
 
 const SEAM_API = 'https://connect.getseam.com'
@@ -41,11 +42,17 @@ export async function POST(request, { params }) {
 
     const gym = await prisma.gym.findUnique({
       where:  { slug: gymSlug },
-      select: { id: true, seamApiKey: true, seamDeviceId: true },
+      select: { id: true, seamApiKey: true, seamDeviceId: true, accessProvider: true, kisiApiKey: true, kisiPlaceId: true, kisiMemberGroupId: true, kisiWeekendGroupId: true },
     })
     if (!gym) {
       return NextResponse.json({ error: 'Gym not found' }, { status: 404 })
     }
+
+    // Snapshot pre-upsert state — Kisi's tier-change check (below) needs the
+    // membershipType/assignment as they were before this request.
+    const memberBeforeUpsert = gym.accessProvider === 'KISI'
+      ? await prisma.member.findUnique({ where: { gymId_email: { gymId: gym.id, email } } })
+      : null
 
     const member = await prisma.member.upsert({
       where:  { gymId_email: { gymId: gym.id, email } },
@@ -69,6 +76,27 @@ export async function POST(request, { params }) {
         ...(dateAccessed ? { dateAccessed }                       : {}),
       },
     })
+
+    if (gym.accessProvider === 'KISI') {
+      // ── Grant/update Kisi access ─────────────────────────────────────────
+      try {
+        const result = await ensureKisiMembership(gym, {
+          existingMember: memberBeforeUpsert,
+          email,
+          name: `${firstName} ${lastName}`.trim(),
+          membershipType,
+        })
+        if (result) {
+          await prisma.member.update({
+            where: { id: member.id },
+            data:  { kisiUserId: result.kisiUserId, kisiRoleAssignmentId: result.kisiRoleAssignmentId },
+          })
+        }
+      } catch (err) {
+        console.error('[members POST] Kisi error:', err.message)
+      }
+      return NextResponse.json({ member }, { status: 200 })
+    }
 
     // ── Program Seam access code ──────────────────────────────────────────────
     const apiKey   = gym.seamApiKey   ?? process.env.SEAM_API_KEY

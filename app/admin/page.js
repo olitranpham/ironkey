@@ -83,6 +83,10 @@ function GymCard({ gym, onEdit, onOpenPortal }) {
           <span className="text-[11px] text-neutral-600">seam</span>
           <StatusBadge on={gym.hasSeam} />
         </div>
+        <div className="flex items-center gap-1.5">
+          <span className="text-[11px] text-neutral-600">kisi</span>
+          <StatusBadge on={gym.hasKisi} />
+        </div>
       </div>
 
       {/* Actions */}
@@ -167,6 +171,11 @@ function EditGymModal({ gym, onClose, onUpdated, onDeleted, adminToken }) {
   const [slug,                   setSlug]                   = useState(gym.slug)
   const [seamApiKey,             setSeamApiKey]             = useState('')
   const [seamDeviceId,           setSeamDeviceId]           = useState(gym.seamDeviceId ?? '')
+  const [accessProvider,         setAccessProvider]         = useState(gym.accessProvider ?? 'SEAM')
+  const [kisiApiKey,             setKisiApiKey]             = useState('')
+  const [kisiPlaceId,            setKisiPlaceId]            = useState(gym.kisiPlaceId ?? '')
+  const [kisiMemberGroupId,      setKisiMemberGroupId]      = useState(gym.kisiMemberGroupId ?? '')
+  const [kisiWeekendGroupId,     setKisiWeekendGroupId]     = useState(gym.kisiWeekendGroupId ?? '')
   const [stripeAccountId,        setStripeAccountId]        = useState('')
   const [zapierMemberWebhookUrl,  setZapierMemberWebhookUrl]  = useState(gym.zapierMemberWebhookUrl  ?? '')
   const [zapierGuestWebhookUrl,   setZapierGuestWebhookUrl]   = useState(gym.zapierGuestWebhookUrl   ?? '')
@@ -185,7 +194,7 @@ function EditGymModal({ gym, onClose, onUpdated, onDeleted, adminToken }) {
       const res  = await fetch(`/api/admin/gyms/${gym.id}`, {
         method:  'PATCH',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
-        body:    JSON.stringify({ name, slug, seamApiKey, seamDeviceId, stripeAccountId, zapierMemberWebhookUrl, zapierGuestWebhookUrl, zapierOverdueWebhookUrl, zapierMembershipRequestWebhookUrl }),
+        body:    JSON.stringify({ name, slug, seamApiKey, seamDeviceId, accessProvider, kisiApiKey, kisiPlaceId, kisiMemberGroupId, kisiWeekendGroupId, stripeAccountId, zapierMemberWebhookUrl, zapierGuestWebhookUrl, zapierOverdueWebhookUrl, zapierMembershipRequestWebhookUrl }),
       })
       const data = await res.json()
       if (!res.ok) { setError(data.error); return }
@@ -227,6 +236,21 @@ function EditGymModal({ gym, onClose, onUpdated, onDeleted, adminToken }) {
           <Field label="gym name" value={name} onChange={setName} />
           <Field label="slug"     value={slug} onChange={setSlug} mono />
           <Field label="seam device id" value={seamDeviceId} onChange={setSeamDeviceId} mono />
+          <div>
+            <label className="block text-xs text-neutral-500 mb-1.5">door-access provider</label>
+            <select
+              value={accessProvider}
+              onChange={e => setAccessProvider(e.target.value)}
+              className="w-full bg-[#292929] border border-neutral-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-neutral-500 focus:ring-1 focus:ring-neutral-500 transition-colors"
+            >
+              <option value="SEAM">seam</option>
+              <option value="KISI">kisi</option>
+            </select>
+          </div>
+          <Field label="kisi api key (write-only)" value={kisiApiKey} onChange={setKisiApiKey} placeholder={gym.hasKisi ? '••••••••' : 'not set'} />
+          <Field label="kisi place id" value={kisiPlaceId} onChange={setKisiPlaceId} mono />
+          <Field label="kisi member group id" value={kisiMemberGroupId} onChange={setKisiMemberGroupId} mono />
+          <Field label="kisi weekend group id" value={kisiWeekendGroupId} onChange={setKisiWeekendGroupId} mono />
           <Field label="zapier member webhook url"  value={zapierMemberWebhookUrl}  onChange={setZapierMemberWebhookUrl}  placeholder="https://hooks.zapier.com/…" />
           <Field label="zapier guest webhook url"   value={zapierGuestWebhookUrl}   onChange={setZapierGuestWebhookUrl}   placeholder="https://hooks.zapier.com/…" />
           <Field label="zapier overdue webhook url" value={zapierOverdueWebhookUrl} onChange={setZapierOverdueWebhookUrl} placeholder="https://hooks.zapier.com/…" />

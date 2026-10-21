@@ -97,6 +97,7 @@ function PortalLayout({ gymSlug, children }) {
   const [gymName,       setGymName]       = useState('')
   const [gymLogo,       setGymLogo]       = useState(null)
   const [hasSeam,       setHasSeam]       = useState(false)
+  const [hasKisi,       setHasKisi]       = useState(false)
   const [repGymPass,    setRepGymPass]    = useState(false)
 
   // Set title synchronously before first paint — slug as immediate fallback,
@@ -131,6 +132,7 @@ function PortalLayout({ gymSlug, children }) {
         setGymName(name)
         setGymLogo(gym.logoUrl ?? null)
         setHasSeam(Boolean(gym.hasSeam))
+        setHasKisi(Boolean(gym.hasKisi))
         setRepGymPass(Boolean(gym.repGymPassEnabled))
         document.title = `${name} - staff portal`
         // Keep localStorage in sync with what the API says
@@ -217,7 +219,7 @@ function PortalLayout({ gymSlug, children }) {
         <nav className="flex-1 py-3 px-2 overflow-y-auto overflow-x-hidden">
           {NAV_GROUPS.map((group, gi) => {
             const items = [
-              ...(group.seam && hasSeam ? [group.seam] : []),
+              ...(group.seam && (hasSeam || hasKisi) ? [group.seam] : []),
               ...group.items,
               ...(group.repGymPass && repGymPass ? [group.repGymPass] : []),
             ]

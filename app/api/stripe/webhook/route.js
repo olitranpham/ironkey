@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import prisma from '@/lib/prisma'
 import { deleteSeamCodeByPin, generateUniqueAccessCode } from '@/lib/seam'
+import { ensureKisiMembership, revokeAccess as revokeKisiAccess } from '@/lib/kisi'
 import { formatPhone } from '@/lib/phone'
 import { normalizeGradSemester } from '@/lib/gradSemester'
 
@@ -59,6 +60,11 @@ export async function POST(request) {
       seamDeviceId:           true,
       zapierMemberWebhookUrl: true,
       zapierGuestWebhookUrl:  true,
+      accessProvider:         true,
+      kisiApiKey:             true,
+      kisiPlaceId:            true,
+      kisiMemberGroupId:      true,
+      kisiWeekendGroupId:     true,
     },
   })
 
@@ -428,6 +434,10 @@ export async function POST(request) {
     })
 
     const isNew = !member
+    // Snapshot before member gets reassigned below (create/update) — Kisi's
+    // tier-change check needs the membershipType/assignment as they were
+    // BEFORE this checkout, not after.
+    const memberBeforeUpdate = member
 
     // Build full address from individual metadata fields
     const addressParts = [
@@ -523,6 +533,49 @@ export async function POST(request) {
     await prisma.membershipEvent.create({
       data: { memberId: member.id, gymId: gym.id, type: isNew ? 'joined' : 'reactivated' },
     })
+
+    // ── Kisi gyms (DNA Strength only) — grant access, skip all Seam logic
+    // below entirely, including the /members loopback (which exists only to
+    // re-trigger Seam programming and would otherwise redundantly re-run
+    // this same Kisi grant a second time).
+    if (gym.accessProvider === 'KISI') {
+      try {
+        const result = await ensureKisiMembership(gym, {
+          existingMember: memberBeforeUpdate,
+          email,
+          name: `${firstName} ${lastName}`.trim(),
+          membershipType: member.membershipType,
+        })
+        if (result) {
+          member = await prisma.member.update({
+            where: { id: member.id },
+            data:  { kisiUserId: result.kisiUserId, kisiRoleAssignmentId: result.kisiRoleAssignmentId },
+          })
+        }
+      } catch (err) {
+        console.error('[platform/webhook] Kisi grant error:', err.message)
+      }
+
+      const zapierMemberUrlKisi = gym.zapierMemberWebhookUrl || process.env.ZAPIER_MEMBER_WEBHOOK_URL
+      if (zapierMemberUrlKisi) {
+        fetch(zapierMemberUrlKisi, {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify({
+            firstName, lastName, email, accessCode: null, membershipType,
+            isMinor,
+            guardianName:         isMinor ? (meta.guardianName         || null) : null,
+            guardianEmail:        isMinor ? (meta.guardianEmail        || null) : null,
+            guardianPhone:        isMinor ? (meta.guardianPhone        || null) : null,
+            guardianRelationship: isMinor ? (meta.guardianRelationship || null) : null,
+          }),
+        })
+          .then(r => console.log('[platform/webhook] Zapier member webhook status:', r.status))
+          .catch(e => console.error('[platform/webhook] Zapier member webhook error:', e.message))
+      }
+
+      return NextResponse.json({ received: true })
+    }
 
     const memberSeamApiKey   = gym.seamApiKey ?? process.env.SEAM_API_KEY
     const memberSeamDeviceId = gym.seamDeviceId ?? process.env.SEAM_DEVICE_ID
@@ -689,7 +742,7 @@ export async function POST(request) {
 
     const member = await prisma.member.findFirst({
       where:  { gymId: gym.id, stripeSubscriptionId: subId },
-      select: { id: true, accessCode: true, status: true },
+      select: { id: true, accessCode: true, status: true, kisiRoleAssignmentId: true },
     })
 
     if (!member) {
@@ -699,9 +752,14 @@ export async function POST(request) {
 
     console.log('[platform/webhook] subscription deleted for member:', member.id, '| accessCode:', member.accessCode)
 
-    const cancelSeamApiKey = gym.seamApiKey ?? process.env.SEAM_API_KEY
-    if (member.accessCode && cancelSeamApiKey) {
-      await deleteSeamCodeByPin(cancelSeamApiKey, member.accessCode, gym.seamDeviceId, '[platform/webhook]')
+    if (gym.accessProvider === 'KISI') {
+      await revokeKisiAccess(gym, member.kisiRoleAssignmentId)
+      await prisma.member.update({ where: { id: member.id }, data: { kisiRoleAssignmentId: null } })
+    } else {
+      const cancelSeamApiKey = gym.seamApiKey ?? process.env.SEAM_API_KEY
+      if (member.accessCode && cancelSeamApiKey) {
+        await deleteSeamCodeByPin(cancelSeamApiKey, member.accessCode, gym.seamDeviceId, '[platform/webhook]')
+      }
     }
 
     if (member.status !== 'CANCELED') {

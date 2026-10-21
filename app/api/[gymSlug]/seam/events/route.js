@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
+import { listEvents as listKisiEvents } from '@/lib/kisi'
 import { withGymContext } from '@/lib/auth/gymContext'
 
 const SEAM_API = 'https://connect.getseam.com'
@@ -53,6 +54,27 @@ export async function GET(request, { params }) {
     const gym = await prisma.gym.findUnique({ where: { slug: gymSlug } })
     if (!gym) {
       return NextResponse.json({ error: 'Gym not found' }, { status: 404 })
+    }
+
+    if (gym.accessProvider === 'KISI') {
+      if (!gym.kisiApiKey || !gym.kisiPlaceId) {
+        return NextResponse.json({ events: [] })
+      }
+      const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+      const rawEvents = await listKisiEvents(gym, since)
+      // NOTE: field names below (user/actor/event_type/created_at) are a
+      // best-effort guess — Kisi's /events response shape wasn't part of
+      // the confirmed/tested surface (only auth, users, and
+      // role_assignments were verified live). Confirm against a real
+      // response before relying on this in production.
+      const normalized = rawEvents.slice(0, 50).map(ev => ({
+        id:        ev.id ?? ev.event_id,
+        name:      ev.user?.name ?? ev.actor?.name ?? '—',
+        event:     (ev.event_type ?? ev.type ?? 'unlock').replace(/[._]/g, ' '),
+        createdAt: ev.created_at ?? ev.timestamp,
+        ok:        true,
+      }))
+      return NextResponse.json({ events: normalized })
     }
 
     const apiKey   = gym.seamApiKey   ?? process.env.SEAM_API_KEY

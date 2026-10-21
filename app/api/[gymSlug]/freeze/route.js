@@ -3,6 +3,7 @@ import Stripe from 'stripe'
 import prisma from '@/lib/prisma'
 import { withGymContext } from '@/lib/auth/gymContext'
 import { deleteSeamCodeByPin } from '@/lib/seam'
+import { revokeAccess as revokeKisiAccess } from '@/lib/kisi'
 
 export async function POST(request, { params }) {
   try {
@@ -18,7 +19,7 @@ export async function POST(request, { params }) {
       prisma.member.findFirst({ where: { id: memberId, gymId } }),
       prisma.gym.findUnique({
         where:  { id: gymId },
-        select: { stripeSecretKey: true, stripeAccountId: true, seamApiKey: true, seamDeviceId: true },
+        select: { stripeSecretKey: true, stripeAccountId: true, seamApiKey: true, seamDeviceId: true, accessProvider: true, kisiApiKey: true, kisiPlaceId: true, kisiMemberGroupId: true, kisiWeekendGroupId: true },
       }),
     ])
 
@@ -66,15 +67,21 @@ export async function POST(request, { params }) {
       console.warn('[freeze] Skipping Stripe — subId:', subId, '| stripeKey present:', Boolean(stripeKey))
     }
 
-    // ── Delete Seam access code ───────────────────────────────────────────
-    const seamKey      = gym?.seamApiKey ?? process.env.SEAM_API_KEY
-    const seamDeviceId = gym?.seamDeviceId
-    const accessCode   = existing.accessCode
-
-    if (seamKey && accessCode) {
-      await deleteSeamCodeByPin(seamKey, accessCode, seamDeviceId, '[freeze]')
+    if (gym?.accessProvider === 'KISI') {
+      // ── Revoke Kisi access ───────────────────────────────────────────────
+      await revokeKisiAccess(gym, existing.kisiRoleAssignmentId)
+      await prisma.member.update({ where: { id: memberId }, data: { kisiRoleAssignmentId: null } })
     } else {
-      console.warn('[freeze] Skipping Seam — accessCode:', accessCode, '| key present:', Boolean(seamKey))
+      // ── Delete Seam access code ─────────────────────────────────────────
+      const seamKey      = gym?.seamApiKey ?? process.env.SEAM_API_KEY
+      const seamDeviceId = gym?.seamDeviceId
+      const accessCode   = existing.accessCode
+
+      if (seamKey && accessCode) {
+        await deleteSeamCodeByPin(seamKey, accessCode, seamDeviceId, '[freeze]')
+      } else {
+        console.warn('[freeze] Skipping Seam — accessCode:', accessCode, '| key present:', Boolean(seamKey))
+      }
     }
 
     // ── Update DB ─────────────────────────────────────────────────────────

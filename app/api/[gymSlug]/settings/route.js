@@ -21,6 +21,11 @@ export async function GET(request, { params }) {
         slug:            true,
         stripeAccountId: true,
         seamApiKey:      true,
+        accessProvider:  true,
+        kisiApiKey:      true,
+        kisiPlaceId:     true,
+        kisiMemberGroupId:  true,
+        kisiWeekendGroupId: true,
       },
     })
 
@@ -32,6 +37,11 @@ export async function GET(request, { params }) {
         slug:             gym.slug,
         hasStripeConnect: Boolean(gym.stripeAccountId),
         hasSeam:          Boolean(gym.seamApiKey),
+        hasKisi:          Boolean(gym.kisiApiKey),
+        accessProvider:     gym.accessProvider,
+        kisiPlaceId:        gym.kisiPlaceId ?? '',
+        kisiMemberGroupId:  gym.kisiMemberGroupId ?? '',
+        kisiWeekendGroupId: gym.kisiWeekendGroupId ?? '',
       },
     })
   } catch (error) {
@@ -48,6 +58,7 @@ export async function GET(request, { params }) {
  *   { type: 'gym',      name }
  *   { type: 'stripe',   stripeSecretKey?, stripeWebhookSecret? }
  *   { type: 'seam',     seamApiKey?, seamDeviceId? }
+ *   { type: 'kisi',     kisiApiKey?, kisiPlaceId?, kisiMemberGroupId?, kisiWeekendGroupId? }
  *   { type: 'password', currentPassword, newPassword }
  *
  * Key fields: non-empty string → update, empty/absent → keep existing.
@@ -144,6 +155,42 @@ export async function PATCH(request, { params }) {
         settings: {
           hasSeam:      Boolean(updated.seamApiKey),
           seamDeviceId: updated.seamDeviceId ?? '',
+        },
+      })
+    }
+
+    // ── Kisi integration ──────────────────────────────────────────────────────
+    if (type === 'kisi') {
+      const data = {}
+
+      const apiKey          = body.kisiApiKey?.trim()
+      const placeId         = body.kisiPlaceId?.trim()
+      const memberGroupId   = body.kisiMemberGroupId?.trim()
+      const weekendGroupId  = body.kisiWeekendGroupId?.trim()
+
+      if (apiKey)         data.kisiApiKey         = apiKey
+      if (placeId)        data.kisiPlaceId        = placeId
+      if (memberGroupId)  data.kisiMemberGroupId  = memberGroupId
+      if (weekendGroupId) data.kisiWeekendGroupId = weekendGroupId
+
+      if (Object.keys(data).length === 0) {
+        return NextResponse.json({ error: 'Enter a value to save' }, { status: 400 })
+      }
+
+      console.log('[settings PATCH] updating kisi fields: %j', Object.keys(data))
+
+      await prisma.gym.update({ where: { id: gymId }, data })
+
+      const updated = await prisma.gym.findUnique({
+        where:  { id: gymId },
+        select: { kisiApiKey: true, kisiPlaceId: true, kisiMemberGroupId: true, kisiWeekendGroupId: true },
+      })
+      return NextResponse.json({
+        settings: {
+          hasKisi:            Boolean(updated.kisiApiKey),
+          kisiPlaceId:        updated.kisiPlaceId ?? '',
+          kisiMemberGroupId:  updated.kisiMemberGroupId ?? '',
+          kisiWeekendGroupId: updated.kisiWeekendGroupId ?? '',
         },
       })
     }

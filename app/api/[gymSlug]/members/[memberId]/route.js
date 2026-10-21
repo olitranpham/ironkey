@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { deleteSeamCodeByPin } from '@/lib/seam'
+import { ensureKisiMembership, revokeAccess as revokeKisiAccess, grantAccess as grantKisiAccess, groupIdForMembershipType } from '@/lib/kisi'
 import { normalizeGradSemester } from '@/lib/gradSemester'
 import { withGymContext } from '@/lib/auth/gymContext'
 
@@ -20,6 +21,7 @@ const MEMBER_SELECT = {
   hearAboutUs: true,
   gradSemester: true, gradYear: true, studentCategory: true,
   studentIdImage: true, studentIdStatus: true, studentIdReviewedAt: true, studentIdReviewedBy: true,
+  kisiUserId: true, kisiRoleAssignmentId: true,
 }
 
 /**
@@ -65,7 +67,10 @@ export async function PATCH(request, { params }) {
     if (errorResponse) return errorResponse
     const body                  = await request.json()
 
-    const gym = await prisma.gym.findUnique({ where: { slug: gymSlug }, select: { id: true } })
+    const gym = await prisma.gym.findUnique({
+      where:  { slug: gymSlug },
+      select: { id: true, accessProvider: true, kisiApiKey: true, kisiPlaceId: true, kisiMemberGroupId: true, kisiWeekendGroupId: true },
+    })
     if (!gym) return NextResponse.json({ error: 'Gym not found' }, { status: 404 })
 
     const gymId = gym.id
@@ -74,6 +79,7 @@ export async function PATCH(request, { params }) {
             emergencyContactRelationship, membershipType,
             stripeCustomerId, stripeSubscriptionId,
             gradSemester, gradYear, studentCategory,
+            resendKisiInvite,
             guardianName, guardianEmail, guardianPhone, guardianRelationship } = body
 
     console.log('[members/patch] memberId=%s gymId=%s body=%j', memberId, gymId, body)
@@ -148,6 +154,42 @@ export async function PATCH(request, { params }) {
     if (stripeCustomerId     !== undefined) data.stripeCustomerId     = stripeCustomerId === ''     ? null : String(stripeCustomerId).trim()
     if (stripeSubscriptionId !== undefined) data.stripeSubscriptionId = stripeSubscriptionId === '' ? null : String(stripeSubscriptionId).trim()
 
+    // ── Kisi: staff changed membershipType → follow the tier into the right
+    // group (revoke old assignment, grant new) before the write below.
+    if (gym.accessProvider === 'KISI' && membershipType !== undefined && data.membershipType !== existing.membershipType) {
+      try {
+        const result = await ensureKisiMembership(gym, {
+          existingMember: existing,
+          email:          existing.email,
+          name:           `${existing.firstName} ${existing.lastName}`.trim(),
+          membershipType: data.membershipType,
+        })
+        if (result) {
+          data.kisiUserId           = result.kisiUserId
+          data.kisiRoleAssignmentId = result.kisiRoleAssignmentId
+        }
+      } catch (err) {
+        console.error('[members/patch] Kisi tier-change error:', err.message)
+      }
+    }
+
+    // ── Kisi: explicit "resend invite" action from the drawer — revoke and
+    // re-grant with notify:true so Kisi fires a fresh notification
+    // regardless of whether this person is brand new to Kisi.
+    if (gym.accessProvider === 'KISI' && resendKisiInvite === true) {
+      try {
+        const targetGroupId = groupIdForMembershipType(gym, data.membershipType ?? existing.membershipType)
+        if (targetGroupId && existing.kisiUserId) {
+          if (existing.kisiRoleAssignmentId) await revokeKisiAccess(gym, existing.kisiRoleAssignmentId)
+          data.kisiRoleAssignmentId = await grantKisiAccess(gym, existing.kisiUserId, targetGroupId, { notify: true })
+        } else {
+          console.warn('[members/patch] resendKisiInvite: no kisiUserId or target group for member %s — skipping', memberId)
+        }
+      } catch (err) {
+        console.error('[members/patch] resendKisiInvite error:', err.message)
+      }
+    }
+
     if (gradSemester !== undefined) {
       if (gradSemester === '' || gradSemester === null) {
         data.gradSemester = null
@@ -197,7 +239,7 @@ export async function PATCH(request, { params }) {
     }
 
     // ── Program Seam lock if access code changed ─────────────────────────────
-    if (accessCode !== undefined && data.accessCode !== existing.accessCode) {
+    if (gym.accessProvider !== 'KISI' && accessCode !== undefined && data.accessCode !== existing.accessCode) {
       try {
         const gymSeam = await prisma.gym.findUnique({
           where:  { id: gymId },
@@ -292,29 +334,35 @@ export async function DELETE(request, { params }) {
 
     const gym = await prisma.gym.findUnique({
       where:  { slug: gymSlug },
-      select: { id: true, seamApiKey: true, seamDeviceId: true },
+      select: { id: true, seamApiKey: true, seamDeviceId: true, accessProvider: true, kisiApiKey: true, kisiPlaceId: true, kisiMemberGroupId: true, kisiWeekendGroupId: true },
     })
     if (!gym) return NextResponse.json({ error: 'Gym not found' }, { status: 404 })
 
     const member = await prisma.member.findFirst({
       where:  { id: memberId, gymId: gym.id },
-      select: { id: true, accessCode: true, firstName: true, lastName: true },
+      select: { id: true, accessCode: true, firstName: true, lastName: true, kisiRoleAssignmentId: true },
     })
     if (!member) return NextResponse.json({ error: 'Member not found' }, { status: 404 })
 
-    // ── Remove Seam access code ───────────────────────────────────────────────
-    const apiKey   = gym.seamApiKey   ?? process.env.SEAM_API_KEY
-    const deviceId = gym.seamDeviceId ?? process.env.SEAM_DEVICE_ID
-
-    if (member.accessCode && apiKey && deviceId) {
-      const { ok } = await deleteSeamCodeByPin(apiKey, member.accessCode, deviceId, '[members DELETE]')
-      console.log('[members DELETE] Seam delete — pin=%s ok=%s memberId=%s', member.accessCode, ok, memberId)
+    if (gym.accessProvider === 'KISI') {
+      // ── Revoke Kisi role assignment — never delete the Kisi user ──────────
+      const { ok } = await revokeKisiAccess(gym, member.kisiRoleAssignmentId)
+      console.log('[members DELETE] Kisi revoke — roleAssignmentId=%s ok=%s memberId=%s', member.kisiRoleAssignmentId, ok, memberId)
     } else {
-      console.log('[members DELETE] skipping Seam — accessCode=%s apiKey=%s deviceId=%s',
-        member.accessCode ?? 'none',
-        apiKey   ? '(set)' : 'MISSING',
-        deviceId ? '(set)' : 'MISSING',
-      )
+      // ── Remove Seam access code ─────────────────────────────────────────
+      const apiKey   = gym.seamApiKey   ?? process.env.SEAM_API_KEY
+      const deviceId = gym.seamDeviceId ?? process.env.SEAM_DEVICE_ID
+
+      if (member.accessCode && apiKey && deviceId) {
+        const { ok } = await deleteSeamCodeByPin(apiKey, member.accessCode, deviceId, '[members DELETE]')
+        console.log('[members DELETE] Seam delete — pin=%s ok=%s memberId=%s', member.accessCode, ok, memberId)
+      } else {
+        console.log('[members DELETE] skipping Seam — accessCode=%s apiKey=%s deviceId=%s',
+          member.accessCode ?? 'none',
+          apiKey   ? '(set)' : 'MISSING',
+          deviceId ? '(set)' : 'MISSING',
+        )
+      }
     }
 
     // ── Delete member from DB ─────────────────────────────────────────────────

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import prisma from '@/lib/prisma'
 import { generateUniqueAccessCode, isAccessCodeLiveOnSeam } from '@/lib/seam'
+import { ensureKisiMembership } from '@/lib/kisi'
 import { withGymContext } from '@/lib/auth/gymContext'
 
 const SEAM_API = 'https://connect.getseam.com'
@@ -27,7 +28,7 @@ export async function POST(request, { params }) {
     const gymId = ctx.gym.id
     const gym = await prisma.gym.findUnique({
       where:  { id: gymId },
-      select: { slug: true, stripeSecretKey: true, seamApiKey: true, seamDeviceId: true },
+      select: { slug: true, stripeSecretKey: true, seamApiKey: true, seamDeviceId: true, accessProvider: true, kisiApiKey: true, kisiPlaceId: true, kisiMemberGroupId: true, kisiWeekendGroupId: true },
     })
 
     const { memberId } = await request.json()
@@ -79,17 +80,6 @@ export async function POST(request, { params }) {
     await stripe.subscriptions.update(subId, stripeParams)
     console.log('[reverse-cancel] Stripe cleared — memberId:', memberId, '| params:', JSON.stringify(stripeParams))
 
-    // ── Access code — leave it alone if it's still live, reissue if not ─────
-    // Seam codes are only ever revoked by the subscription.deleted webhook,
-    // which fires solely once a subscription actually ends — the same
-    // condition already rejected above. So in the normal case there's
-    // nothing to touch here. This still checks for real rather than
-    // assuming, since staff could have separately removed the code by hand
-    // (e.g. the door-access page's own "remove" action) independent of
-    // subscription state.
-    const apiKey   = gym.seamApiKey ?? process.env.SEAM_API_KEY
-    const deviceId = gym.seamDeviceId ?? process.env.SEAM_DEVICE_ID
-
     let codeReissued = false
     let accessCode   = member.accessCode
     const updateData = {
@@ -99,32 +89,70 @@ export async function POST(request, { params }) {
       updatedAt:           new Date(),
     }
 
-    if (apiKey) {
-      const stillLive = member.accessCode
-        ? await isAccessCodeLiveOnSeam(apiKey, deviceId, member.accessCode)
-        : false
+    if (gym.accessProvider === 'KISI') {
+      // Kisi role assignments are only ever revoked by the
+      // subscription.deleted webhook, same condition already rejected
+      // above — so in the normal case there's nothing to re-grant. Still
+      // checked for real (member.kisiRoleAssignmentId null) rather than
+      // assumed, since staff could have separately removed access by hand.
+      if (!member.kisiRoleAssignmentId) {
+        try {
+          const result = await ensureKisiMembership(gym, {
+            existingMember: member,
+            email:          member.email,
+            name:           `${member.firstName} ${member.lastName}`.trim(),
+            membershipType: member.membershipType,
+          })
+          if (result) {
+            updateData.kisiUserId           = result.kisiUserId
+            updateData.kisiRoleAssignmentId = result.kisiRoleAssignmentId
+          }
+        } catch (err) {
+          console.error('[reverse-cancel] Kisi error:', err.message)
+        }
+      }
+      // accessCode/codeReissued stay as-is (no PIN concept for Kisi) —
+      // kept null/false so the staff-facing banner doesn't show a
+      // misleading "new code: null".
+    } else {
+      // ── Access code — leave it alone if it's still live, reissue if not ──
+      // Seam codes are only ever revoked by the subscription.deleted webhook,
+      // which fires solely once a subscription actually ends — the same
+      // condition already rejected above. So in the normal case there's
+      // nothing to touch here. This still checks for real rather than
+      // assuming, since staff could have separately removed the code by hand
+      // (e.g. the door-access page's own "remove" action) independent of
+      // subscription state.
+      const apiKey   = gym.seamApiKey ?? process.env.SEAM_API_KEY
+      const deviceId = gym.seamDeviceId ?? process.env.SEAM_DEVICE_ID
 
-      if (!stillLive) {
-        accessCode = await generateUniqueAccessCode({
-          prisma, gymId, apiKey, deviceId, logPrefix: '[reverse-cancel]',
-        })
-        updateData.accessCode = accessCode
-        codeReissued = true
+      if (apiKey) {
+        const stillLive = member.accessCode
+          ? await isAccessCodeLiveOnSeam(apiKey, deviceId, member.accessCode)
+          : false
 
-        const headers = { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' }
-        const createRes = await fetch(`${SEAM_API}/access_codes/create`, {
-          method: 'POST', headers,
-          body:   JSON.stringify({
-            device_id: deviceId,
-            code:      accessCode,
-            name:      `${member.firstName} ${member.lastName}`,
-          }),
-        })
-        if (!createRes.ok) {
-          const text = await createRes.text()
-          console.error('[reverse-cancel] Seam create failed:', createRes.status, text)
-          // Non-fatal — the DB/Stripe reversal already succeeded; the code
-          // just won't be live on the lock yet. Surfaced in the response.
+        if (!stillLive) {
+          accessCode = await generateUniqueAccessCode({
+            prisma, gymId, apiKey, deviceId, logPrefix: '[reverse-cancel]',
+          })
+          updateData.accessCode = accessCode
+          codeReissued = true
+
+          const headers = { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' }
+          const createRes = await fetch(`${SEAM_API}/access_codes/create`, {
+            method: 'POST', headers,
+            body:   JSON.stringify({
+              device_id: deviceId,
+              code:      accessCode,
+              name:      `${member.firstName} ${member.lastName}`,
+            }),
+          })
+          if (!createRes.ok) {
+            const text = await createRes.text()
+            console.error('[reverse-cancel] Seam create failed:', createRes.status, text)
+            // Non-fatal — the DB/Stripe reversal already succeeded; the code
+            // just won't be live on the lock yet. Surfaced in the response.
+          }
         }
       }
     }

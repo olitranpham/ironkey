@@ -39,6 +39,8 @@ export default function DoorAccessPage() {
   const [fetchErr,      setFetchErr]      = useState(null)
   const [noDevice,      setNoDevice]      = useState(false)
   const [search,        setSearch]        = useState('')
+  const [accessProvider, setAccessProvider] = useState(null) // null while loading
+  const [resendingId,    setResendingId]    = useState(null)
   const [changeModal,   setChangeModal]   = useState(null)
   const [removeModal,   setRemoveModal]   = useState(null)
   const [actionLoading, setActionLoading] = useState(false)
@@ -69,7 +71,7 @@ export default function DoorAccessPage() {
     if (!addForm.email.trim())          { setAddError('email is required');            return }
     if (!addForm.phone.trim())          { setAddError('phone is required');            return }
     if (!addForm.membershipType.trim()) { setAddError('membership type is required'); return }
-    if (!addForm.accessCode.trim())     { setAddError('access code is required');     return }
+    if (accessProvider !== 'KISI' && !addForm.accessCode.trim()) { setAddError('access code is required'); return }
     if (!addForm.joinDate)              { setAddError('joined date is required');     return }
     setAddSubmitting(true)
     setAddError(null)
@@ -93,21 +95,27 @@ export default function DoorAccessPage() {
         throw new Error(msg || `${res.status}`)
       }
       const { member } = await res.json()
-      // Append optimistically — Seam won't index the new code instantly
-      const fullName = `${member.firstName} ${member.lastName}`.trim()
-      setCodes(prev => [...prev, {
-        id:             `pending-${member.id}`,
-        type:           'member',
-        name:           fullName,
-        code:           member.accessCode,
-        endsAt:         null,
-        memberId:       member.id,
-        email:          member.email,
-        phone:          member.phone          ?? null,
-        membershipType: member.membershipType ?? 'general',
-        memberStatus:   member.status,
-        joinDate:       member.dateAccessed   ?? member.createdAt,
-      }])
+      if (accessProvider === 'KISI') {
+        // Kisi grant happens server-side (members/route.js) — just refetch
+        // the list rather than guessing at its shape optimistically.
+        fetchCodes()
+      } else {
+        // Append optimistically — Seam won't index the new code instantly
+        const fullName = `${member.firstName} ${member.lastName}`.trim()
+        setCodes(prev => [...prev, {
+          id:             `pending-${member.id}`,
+          type:           'member',
+          name:           fullName,
+          code:           member.accessCode,
+          endsAt:         null,
+          memberId:       member.id,
+          email:          member.email,
+          phone:          member.phone          ?? null,
+          membershipType: member.membershipType ?? 'general',
+          memberStatus:   member.status,
+          joinDate:       member.dateAccessed   ?? member.createdAt,
+        }])
+      }
       setAddOpen(false)
     } catch (err) {
       setAddError(err.message || 'something went wrong — please try again')
@@ -196,11 +204,44 @@ export default function DoorAccessPage() {
     }
   }
 
+  // Resolve the gym's door-access provider first — everything else below
+  // waits on this so it only fetches from the right source once.
+  useEffect(() => {
+    if (!gymSlug) return
+    const token = localStorage.getItem('ik_token')
+    fetch(`/api/${gymSlug}/gym`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => setAccessProvider(data?.gym?.accessProvider ?? 'SEAM'))
+      .catch(() => setAccessProvider('SEAM'))
+  }, [gymSlug])
+
   const fetchCodes = useCallback(async () => {
+    if (!accessProvider) return
     setLoading(true)
     setNoDevice(false)
     try {
       const token = localStorage.getItem('ik_token')
+
+      if (accessProvider === 'KISI') {
+        // No Seam "codes" concept for Kisi — list members directly and
+        // derive invite status from kisiUserId/kisiRoleAssignmentId.
+        const res = await fetch(`/api/${gymSlug}/all`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        if (!res.ok) throw new Error(`${res.status}`)
+        const { members } = await res.json()
+        setCodes((members ?? []).map(m => ({
+          id:                   m.id,
+          type:                 'member',
+          name:                 `${m.firstName} ${m.lastName}`.trim(),
+          memberId:              m.id,
+          kisiUserId:            m.kisiUserId ?? null,
+          kisiRoleAssignmentId:  m.kisiRoleAssignmentId ?? null,
+        })))
+        setFetchErr(null)
+        return
+      }
+
       const res   = await fetch(`/api/${gymSlug}/seam/codes`, {
         headers: { Authorization: `Bearer ${token}` },
       })
@@ -219,9 +260,27 @@ export default function DoorAccessPage() {
     } finally {
       setLoading(false)
     }
-  }, [gymSlug])
+  }, [gymSlug, accessProvider])
 
   useEffect(() => { fetchCodes() }, [fetchCodes])
+
+  async function handleResendInviteRow(memberId) {
+    setResendingId(memberId)
+    try {
+      const token = localStorage.getItem('ik_token')
+      const res   = await fetch(`/api/${gymSlug}/members/${memberId}`, {
+        method:  'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body:    JSON.stringify({ resendKisiInvite: true }),
+      })
+      if (!res.ok) throw new Error('Failed')
+      fetchCodes()
+    } catch {
+      // non-fatal
+    } finally {
+      setResendingId(null)
+    }
+  }
 
   // Tab + search filter
   const visible = codes.filter(c => {
@@ -367,13 +426,30 @@ export default function DoorAccessPage() {
                                   )}
                                 </div>
                               )}
+                              {accessProvider === 'KISI' && (
+                                <p className="text-[11px] text-neutral-500 mt-0.5">
+                                  access via kisi app
+                                  {' — '}
+                                  {!c.kisiUserId
+                                    ? 'not yet invited'
+                                    : c.kisiRoleAssignmentId ? 'active' : 'invited, access pending'}
+                                </p>
+                              )}
                             </div>
                           </div>
                         </td>
 
-                        {/* Action — remove for guests only */}
-                        <td className="px-4 py-3 text-right" onClick={e => c.type === 'guest' && e.stopPropagation()}>
-                          {c.type === 'guest' && (
+                        {/* Action — remove for guests only (Seam); resend invite (Kisi) */}
+                        <td className="px-4 py-3 text-right" onClick={e => (accessProvider === 'KISI' || c.type === 'guest') && e.stopPropagation()}>
+                          {accessProvider === 'KISI' ? (
+                            <button
+                              onClick={() => handleResendInviteRow(c.memberId)}
+                              disabled={resendingId === c.memberId}
+                              className="opacity-0 group-hover:opacity-100 transition-opacity text-xs text-neutral-400 hover:text-white disabled:opacity-40 transition-colors"
+                            >
+                              {resendingId === c.memberId ? '…' : 'resend invite'}
+                            </button>
+                          ) : c.type === 'guest' && (
                             <button
                               onClick={() => { setRemoveModal(c); setActionError(null) }}
                               className="opacity-0 group-hover:opacity-100 transition-opacity text-xs text-red-400/60 hover:text-red-400 transition-colors"
@@ -547,23 +623,28 @@ export default function DoorAccessPage() {
                   className="w-full bg-[#252525] border border-neutral-700 rounded-lg px-3 py-2 text-xs text-white placeholder-neutral-600 focus:outline-none focus:border-neutral-500" />
               </div>
 
-              {/* Access code + joined date */}
+              {/* Access code (Seam only) + joined date */}
               <div className="flex gap-3">
-                <div className="flex-1">
-                  <label className="block text-[11px] text-neutral-500 mb-1">access code</label>
-                  <input
-                    value={addForm.accessCode}
-                    onChange={e => setAddForm(p => ({ ...p, accessCode: e.target.value.replace(/\D/g, '').slice(0, 6) }))}
-                    placeholder="e.g. 4821" maxLength={6}
-                    className="w-full bg-[#252525] border border-neutral-700 rounded-lg px-3 py-2 text-xs text-white placeholder-neutral-600 focus:outline-none focus:border-neutral-500 font-mono"
-                  />
-                </div>
+                {accessProvider !== 'KISI' && (
+                  <div className="flex-1">
+                    <label className="block text-[11px] text-neutral-500 mb-1">access code</label>
+                    <input
+                      value={addForm.accessCode}
+                      onChange={e => setAddForm(p => ({ ...p, accessCode: e.target.value.replace(/\D/g, '').slice(0, 6) }))}
+                      placeholder="e.g. 4821" maxLength={6}
+                      className="w-full bg-[#252525] border border-neutral-700 rounded-lg px-3 py-2 text-xs text-white placeholder-neutral-600 focus:outline-none focus:border-neutral-500 font-mono"
+                    />
+                  </div>
+                )}
                 <div className="flex-1">
                   <label className="block text-[11px] text-neutral-500 mb-1">joined date</label>
                   <input value={addForm.joinDate} onChange={setField('joinDate')} type="date"
                     className="w-full bg-[#252525] border border-neutral-700 rounded-lg px-3 py-2 text-xs text-white placeholder-neutral-600 focus:outline-none focus:border-neutral-500" />
                 </div>
               </div>
+              {accessProvider === 'KISI' && (
+                <p className="text-[11px] text-neutral-500">access will be granted via the kisi app — an invite is sent automatically.</p>
+              )}
 
               {addError && <p className="text-xs text-red-400">{addError}</p>}
 
@@ -592,7 +673,7 @@ export default function DoorAccessPage() {
         onClose={closePanel}
         onSaveAccessCode={handleSaveAccessCode}
         onSaveField={handleSaveField}
-        onDeleteCode={handleDeleteCode}
+        onDeleteCode={accessProvider === 'KISI' ? undefined : handleDeleteCode}
         simplified={true}
       />
 
