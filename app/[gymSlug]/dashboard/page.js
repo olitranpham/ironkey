@@ -126,6 +126,12 @@ function buildChartData(members) {
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
+// User-facing message for a failed API call; 403 means the user lacks the permission.
+function requestError(res, json) {
+  if (res.status === 403) return "you don't have permission to do that"
+  return json?.error || `request failed (${res.status})`
+}
+
 export default function DashboardPage() {
   const { gymSlug } = useParams()
   const { membershipBorder } = getGymTheme(gymSlug)
@@ -165,21 +171,33 @@ export default function DashboardPage() {
     closeTimer.current = setTimeout(() => setSelectedMember(null), 220)
   }
 
+  // Status changes go through the Stripe/door-aware routes, never a raw PATCH
+  const STATUS_ACTIONS = {
+    FROZEN:   { route: 'freeze', confirm: 'Freeze this membership? Billing will be paused and their door access removed.' },
+    CANCELED: { route: 'cancel', confirm: 'Cancel this membership at the end of the current billing period?' },
+    ACTIVE:   { route: 'resume' },
+  }
+
   async function handleStatusChange(memberId, newStatus) {
+    const action = STATUS_ACTIONS[newStatus]
+    if (!action) return
+    if (action.confirm && !confirm(action.confirm)) return
     setUpdatingStatus(true)
+    setActionError(null)
     try {
       const token = localStorage.getItem('ik_token')
-      const res = await fetch(`/api/${gymSlug}/members/${memberId}`, {
-        method:  'PATCH',
+      const res = await fetch(`/api/${gymSlug}/${action.route}`, {
+        method:  'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body:    JSON.stringify({ status: newStatus }),
+        body:    JSON.stringify({ memberId }),
       })
-      if (!res.ok) throw new Error('Failed')
-      const { member: updated } = await res.json()
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(requestError(res, json))
+      const { member: updated } = json
       setMembers(prev => prev.map(m => m.id === memberId ? { ...m, ...updated } : m))
       setSelectedMember(prev => prev?.id === memberId ? { ...prev, ...updated } : prev)
-    } catch {
-      // non-fatal — leave UI as-is
+    } catch (err) {
+      setActionError(err.message || 'something went wrong — please try again')
     } finally {
       setUpdatingStatus(false)
     }
@@ -196,7 +214,7 @@ export default function DashboardPage() {
         body:    JSON.stringify({ memberId }),
       })
       const json = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(json.error || 'Request failed')
+      if (!res.ok) throw new Error(requestError(res, json))
       const { member: updated } = json
       setMembers(prev => prev.map(m => m.id === memberId ? { ...m, ...updated } : m))
       setSelectedMember(prev => prev?.id === memberId ? { ...prev, ...updated } : prev)
@@ -223,12 +241,13 @@ export default function DashboardPage() {
         method:  'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       })
-      if (!res.ok) throw new Error('Request failed')
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(requestError(res, json))
       setMembers(prev => prev.filter(m => m.id !== removeTarget.id))
       setRemoveTarget(null)
       closePanel()
-    } catch {
-      setRemoveError('something went wrong — please try again')
+    } catch (err) {
+      setRemoveError(err.message || 'something went wrong — please try again')
     } finally {
       setRemoving(false)
     }
@@ -242,12 +261,13 @@ export default function DashboardPage() {
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body:    JSON.stringify({ accessCode: code }),
       })
-      if (!res.ok) throw new Error('Failed')
-      const { member: updated } = await res.json()
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(requestError(res, json))
+      const { member: updated } = json
       setMembers(prev => prev.map(m => m.id === memberId ? { ...m, ...updated } : m))
       setSelectedMember(prev => prev?.id === memberId ? { ...prev, ...updated } : prev)
-    } catch {
-      // non-fatal
+    } catch (err) {
+      setActionError(err.message || 'could not save access code')
     }
   }
 
@@ -259,12 +279,13 @@ export default function DashboardPage() {
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body:    JSON.stringify(fields),
       })
-      if (!res.ok) throw new Error('Failed')
-      const { member: updated } = await res.json()
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(requestError(res, json))
+      const { member: updated } = json
       setMembers(prev => prev.map(m => m.id === memberId ? { ...m, ...updated } : m))
       setSelectedMember(prev => prev?.id === memberId ? { ...prev, ...updated } : prev)
-    } catch {
-      // non-fatal
+    } catch (err) {
+      setActionError(err.message || 'could not save changes')
     }
   }
 
@@ -358,8 +379,9 @@ export default function DashboardPage() {
           <p className="text-xs text-emerald-400">{successBanner}</p>
         </div>
       )}
+      {/* Fixed + z-50 so errors from actions inside the member drawer (z-40 overlay) stay visible */}
       {actionError && (
-        <div className="shrink-0 px-6 py-2 bg-red-500/10 border-b border-red-500/20 flex items-center justify-between gap-3">
+        <div role="alert" className="fixed top-4 left-1/2 -translate-x-1/2 z-50 w-[calc(100%-2rem)] max-w-md px-4 py-2 rounded-lg bg-neutral-900 border border-red-500/40 shadow-lg flex items-center justify-between gap-3">
           <p className="text-xs text-red-400">{actionError}</p>
           <button onClick={() => setActionError(null)} className="text-xs text-red-400/70 hover:text-red-400 shrink-0">dismiss</button>
         </div>

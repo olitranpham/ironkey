@@ -42,6 +42,12 @@ const CONFIRM_COPY = {
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
+// User-facing message for a failed API call; 403 means the user lacks the permission.
+function requestError(res, json) {
+  if (res.status === 403) return "you don't have permission to do that"
+  return json?.error || `request failed (${res.status})`
+}
+
 export default function PaymentsPage() {
   const { gymSlug } = useParams()
   const [members,    setMembers]    = useState([])
@@ -141,8 +147,8 @@ export default function PaymentsPage() {
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body:    JSON.stringify({ memberId: member.id }),
       })
-      if (!res.ok) throw new Error('Request failed')
-      const json = await res.json()
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(requestError(res, json))
       const { member: updated } = json
       setMembers(prev => prev.map(m => m.id === updated.id ? { ...m, ...updated } : m))
       setSelectedMember(prev => prev?.id === updated.id ? { ...prev, ...updated } : prev)
@@ -152,8 +158,8 @@ export default function PaymentsPage() {
       } else {
         setConfirmModal(null)
       }
-    } catch {
-      setActionError('something went wrong — please try again')
+    } catch (err) {
+      setActionError(err.message || 'something went wrong — please try again')
     } finally {
       setActionLoading(false)
     }

@@ -8,7 +8,6 @@ import { maskPin, redactJsonText } from '@/lib/redact'
 import { writeAudit } from '@/lib/audit'
 
 const SEAM_API = 'https://connect.getseam.com'
-const VALID_STATUSES         = ['ACTIVE', 'FROZEN', 'CANCELED']
 const VALID_STUDENT_CATEGORIES = ['Student', 'Military', 'EMT']
 
 const MEMBER_SELECT = {
@@ -62,8 +61,10 @@ export async function GET(request, { params }) {
 
 /**
  * PATCH /api/[gymSlug]/members/[memberId]
- * Updates a member's status and/or accessCode.
+ * Updates a member's profile fields and/or accessCode.
  * When accessCode changes, programs the new code onto the gym's Seam lock.
+ * Status changes are rejected — they must go through /freeze, /resume,
+ * /cancel or /reverse-cancel, which also handle Stripe and door access.
  */
 export async function PATCH(request, { params }) {
   try {
@@ -75,6 +76,10 @@ export async function PATCH(request, { params }) {
     if (scope && !scope.has(memberId)) return NextResponse.json({ error: 'Member not found' }, { status: 404 })
     const body                  = await request.json()
 
+    if (body.status !== undefined) {
+      return NextResponse.json({ error: 'use /freeze, /resume, /cancel' }, { status: 400 })
+    }
+
     const gym = await prisma.gym.findUnique({
       where:  { slug: gymSlug },
       select: { id: true, accessProvider: true, kisiApiKey: true, kisiPlaceId: true, kisiMemberGroupId: true, kisiWeekendGroupId: true },
@@ -82,7 +87,7 @@ export async function PATCH(request, { params }) {
     if (!gym) return NextResponse.json({ error: 'Gym not found' }, { status: 404 })
 
     const gymId = gym.id
-    const { status, accessCode, firstName, lastName, email, phone,
+    const { accessCode, firstName, lastName, email, phone,
             dateOfBirth, address, emergencyContactName, emergencyContactPhone,
             emergencyContactRelationship, membershipType,
             stripeCustomerId, stripeSubscriptionId,
@@ -101,27 +106,13 @@ export async function PATCH(request, { params }) {
     }
 
     // ── Field-level permissions ───────────────────────────────────────────────
-    // Door codes reprogram the lock; status changes mirror the freeze/cancel routes.
+    // Door codes reprogram the lock.
     if ((accessCode !== undefined || resendKisiInvite === true) && !can(ctx.user, 'door.manage')) {
       return forbidden()
-    }
-    if (status !== undefined && status !== existing.status) {
-      const needs = status === 'CANCELED' || existing.status === 'CANCELED' ? 'members.cancel' : 'members.freeze'
-      if (!can(ctx.user, needs)) return forbidden()
     }
 
     const now  = new Date()
     const data = { updatedAt: now }
-
-    if (status !== undefined) {
-      if (!VALID_STATUSES.includes(status)) {
-        return NextResponse.json({ error: 'Invalid status' }, { status: 400 })
-      }
-      data.status = status
-      if (status === 'FROZEN'    && !existing.dateFrozen)   data.dateFrozen   = now
-      if (status === 'CANCELED'  && !existing.dateCanceled) data.dateCanceled = now
-      if (status === 'ACTIVE')                              data.dateFrozen   = null
-    }
 
     if (firstName !== undefined && firstName.trim()) data.firstName = firstName.trim()
     if (lastName  !== undefined && lastName.trim())  data.lastName  = lastName.trim()
@@ -246,23 +237,8 @@ export async function PATCH(request, { params }) {
     console.log('[members/patch] DB updated — accessCode=%s', maskPin(member.accessCode))
 
     // ── Audit ────────────────────────────────────────────────────────────────
-    if (status !== undefined && status !== existing.status) {
-      const action = status === 'FROZEN' ? 'member.freeze' : status === 'CANCELED' ? 'member.cancel' : 'member.resume'
-      writeAudit(ctx, action, 'Member', memberId, { via: 'status_patch', from: existing.status, to: status })
-    }
     if (accessCode !== undefined && data.accessCode !== existing.accessCode) {
       writeAudit(ctx, 'member.access_code_change', 'Member', memberId, { via: 'member_patch', cleared: data.accessCode === null })
-    }
-
-    // ── Log membership event if status changed ───────────────────────────────
-    if (status !== undefined && status !== existing.status) {
-      let eventType
-      if (status === 'FROZEN')    eventType = 'frozen'
-      if (status === 'CANCELED')  eventType = 'canceled'
-      if (status === 'ACTIVE')    eventType = existing.status === 'FROZEN' ? 'unfrozen' : 'reactivated'
-      if (eventType) {
-        await prisma.membershipEvent.create({ data: { memberId, gymId, type: eventType } })
-      }
     }
 
     // ── Program Seam lock if access code changed ─────────────────────────────
