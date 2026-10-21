@@ -13,6 +13,8 @@ export default function JoinSuccessPage() {
   const [gymLogo,    setGymLogo]    = useState(null)
   const [sentTo,     setSentTo]     = useState(null)
   const [lockboxCode, setLockboxCode] = useState(null)   // only sent for a verified paid session
+  const [resendState, setResendState] = useState(null)   // null | 'sending' | 'sent'
+  const [resendError, setResendError] = useState(null)
   const [accessProvider, setAccessProvider] = useState('SEAM')
   const [loading,    setLoading]    = useState(Boolean(sessionId))
 
@@ -68,6 +70,24 @@ export default function JoinSuccessPage() {
     poll()
   }, [gymSlug, sessionId, accessProvider])
 
+  async function handleResend() {
+    setResendState('sending')
+    setResendError(null)
+    try {
+      const res  = await fetch(`/api/${gymSlug}/join/resend`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ session_id: sessionId }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(json.error ?? 'could not resend — please contact admin@ironkeyentry.com')
+      setResendState('sent')
+    } catch (err) {
+      setResendState(null)
+      setResendError(err.message)
+    }
+  }
+
   return (
     <div className="min-h-screen bg-[#292929] flex flex-col items-center justify-center px-4">
       <div className="w-full max-w-md bg-[#1c1c1c] border border-neutral-800 rounded-2xl p-8 flex flex-col items-center text-center gap-5 shadow-2xl">
@@ -109,6 +129,18 @@ export default function JoinSuccessPage() {
               your access code was emailed to <span className="text-white font-semibold">{sentTo}</span>.
               check your inbox (and spam).
             </p>
+            <button
+              type="button"
+              onClick={handleResend}
+              disabled={resendState === 'sending'}
+              className="text-xs px-3 py-1.5 rounded-lg border border-neutral-700 text-neutral-300 hover:text-white hover:border-neutral-500 disabled:opacity-40 transition-colors"
+            >
+              {resendState === 'sending' ? 'sending…' : 'resend'}
+            </button>
+            {resendState === 'sent' && (
+              <p className="text-xs text-emerald-400">if your code is ready, we've sent it again.</p>
+            )}
+            {resendError && <p className="text-xs text-red-400">{resendError}</p>}
           </div>
         ) : (
           <div className="w-full bg-neutral-900 rounded-xl p-4 text-left space-y-2">
