@@ -1,123 +1,27 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
-import { getAllowedPassTypes } from '@/lib/gymPassTypes'
-import { formatPhone } from '@/lib/phone'
 import { requirePermission } from '@/lib/permissions'
-
-const PASS_TYPE_MAP = {
-  single:     'SINGLE',
-  '3-pack':   'THREE_PACK',
-  '5-pack':   'FIVE_PACK',
-  '10-pack':  'TEN_PACK',
-  three_pack: 'THREE_PACK',
-  five_pack:  'FIVE_PACK',
-  ten_pack:   'TEN_PACK',
-  value:      'VALUE',
-  deluxe:     'DELUXE',
-}
-
-const PASS_TYPE_LABEL = {
-  SINGLE:     'Day Pass',
-  THREE_PACK: '3-Pack',
-  FIVE_PACK:  '5-Pack',
-  TEN_PACK:   '10-Pack',
-  VALUE:      'Value',
-  DELUXE:     'Deluxe',
-}
+import { authorizeIntake } from '@/lib/webhookAuth'
+import { intakeGuestPass } from '@/lib/guestPassIntake'
 
 /**
  * POST /api/[gymSlug]/guest-passes
- * Public route  called by Zapier when a guest purchases a pass.
+ * Called by Zapier when a guest purchases a pass.
  * Body: { name, email?, phone?, passType?, passesLeft?, accessCode? }
  *
- * Access code logic:
- *  - Returning guest (profile.accessCode exists)  reuse stored code, ignore body.accessCode
- *  - New guest (no accessCode yet)  save body.accessCode to profile and create Seam code
+ * Auth: a staff JWT with door.manage, OR x-webhook-secret = WEBHOOK_SECRET (Zapier).
+ * Unauthenticated calls are rejected when WEBHOOK_ENFORCE=true, otherwise allowed with a warning.
+ * See lib/guestPassIntake.js for the access-code logic.
  */
 export async function POST(request, { params }) {
   try {
     const { gymSlug } = await params
+    const auth = await authorizeIntake(request, gymSlug, 'door.manage', 'POST /api/[gymSlug]/guest-passes')
+    if (auth.errorResponse) return auth.errorResponse
+
     const body = await request.json()
-
-    const guestName = (body.name ?? '').trim()
-    if (!guestName) {
-      return NextResponse.json({ error: 'name is required' }, { status: 400 })
-    }
-
-    const gym = await prisma.gym.findUnique({
-      where:  { slug: gymSlug },
-      select: { id: true },
-    })
-    if (!gym) {
-      return NextResponse.json({ error: 'Gym not found' }, { status: 404 })
-    }
-
-    const rawType  = (body.passType ?? '').toLowerCase().trim()
-    const passType = PASS_TYPE_MAP[rawType] ?? 'SINGLE'
-
-    const allowed = getAllowedPassTypes(gymSlug)
-    if (!allowed.includes(passType)) {
-      return NextResponse.json(
-        { error: `Pass type "${passType}" is not available for this gym` },
-        { status: 400 },
-      )
-    }
-    const email    = (body.email ?? '').trim().toLowerCase() || null
-    const phone    = formatPhone(body.phone ?? null)
-
-    //  Upsert guest profile (global — keyed by email only)
-    let profile = null
-    if (email) {
-      profile = await prisma.guest.upsert({
-        where:  { email },
-        update: {
-          name:  guestName,
-          phone: phone ?? undefined,
-        },
-        create: {
-          name:  guestName,
-          email,
-          phone: phone ?? null,
-        },
-      })
-
-      if (profile.accessCode) {
-        // Returning guest -- accessCode already stored, Zapier will reprogram Seam
-      } else {
-        // New guest -- save incoming code to profile
-        const incomingCode = body.accessCode ? String(body.accessCode).trim() : null
-        if (incomingCode) {
-          profile = await prisma.guest.update({
-            where: { id: profile.id },
-            data:  { accessCode: incomingCode },
-          })
-        }
-      }
-    }
-
-    //  Create the pass 
-    const pass = await prisma.guestVisit.create({
-      data: {
-        gymId:          gym.id,
-        guestProfileId: profile?.id ?? null,
-        guestName,
-        guestEmail:     email,
-        guestPhone:     phone ?? null,
-        passType,
-        passesLeft:     body.passesLeft != null && passType !== 'SINGLE'
-                          ? Math.max(0, Number(body.passesLeft) - 1)
-                          : null,
-        usedAt:         new Date(),
-        expiresAt:      new Date(Date.now() + 24 * 60 * 60 * 1000),
-      },
-    })
-
-    const accessCode = profile?.accessCode ?? null
-    return NextResponse.json({
-      pass,
-      accessCode,
-      passTypeLabel: PASS_TYPE_LABEL[passType] ?? passType,
-    }, { status: 201 })
+    const { status, json } = await intakeGuestPass(gymSlug, body)
+    return NextResponse.json(json, { status })
   } catch (error) {
     console.error('[guest-passes POST]', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

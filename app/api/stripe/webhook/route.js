@@ -5,7 +5,9 @@ import { deleteSeamCodeByPin, generateUniqueAccessCode } from '@/lib/seam'
 import { ensureKisiMembership, revokeAccess as revokeKisiAccess } from '@/lib/kisi'
 import { formatPhone } from '@/lib/phone'
 import { normalizeGradSemester } from '@/lib/gradSemester'
-import { maskPin, redactJsonText } from '@/lib/redact'
+import { maskPin, redactObject } from '@/lib/redact'
+import { intakeMember } from '@/lib/memberIntake'
+import { intakeGuestPass } from '@/lib/guestPassIntake'
 
 const SEAM_API = 'https://connect.getseam.com'
 
@@ -248,29 +250,21 @@ export async function POST(request) {
         }
       }
 
-      const host    = request.headers.get('host') ?? ''
-      const scheme  = host.startsWith('localhost') ? 'http' : 'https'
-      const baseUrl = `${scheme}://${host}`
-
       // passesLeft from the saved DB record (guest-passes route subtracts 1 for the current use)
       let savedPassesLeft = passType === 'SINGLE' ? null : passesLeft
       try {
-        const zapRes = await fetch(`${baseUrl}/api/${gymSlug}/guest-passes`, {
-          method:  'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body:    JSON.stringify({
-            name:       guestName,
-            email,
-            phone,
-            passType:   passType.toLowerCase(),
-            passesLeft: passType === 'SINGLE' ? null : passesLeft,
-            accessCode,
-          }),
+        // Direct call — previously an HTTP POST to /api/[gymSlug]/guest-passes
+        const { status: zapStatus, json: zapJson } = await intakeGuestPass(gymSlug, {
+          name:       guestName,
+          email,
+          phone,
+          passType:   passType.toLowerCase(),
+          passesLeft: passType === 'SINGLE' ? null : passesLeft,
+          accessCode,
         })
-        if (!zapRes.ok) {
-          console.error('[platform/webhook] guest-passes notify failed:', zapRes.status, redactJsonText(await zapRes.text()))
+        if (zapStatus >= 400) {
+          console.error('[platform/webhook] guest-passes notify failed:', zapStatus, redactObject(zapJson))
         } else {
-          const zapJson = await zapRes.json()
           savedPassesLeft = zapJson.pass?.passesLeft ?? savedPassesLeft
           console.log('[platform/webhook] guest-passes notified for', email, '| passType:', passType, '| savedPassesLeft:', savedPassesLeft)
 
@@ -654,26 +648,23 @@ export async function POST(request) {
       }
     }
 
-    const host   = request.headers.get('host') ?? ''
-    const scheme = host.startsWith('localhost') ? 'http' : 'https'
-    fetch(`${scheme}://${host}/api/${gymSlug}/members`, {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({
-        firstName,
-        lastName,
-        email,
-        phone:                 phone || null,
-        dob:                   meta.dob                   || null,
-        address:               meta.address               || null,
-        emergencyName:         meta.emergencyName         || null,
-        emergencyPhone:        meta.emergencyPhone        || null,
-        emergencyRelationship: meta.emergencyRelationship || null,
-        membershipType:        membershipType.toLowerCase(),
-        subId,
-        accessCode,
-      }),
-    }).catch(e => console.error('[platform/webhook] members notify error:', e.message))
+    // Direct call — previously a fire-and-forget HTTP POST to /api/[gymSlug]/members
+    intakeMember(gymSlug, {
+      firstName,
+      lastName,
+      email,
+      phone:                 phone || null,
+      dob:                   meta.dob                   || null,
+      address:               meta.address               || null,
+      emergencyName:         meta.emergencyName         || null,
+      emergencyPhone:        meta.emergencyPhone        || null,
+      emergencyRelationship: meta.emergencyRelationship || null,
+      membershipType:        membershipType.toLowerCase(),
+      subId,
+      accessCode,
+    })
+      .then(({ status, json }) => { if (status >= 400) console.error('[platform/webhook] members notify failed:', status, json.error) })
+      .catch(e => console.error('[platform/webhook] members notify error:', e.message))
   }
 
   // ── customer.subscription.updated ────────────────────────────────────────

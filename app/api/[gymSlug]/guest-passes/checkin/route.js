@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { deleteSeamCodeByPin } from '@/lib/seam'
 import { maskPin, redactObject } from '@/lib/redact'
+import { intakeGuestPass } from '@/lib/guestPassIntake'
 
 const SEAM_API = 'https://connect.getseam.com'
 
@@ -38,21 +39,18 @@ async function findValidSeamCode(seamHeaders, deviceId, pin) {
   }
 }
 
-function notifyZapier(request, gymSlug, { name, email, phone, accessCode }) {
-  const host   = request.headers.get('host') ?? ''
-  const scheme = host.startsWith('localhost') ? 'http' : 'https'
-  fetch(`${scheme}://${host}/api/${gymSlug}/guest-passes`, {
-    method:  'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body:    JSON.stringify({
-      name,
-      email,
-      phone:      phone ?? null,
-      passType:   'single',
-      passesLeft: null,
-      accessCode,
-    }),
-  }).catch(e => console.error('[checkin] Zapier notify error:', e.message))
+// Records the check-in as a single guest pass (direct call — previously an HTTP POST to /guest-passes)
+function notifyZapier(gymSlug, { name, email, phone, accessCode }) {
+  intakeGuestPass(gymSlug, {
+    name,
+    email,
+    phone:      phone ?? null,
+    passType:   'single',
+    passesLeft: null,
+    accessCode,
+  })
+    .then(({ status, json }) => { if (status >= 400) console.error('[checkin] guest pass record failed:', status, json.error) })
+    .catch(e => console.error('[checkin] Zapier notify error:', e.message))
 }
 
 export async function POST(request, { params }) {
@@ -287,7 +285,7 @@ export async function POST(request, { params }) {
 
     // ── Notify Zapier (fire-and-forget) ─────────────────────────────────
     if (profile?.accessCode) {
-      notifyZapier(request, gymSlug, { name: profile.name, email, phone: body.phone, accessCode: profile.accessCode })
+      notifyZapier(gymSlug, { name: profile.name, email, phone: body.phone, accessCode: profile.accessCode })
     }
 
     // ── Fire Zapier guest webhook (check-in) ─────────────────────────────
