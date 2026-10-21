@@ -1,21 +1,36 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
+import { verifyStripeState } from '@/lib/stripeOAuthState'
 
 /**
  * GET /api/stripe/callback
  * Public route — Stripe OAuth redirect target.
  *
- * Query params: ?code=...&state=gymSlug
+ * Query params: ?code=...&state=<signed state from /api/[gymSlug]/stripe/connect>
  *
- * Exchanges the authorization code for a stripe_user_id (connected account ID),
- * saves it to the gym row, then redirects the user back to settings.
+ * Verifies the signed state (signature + expiry), exchanges the authorization
+ * code for a stripe_user_id (connected account ID), saves it to the gym named
+ * in the state, then redirects the user back to settings.
  */
 export async function GET(request) {
   const { searchParams } = new URL(request.url)
   const code    = searchParams.get('code')
-  const gymSlug = searchParams.get('state')
   const error   = searchParams.get('error')
   const appUrl  = process.env.NEXT_PUBLIC_APP_URL
+
+  // ── Verify state before doing anything else ─────────────────────────────
+  const state = verifyStripeState(searchParams.get('state'))
+  if (!state) {
+    console.warn('[stripe/callback] rejected: invalid or expired state')
+    return NextResponse.redirect(`${appUrl}/login`)
+  }
+
+  const gym = await prisma.gym.findUnique({ where: { id: state.gymId }, select: { id: true, slug: true } })
+  if (!gym) {
+    console.error('[stripe/callback] gym not found for state gymId:', state.gymId)
+    return NextResponse.redirect(`${appUrl}/login`)
+  }
+  const gymSlug = gym.slug
 
   // Stripe sends ?error=access_denied if the user cancels
   if (error) {
@@ -23,7 +38,7 @@ export async function GET(request) {
     return NextResponse.redirect(`${appUrl}/${gymSlug}/settings?stripe_error=${encodeURIComponent(error)}`)
   }
 
-  if (!code || !gymSlug) {
+  if (!code) {
     return NextResponse.redirect(`${appUrl}/login`)
   }
 
@@ -52,13 +67,7 @@ export async function GET(request) {
 
     const stripeAccountId = tokenData.stripe_user_id
 
-    // Save to the gym row
-    const gym = await prisma.gym.findUnique({ where: { slug: gymSlug } })
-    if (!gym) {
-      console.error('[stripe/callback] gym not found for slug:', gymSlug)
-      return NextResponse.redirect(`${appUrl}/login`)
-    }
-
+    // Save to the gym bound in the signed state — never to a gym named by the URL
     await prisma.gym.update({
       where: { id: gym.id },
       data:  {
@@ -67,7 +76,7 @@ export async function GET(request) {
       },
     })
 
-    console.log('[stripe/callback] connected account %s saved for gym %s', stripeAccountId, gymSlug)
+    console.log('[stripe/callback] connected account %s saved for gym %s (user %s)', stripeAccountId, gymSlug, state.userId)
     return NextResponse.redirect(`${appUrl}/${gymSlug}/settings?stripe_connected=1`)
   } catch (err) {
     console.error('[stripe/callback]', err.message, err.stack)

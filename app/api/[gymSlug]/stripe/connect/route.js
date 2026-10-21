@@ -2,36 +2,54 @@ import { NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import prisma from '@/lib/prisma'
 import { withGymContext } from '@/lib/auth/gymContext'
+import { createStripeState } from '@/lib/stripeOAuthState'
 
 const STRIPE_OAUTH_URL = 'https://connect.stripe.com/oauth/authorize'
 
 /**
  * GET /api/[gymSlug]/stripe/connect
- * Redirects the authenticated gym owner to Stripe's OAuth authorization page.
+ * Returns { url } — Stripe's OAuth authorization page for this gym. Only the
+ * gym's OWNER may start the flow. The `state` param is signed and binds the
+ * callback to this gym + user (see lib/stripeOAuthState.js).
  */
 export async function GET(request, { params }) {
-  const { gymSlug } = await params
-  const clientId  = process.env.STRIPE_CLIENT_ID
-  const appUrl    = process.env.NEXT_PUBLIC_APP_URL
+  try {
+    const { gymSlug } = await params
+    const { ctx, errorResponse } = await withGymContext(request, gymSlug)
+    if (errorResponse) return errorResponse
 
-  console.log('[stripe/connect GET] STRIPE_CLIENT_ID:', clientId)
+    if ((ctx.user.role ?? '').toUpperCase() !== 'OWNER') {
+      return NextResponse.json({ error: 'Only the gym owner can connect Stripe' }, { status: 403 })
+    }
 
-  if (!clientId) {
-    return NextResponse.json({ error: 'STRIPE_CLIENT_ID is not configured' }, { status: 500 })
+    const clientId  = process.env.STRIPE_CLIENT_ID
+    const appUrl    = process.env.NEXT_PUBLIC_APP_URL
+
+    console.log('[stripe/connect GET] STRIPE_CLIENT_ID:', clientId)
+
+    if (!clientId) {
+      return NextResponse.json({ error: 'STRIPE_CLIENT_ID is not configured' }, { status: 500 })
+    }
+    if (!process.env.STRIPE_STATE_SECRET) {
+      return NextResponse.json({ error: 'STRIPE_STATE_SECRET is not configured' }, { status: 500 })
+    }
+
+    const redirectUri = `${appUrl}/api/stripe/callback`
+
+    const url = new URL(STRIPE_OAUTH_URL)
+    url.searchParams.set('response_type', 'code')
+    url.searchParams.set('client_id', clientId)
+    url.searchParams.set('scope', 'read_write')
+    url.searchParams.set('state', createStripeState({ gymId: ctx.gym.id, userId: ctx.user.id }))
+    url.searchParams.set('redirect_uri', redirectUri)
+    url.searchParams.set('stripe_landing', 'login')
+    url.searchParams.set('always_prompt', 'true')
+
+    return NextResponse.json({ url: url.toString() })
+  } catch (error) {
+    console.error('[stripe/connect GET]', error.message)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
-
-  const redirectUri = `${appUrl}/api/stripe/callback`
-
-  const url = new URL(STRIPE_OAUTH_URL)
-  url.searchParams.set('response_type', 'code')
-  url.searchParams.set('client_id', clientId)
-  url.searchParams.set('scope', 'read_write')
-  url.searchParams.set('state', gymSlug)
-  url.searchParams.set('redirect_uri', redirectUri)
-  url.searchParams.set('stripe_landing', 'login')
-  url.searchParams.set('always_prompt', 'true')
-
-  return NextResponse.redirect(url.toString())
 }
 
 /**

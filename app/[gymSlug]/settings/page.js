@@ -47,6 +47,7 @@ function SettingsPage() {
   const [connected,      setConnected]      = useState(false)
   const [settingsLoaded, setSettingsLoaded] = useState(false)
   const [disconnecting,  setDisconnecting]  = useState(false)
+  const [connecting,     setConnecting]     = useState(false)
   const [stripeMsg,      setStripeMsg]      = useState(null) // { type: 'ok'|'err', text }
 
 const [curPw,     setCurPw]     = useState('')
@@ -84,6 +85,23 @@ const [curPw,     setCurPw]     = useState('')
       setStripeMsg({ type: 'err', text: `Stripe connection failed: ${searchParams.get('stripe_error')}` })
     }
   }, [searchParams])
+
+  // ── Connect Stripe ─────────────────────────────────────────────────────────
+  async function connectStripe() {
+    setConnecting(true)
+    setStripeMsg(null)
+    try {
+      const res = await fetch(`/api/${gymSlug}/stripe/connect`, {
+        headers: { Authorization: `Bearer ${token()}` },
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok || !data.url) throw new Error(data.error)
+      window.location.href = data.url
+    } catch (err) {
+      setStripeMsg({ type: 'err', text: err.message || 'Failed to start Stripe connection — please try again.' })
+      setConnecting(false)
+    }
+  }
 
   // ── Disconnect Stripe ──────────────────────────────────────────────────────
   async function disconnect() {
@@ -174,12 +192,13 @@ const [curPw,     setCurPw]     = useState('')
                     {disconnecting ? 'disconnecting…' : 'disconnect'}
                   </button>
                 ) : (
-                  <a
-                    href={`/api/${gymSlug}/stripe/connect`}
-                    className="flex items-center justify-center w-full py-2 rounded-lg text-xs font-medium bg-[#635BFF] text-white hover:bg-[#4F46E5] transition-colors"
+                  <button
+                    onClick={connectStripe}
+                    disabled={connecting}
+                    className="flex items-center justify-center w-full py-2 rounded-lg text-xs font-medium bg-[#635BFF] text-white hover:bg-[#4F46E5] disabled:opacity-40 transition-colors"
                   >
-                    connect stripe
-                  </a>
+                    {connecting ? 'connecting…' : 'connect stripe'}
+                  </button>
                 )
               )}
             </div>
