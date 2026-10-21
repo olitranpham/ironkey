@@ -4,7 +4,7 @@ import { deleteSeamCodeByPin } from '@/lib/seam'
 import { maskPin, redactObject } from '@/lib/redact'
 import { intakeGuestPass } from '@/lib/guestPassIntake'
 import { generateUniquePin, DEFAULT_PIN_LENGTH } from '@/lib/pins'
-import { maskEmail, findValidSeamCode } from '@/lib/guestCodeDelivery'
+import { maskEmail, findValidSeamCode, deliverGuestCode } from '@/lib/guestCodeDelivery'
 import { limitRequest } from '@/lib/rateLimit'
 
 const SEAM_API = 'https://connect.getseam.com'
@@ -49,20 +49,40 @@ async function createGuestSeamCode({ seamHeaders, deviceId, gymId, pin, name, se
 }
 
 
-// Records the check-in as a single guest pass (direct call — previously an HTTP POST to /guest-passes)
-function notifyZapier(gymSlug, { name, email, phone, accessCode }) {
-  intakeGuestPass(gymSlug, {
-    name,
-    email,
-    phone:      phone ?? null,
-    passType:   'single',
-    passesLeft: null,
-    accessCode,
-  })
-    .then(({ status, json }) => { if (status >= 400) console.error('[checkin] guest pass record failed:', status, json.error) })
-    .catch(e => console.error('[checkin] Zapier notify error:', e.message))
+const DELIVERY_FAILED = () => NextResponse.json(
+  { error: "we couldn't send your code. please see the front desk." },
+  { status: 502 },
+)
+
+// Records the check-in as a single guest pass (direct call — previously an
+// HTTP POST to /guest-passes). Awaited so a failed delivery can delete it.
+async function recordSinglePass(gymSlug, { name, email, phone, accessCode }) {
+  try {
+    const { status, json } = await intakeGuestPass(gymSlug, {
+      name,
+      email,
+      phone:      phone ?? null,
+      passType:   'single',
+      passesLeft: null,
+      accessCode,
+    })
+    if (status >= 400) console.error('[checkin] guest pass record failed:', status, json.error)
+    return json.pass?.id ?? null
+  } catch (e) {
+    console.error('[checkin] guest pass record error:', e.message)
+    return null
+  }
 }
 
+/**
+ * POST /api/[gymSlug]/guest-passes/checkin
+ * Public kiosk check-in. Body: { email, name? }
+ *
+ * Never returns the door code: it is emailed by the gym's guest Zapier webhook
+ * to the email on the profile. If the gym has no webhook, or delivery fails
+ * (non-2xx / error / 5 s timeout), everything this request did is undone and
+ * the kiosk gets 502.
+ */
 export async function POST(request, { params }) {
   try {
     const { gymSlug } = await params
@@ -88,12 +108,53 @@ export async function POST(request, { params }) {
       return NextResponse.json({ error: 'Gym not found' }, { status: 404 })
     }
 
+    // No way to deliver a code → refuse before changing anything
+    if (!gym.zapierGuestWebhookUrl) {
+      console.error('[guest-code-delivery] gym=%s status=no_webhook_configured', gymSlug)
+      return DELIVERY_FAILED()
+    }
+
+    // ── Everything this request changes, so it can be undone ────────────────
+    const undo = {
+      createdProfileId:   null,   // profile created by this request
+      restoreVisit:       null,   // { id, passesLeft, usedAt, guestProfileId }
+      createdVisitIds:    [],     // pass rows created by this request
+      activatedSeamCode:  null,   // { seamHeaders, codeId } activated by this request
+      restoreProfileCode: null,   // { id, accessCode } previous profile code
+    }
+    async function rollback() {
+      try {
+        if (undo.activatedSeamCode?.codeId) {
+          await fetch(`${SEAM_API}/access_codes/delete`, {
+            method: 'POST', headers: undo.activatedSeamCode.seamHeaders,
+            body:   JSON.stringify({ access_code_id: undo.activatedSeamCode.codeId }),
+          }).catch(e => console.error('[checkin] rollback Seam delete failed:', e.message))
+        }
+        if (undo.restoreVisit) {
+          const { id, ...data } = undo.restoreVisit
+          await prisma.guestVisit.update({ where: { id }, data })
+        }
+        if (undo.createdVisitIds.length) {
+          await prisma.guestVisit.deleteMany({ where: { id: { in: undo.createdVisitIds } } })
+        }
+        if (undo.restoreProfileCode) {
+          await prisma.guest.update({ where: { id: undo.restoreProfileCode.id }, data: { accessCode: undo.restoreProfileCode.accessCode } })
+        }
+        if (undo.createdProfileId) {
+          await prisma.guest.delete({ where: { id: undo.createdProfileId } }).catch(() => {})
+        }
+      } catch (e) {
+        console.error('[checkin] rollback error:', e.message)
+      }
+    }
+
     // ── Guest profile (global — keyed by email) ─────────────────────────────
     // Request fields are used only to create a NEW profile; an existing
     // profile is never modified by a check-in.
     let profile = await prisma.guest.findUnique({ where: { email } })
     if (!profile) {
       profile = await prisma.guest.create({ data: { name: name || email, email } })
+        .then(p => { undo.createdProfileId = p.id; return p })
         .catch(async (err) => {
           // Concurrent first check-in created it — use that one, unmodified
           if (err.code === 'P2002') return prisma.guest.findUnique({ where: { email } })
@@ -102,36 +163,35 @@ export async function POST(request, { params }) {
     }
 
     // ── Look up most recent pack with passes remaining ────────────────────────
-    const existing = email
-      ? await prisma.guestVisit.findFirst({
-          where: {
-            gymId:      gym.id,
-            guestEmail: { equals: email, mode: 'insensitive' },
-            passesLeft: { gt: 0 },
-          },
-          orderBy: { usedAt: { sort: 'desc', nulls: 'last' } },
-        })
-      : null
+    const existing = await prisma.guestVisit.findFirst({
+      where: {
+        gymId:      gym.id,
+        guestEmail: { equals: email, mode: 'insensitive' },
+        passesLeft: { gt: 0 },
+      },
+      orderBy: { usedAt: { sort: 'desc', nulls: 'last' } },
+    })
 
     if (existing) {
       const newCount = existing.passesLeft - 1
+      // Snapshot before writing, so a failed delivery can restore it exactly
+      undo.restoreVisit = { id: existing.id, passesLeft: existing.passesLeft, usedAt: existing.usedAt, guestProfileId: existing.guestProfileId }
       const updated  = await prisma.guestVisit.update({
         where: { id: existing.id },
         data:  {
           passesLeft:     newCount,
           usedAt:         new Date(),
-          guestProfileId: profile?.id ?? existing.guestProfileId,
+          guestProfileId: profile.id,
         },
       })
 
       // ── Refresh 24-hr Seam code on every check-in ───────────────────────
-      let alreadyActive = false
       let codeFailed    = false
       let codeExpiresAt = null
       console.log('[checkin] Seam gate check — newCount=%s profile=%s seamApiKey=%s seamDeviceId=%s',
-        newCount, profile?.id ?? 'null', gym.seamApiKey ? '(set)' : 'null', gym.seamDeviceId ?? 'null')
+        newCount, profile.id, gym.seamApiKey ? '(set)' : 'null', gym.seamDeviceId ?? 'null')
 
-      if (profile && gym.seamApiKey && gym.seamDeviceId && (newCount > 0 || profile.accessCode)) {
+      if (gym.seamApiKey && gym.seamDeviceId && (newCount > 0 || profile.accessCode)) {
         const seamHeaders = { Authorization: `Bearer ${gym.seamApiKey}`, 'Content-Type': 'application/json' }
         const storedPin   = profile.accessCode ? String(profile.accessCode).trim() : null
 
@@ -140,7 +200,6 @@ export async function POST(request, { params }) {
         const validCode = storedPin ? await findValidSeamCode(seamHeaders, gym.seamDeviceId, storedPin) : null
 
         if (validCode) {
-          alreadyActive = true
           codeExpiresAt = validCode.ends_at ?? null
           console.log('[checkin] repeat check-in within window — code already valid, skipping refresh — pin=%s ends_at=%s', maskPin(storedPin), validCode.ends_at)
         } else {
@@ -183,7 +242,9 @@ export async function POST(request, { params }) {
             })
             if (result.ok) {
               codeExpiresAt = result.endsAt
+              undo.activatedSeamCode = { seamHeaders, codeId: result.codeId }
               if (result.pin !== profile.accessCode) {
+                undo.restoreProfileCode = { id: profile.id, accessCode: profile.accessCode }
                 await prisma.guest.update({ where: { id: profile.id }, data: { accessCode: result.pin } })
                 profile = { ...profile, accessCode: result.pin }
               }
@@ -197,34 +258,27 @@ export async function POST(request, { params }) {
         }
       }
 
-      // No working door code — undo this check-in's pass deduction and fail
+      // No working door code — undo this check-in and fail
       if (codeFailed) {
-        await prisma.guestVisit.update({
-          where: { id: existing.id },
-          data:  { passesLeft: existing.passesLeft, usedAt: existing.usedAt },
-        })
+        await rollback()
         return NextResponse.json(
           { error: 'could not activate a door code — please see the front desk' },
           { status: 503 },
         )
       }
 
-      // ── Fire Zapier guest webhook (check-in) ─────────────────────────────
-      if (gym.zapierGuestWebhookUrl) {
-        fetch(gym.zapierGuestWebhookUrl, {
-          method:  'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body:    JSON.stringify({
-            name:       profile.name,
-            email:      profile.email,   // always the profile's email, never the request's
-            accessCode: profile.accessCode ?? null,
-            passType:   updated.passType,
-            passesLeft: updated.passesLeft,
-            type:       'checkin',
-          }),
-        })
-          .then(r => console.log('[checkin] Zapier guest webhook status:', r.status))
-          .catch(e => console.error('[checkin] Zapier guest webhook error:', e.message))
+      // ── Deliver the code (guest Zapier webhook → email on the profile) ────
+      const delivered = await deliverGuestCode(gym, gymSlug, {
+        name:       profile.name,
+        email:      profile.email,   // always the profile's email, never the request's
+        accessCode: profile.accessCode ?? null,
+        passType:   updated.passType,
+        passesLeft: updated.passesLeft,
+        type:       'checkin',
+      })
+      if (!delivered) {
+        await rollback()
+        return DELIVERY_FAILED()
       }
 
       // The code is never returned — it's emailed by the gym's guest webhook
@@ -235,42 +289,40 @@ export async function POST(request, { params }) {
     const singleVisit = await prisma.guestVisit.create({
       data: {
         gymId:          gym.id,
-        guestProfileId: profile?.id ?? null,
+        guestProfileId: profile.id,
         guestName:      name || email,
-        guestEmail:     email || null,
+        guestEmail:     email,
         passType:       'SINGLE',
         passesLeft:     null,
         usedAt:         new Date(),
         expiresAt:      new Date(Date.now() + 24 * 60 * 60 * 1000),
       },
     })
+    undo.createdVisitIds.push(singleVisit.id)
 
     // Single pass — deactivate immediately after use
-    if (profile?.accessCode && gym.seamApiKey && gym.seamDeviceId) {
+    if (profile.accessCode && gym.seamApiKey && gym.seamDeviceId) {
       await deleteSeamCodeByPin(gym.seamApiKey, profile.accessCode, gym.seamDeviceId, '[checkin]')
     }
 
-    // ── Notify Zapier (fire-and-forget) ─────────────────────────────────
-    if (profile?.accessCode) {
-      notifyZapier(gymSlug, { name: profile.name, email: profile.email, phone: body.phone, accessCode: profile.accessCode })
+    // ── Record the single pass (awaited so it can be undone) ───────────────
+    if (profile.accessCode) {
+      const passId = await recordSinglePass(gymSlug, { name: profile.name, email: profile.email, phone: body.phone, accessCode: profile.accessCode })
+      if (passId) undo.createdVisitIds.push(passId)
     }
 
-    // ── Fire Zapier guest webhook (check-in) ─────────────────────────────
-    if (gym.zapierGuestWebhookUrl) {
-      fetch(gym.zapierGuestWebhookUrl, {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({
-          name:       profile.name,
-          email:      profile.email,   // always the profile's email, never the request's
-          accessCode: profile.accessCode ?? null,
-          passType:   'SINGLE',
-          passesLeft: null,
-          type:       'checkin',
-        }),
-      })
-        .then(r => console.log('[checkin] Zapier guest webhook status:', r.status))
-        .catch(e => console.error('[checkin] Zapier guest webhook error:', e.message))
+    // ── Deliver the code (guest Zapier webhook → email on the profile) ──────
+    const delivered = await deliverGuestCode(gym, gymSlug, {
+      name:       profile.name,
+      email:      profile.email,   // always the profile's email, never the request's
+      accessCode: profile.accessCode ?? null,
+      passType:   'SINGLE',
+      passesLeft: null,
+      type:       'checkin',
+    })
+    if (!delivered) {
+      await rollback()
+      return DELIVERY_FAILED()
     }
 
     return NextResponse.json({ ok: true, sentTo: maskEmail(profile.email), passesLeft: null, expiresAt: singleVisit.expiresAt })
