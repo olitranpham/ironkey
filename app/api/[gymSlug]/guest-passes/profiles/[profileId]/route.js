@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { formatPhone } from '@/lib/phone'
 import { deleteSeamCodeByPin } from '@/lib/seam'
-import { withGymContext } from '@/lib/auth/gymContext'
+import { requirePermission, can, forbidden } from '@/lib/permissions'
 import { maskPin } from '@/lib/redact'
 
 /**
@@ -13,9 +13,12 @@ import { maskPin } from '@/lib/redact'
 export async function PATCH(request, { params }) {
   try {
     const { gymSlug, profileId } = await params
-    const { errorResponse } = await withGymContext(request, gymSlug)
+    const { ctx, errorResponse } = await requirePermission(request, gymSlug, 'guestpasses.manage')
     if (errorResponse) return errorResponse
     const body = await request.json()
+
+    // Changing a guest's door code also needs door.manage
+    if (body.accessCode !== undefined && !can(ctx.user, 'door.manage')) return forbidden()
 
     const gym = await prisma.gym.findUnique({ where: { slug: gymSlug }, select: { id: true } })
     if (!gym) return NextResponse.json({ error: 'Gym not found' }, { status: 404 })
@@ -96,10 +99,13 @@ export async function PATCH(request, { params }) {
 export async function DELETE(request, { params }) {
   try {
     const { gymSlug, profileId } = await params
-    const { errorResponse } = await withGymContext(request, gymSlug)
+    const { ctx, errorResponse } = await requirePermission(request, gymSlug, 'guestpasses.manage')
     if (errorResponse) return errorResponse
     const { searchParams } = new URL(request.url)
     const full = searchParams.get('full') === 'true'
+
+    // The full hard-delete also needs guestpasses.delete
+    if (full && !can(ctx.user, 'guestpasses.delete')) return forbidden()
 
     const gym = await prisma.gym.findUnique({
       where:  { slug: gymSlug },

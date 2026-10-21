@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
-import { withGymContext } from '@/lib/auth/gymContext'
+import { requirePermission, trainerMemberScope } from '@/lib/permissions'
 
 /**
  * GET /api/[gymSlug]/members/[memberId]/events
@@ -11,17 +11,19 @@ import { withGymContext } from '@/lib/auth/gymContext'
 export async function GET(request, { params }) {
   try {
     const { gymSlug, memberId } = params
-    const { errorResponse } = await withGymContext(request, gymSlug)
+    const { ctx, errorResponse } = await requirePermission(request, gymSlug, 'members.view')
     if (errorResponse) return errorResponse
 
-    const [gym, member] = await Promise.all([
-      prisma.gym.findUnique({ where: { slug: gymSlug }, select: { id: true } }),
-      prisma.member.findUnique({
-        where:  { id: memberId },
-        select: { dateAccessed: true, createdAt: true, dateFrozen: true, dateCanceled: true },
-      }),
-    ])
-    if (!gym) return NextResponse.json({ error: 'Gym not found' }, { status: 404 })
+    // TRAINER is always limited to members from their own PT sessions
+    const scope = await trainerMemberScope(ctx)
+    if (scope && !scope.has(memberId)) return NextResponse.json({ error: 'Member not found' }, { status: 404 })
+
+    const gym = ctx.gym
+    const member = await prisma.member.findFirst({
+      where:  { id: memberId, gymId: gym.id },
+      select: { dateAccessed: true, createdAt: true, dateFrozen: true, dateCanceled: true },
+    })
+    if (!member) return NextResponse.json({ error: 'Member not found' }, { status: 404 })
 
     const real = await prisma.membershipEvent.findMany({
       where:   { memberId, gymId: gym.id },

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
-import { withGymContext } from '@/lib/auth/gymContext'
+import { requirePermission } from '@/lib/permissions'
 
 /**
  * PATCH /api/[gymSlug]/guest-passes/[passId]
@@ -10,7 +10,7 @@ import { withGymContext } from '@/lib/auth/gymContext'
 export async function PATCH(request, { params }) {
   try {
     const { gymSlug, passId } = await params
-    const { errorResponse } = await withGymContext(request, gymSlug)
+    const { errorResponse } = await requirePermission(request, gymSlug, 'guestpasses.manage')
     if (errorResponse) return errorResponse
     const body = await request.json()
 

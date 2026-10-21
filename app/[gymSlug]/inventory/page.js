@@ -237,29 +237,17 @@ function SellModal({ gymSlug, item, onSave, onClose }) {
     try {
       const token = localStorage.getItem('ik_token')
 
-      // Adjust inventory
-      const res = await fetch(`/api/${gymSlug}/inventory/${item.id}`, {
-        method:  'PATCH',
+      // Decrement stock and (optionally) log the income entry in one server-side transaction
+      const res = await fetch(`/api/${gymSlug}/inventory/${item.id}/sell`, {
+        method:  'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body:    JSON.stringify({ adjust: -amount, reason: 'sale' }),
+        body:    JSON.stringify({
+          quantity:  amount,
+          unitPrice: logSale && price && parseFloat(price) > 0 ? parseFloat(price) : 0,
+        }),
       })
       const json = await res.json()
       if (!res.ok) throw new Error(json.error ?? res.status)
-
-      // Optionally log a financial entry
-      if (logSale && price && parseFloat(price) > 0) {
-        await fetch(`/api/${gymSlug}/financial-entries`, {
-          method:  'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body:    JSON.stringify({
-            type:        'income',
-            category:    item.category,
-            amount:      parseFloat(price) * amount,
-            description: `${item.name} × ${amount}`,
-            date:        new Date().toISOString().split('T')[0],
-          }),
-        })
-      }
 
       onSave(json.item)
     } catch (e) {

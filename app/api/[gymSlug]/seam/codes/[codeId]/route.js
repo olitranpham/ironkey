@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { deleteSeamCodeById } from '@/lib/seam'
-import { withGymContext } from '@/lib/auth/gymContext'
+import { requirePermission } from '@/lib/permissions'
 
 /**
  * DELETE /api/[gymSlug]/seam/codes/[codeId]
@@ -11,7 +11,7 @@ import { withGymContext } from '@/lib/auth/gymContext'
 export async function DELETE(request, { params }) {
   try {
     const { gymSlug, codeId } = await params
-    const { errorResponse } = await withGymContext(request, gymSlug)
+    const { errorResponse } = await requirePermission(request, gymSlug, 'door.manage')
     if (errorResponse) return errorResponse
     const pin = new URL(request.url).searchParams.get('code')
 

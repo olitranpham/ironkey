@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import prisma from '@/lib/prisma'
-import { withGymContext } from '@/lib/auth/gymContext'
+import { requirePermission } from '@/lib/permissions'
 
 // ── Cache ─────────────────────────────────────────────────────────────────────
 
@@ -24,7 +24,7 @@ const CACHE_TTL = 5 * 60 * 1000  // 5 minutes
 export async function GET(request, { params }) {
   try {
     const { gymSlug } = await params
-    const { errorResponse } = await withGymContext(request, gymSlug)
+    const { errorResponse } = await requirePermission(request, gymSlug, 'billing.view')
     if (errorResponse) return errorResponse
 
     const cached = subCache.get(gymSlug)

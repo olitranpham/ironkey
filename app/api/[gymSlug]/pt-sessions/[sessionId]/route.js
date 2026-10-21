@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
-import { withGymContext } from '@/lib/auth/gymContext'
+import { requirePermission, forbidden } from '@/lib/permissions'
+import { ptOwnOnly, validateSessionRefs } from '@/lib/ptSessions'
 
 const MEMBER_SELECT = { id: true, firstName: true, lastName: true }
 
@@ -11,7 +12,7 @@ function flattenMembers(session) {
 export async function PATCH(request, { params }) {
   try {
     const { gymSlug, sessionId } = await params
-    const { errorResponse } = await withGymContext(request, gymSlug)
+    const { ctx, errorResponse } = await requirePermission(request, gymSlug, ['pt.manage_all', 'pt.manage_own'])
     if (errorResponse) return errorResponse
     const body = await request.json()
 
@@ -20,6 +21,14 @@ export async function PATCH(request, { params }) {
 
     const existing = await prisma.pTSession.findFirst({ where: { id: sessionId, gymId: gym.id } })
     if (!existing) return NextResponse.json({ error: 'Session not found' }, { status: 404 })
+
+    // pt.manage_own only → may only touch the caller's own trainer's sessions
+    const ownOnly = ptOwnOnly(ctx)
+    if (ownOnly && existing.trainerId !== ctx.user.personalTrainerId) return forbidden()
+    if (ownOnly && body.trainerId !== undefined && body.trainerId !== existing.trainerId) return forbidden()
+
+    const refError = await validateSessionRefs(gym.id, { trainerId: body.trainerId, memberIds: body.memberIds })
+    if (refError) return NextResponse.json({ error: refError }, { status: 400 })
 
     const data = {}
     if (body.trainerId       !== undefined) data.trainerId       = body.trainerId
@@ -55,7 +64,7 @@ export async function PATCH(request, { params }) {
 export async function DELETE(request, { params }) {
   try {
     const { gymSlug, sessionId } = await params
-    const { errorResponse } = await withGymContext(request, gymSlug)
+    const { ctx, errorResponse } = await requirePermission(request, gymSlug, ['pt.manage_all', 'pt.manage_own'])
     if (errorResponse) return errorResponse
 
     const gym = await prisma.gym.findUnique({ where: { slug: gymSlug }, select: { id: true } })
@@ -63,6 +72,10 @@ export async function DELETE(request, { params }) {
 
     const existing = await prisma.pTSession.findFirst({ where: { id: sessionId, gymId: gym.id } })
     if (!existing) return NextResponse.json({ error: 'Session not found' }, { status: 404 })
+
+    // pt.manage_own only → may only touch the caller's own trainer's sessions
+    const ownOnly = ptOwnOnly(ctx)
+    if (ownOnly && existing.trainerId !== ctx.user.personalTrainerId) return forbidden()
 
     await prisma.pTSession.delete({ where: { id: sessionId } })
     return NextResponse.json({ success: true })

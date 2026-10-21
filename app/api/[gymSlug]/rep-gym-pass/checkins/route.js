@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
-import { withGymContext } from '@/lib/auth/gymContext'
+import { requirePermission } from '@/lib/permissions'
 
 export async function GET(request, { params }) {
   try {
     const { gymSlug } = await params
-    const { errorResponse } = await withGymContext(request, gymSlug)
+    const { errorResponse } = await requirePermission(request, gymSlug, 'guestpasses.manage')
     if (errorResponse) return errorResponse
     const gym = await prisma.gym.findUnique({ where: { slug: gymSlug }, select: { id: true } })
     if (!gym) return NextResponse.json({ error: 'Gym not found' }, { status: 404 })

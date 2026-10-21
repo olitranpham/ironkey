@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import prisma from '@/lib/prisma'
-import { withGymContext } from '@/lib/auth/gymContext'
+import { requirePermission } from '@/lib/permissions'
 import { ensureKisiMembership } from '@/lib/kisi'
 import { maskSecret, maskPin } from '@/lib/redact'
 
@@ -10,7 +10,7 @@ const SEAM_API = 'https://connect.getseam.com'
 export async function POST(request, { params }) {
   try {
     const { gymSlug } = await params
-    const { ctx, errorResponse } = await withGymContext(request, gymSlug)
+    const { ctx, errorResponse } = await requirePermission(request, gymSlug, 'members.freeze')
     if (errorResponse) return errorResponse
     const gymId        = ctx.gym.id
     const { memberId } = await request.json()

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import prisma from '@/lib/prisma'
-import { withGymContext } from '@/lib/auth/gymContext'
+import { requirePermission } from '@/lib/permissions'
 
 async function getGym(gymSlug) {
   return prisma.gym.findUnique({
@@ -20,7 +20,7 @@ async function getGym(gymSlug) {
 export async function PATCH(request, { params }) {
   try {
     const { gymSlug, promotionCodeId } = await params
-    const { errorResponse } = await withGymContext(request, gymSlug)
+    const { errorResponse } = await requirePermission(request, gymSlug, 'products.manage')
     if (errorResponse) return errorResponse
     const body = await request.json()
 

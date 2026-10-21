@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import prisma from '@/lib/prisma'
-import { withGymContext } from '@/lib/auth/gymContext'
+import { requirePermission } from '@/lib/permissions'
 import { createStripeState } from '@/lib/stripeOAuthState'
 
 const STRIPE_OAUTH_URL = 'https://connect.stripe.com/oauth/authorize'
@@ -9,18 +9,14 @@ const STRIPE_OAUTH_URL = 'https://connect.stripe.com/oauth/authorize'
 /**
  * GET /api/[gymSlug]/stripe/connect
  * Returns { url } — Stripe's OAuth authorization page for this gym. Only the
- * gym's OWNER may start the flow. The `state` param is signed and binds the
+ * holder of settings.manage (OWNER by default) may start the flow. The `state` param is signed and binds the
  * callback to this gym + user (see lib/stripeOAuthState.js).
  */
 export async function GET(request, { params }) {
   try {
     const { gymSlug } = await params
-    const { ctx, errorResponse } = await withGymContext(request, gymSlug)
+    const { ctx, errorResponse } = await requirePermission(request, gymSlug, 'settings.manage')
     if (errorResponse) return errorResponse
-
-    if ((ctx.user.role ?? '').toUpperCase() !== 'OWNER') {
-      return NextResponse.json({ error: 'Only the gym owner can connect Stripe' }, { status: 403 })
-    }
 
     const clientId  = process.env.STRIPE_CLIENT_ID
     const appUrl    = process.env.NEXT_PUBLIC_APP_URL
@@ -55,19 +51,14 @@ export async function GET(request, { params }) {
 /**
  * DELETE /api/[gymSlug]/stripe/connect
  * Disconnects the gym's Stripe connected account (clears stripeAccountId).
- * Only OWNER may disconnect, and only for their own gym.
+ * Requires settings.manage, and only for the caller's own gym.
  */
 export async function DELETE(request, { params }) {
   try {
     const { gymSlug } = await params
-    const { ctx, errorResponse } = await withGymContext(request, gymSlug)
+    const { ctx, errorResponse } = await requirePermission(request, gymSlug, 'settings.manage')
     if (errorResponse) return errorResponse
     const gymId = ctx.gym.id
-    const role  = (ctx.user.role ?? '').toUpperCase()
-
-    if (role !== 'OWNER') {
-      return NextResponse.json({ error: 'Only the gym owner can disconnect Stripe' }, { status: 403 })
-    }
 
     const gym = await prisma.gym.findUnique({
       where:  { id: gymId },

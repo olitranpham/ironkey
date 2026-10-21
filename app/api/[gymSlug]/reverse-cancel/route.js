@@ -3,14 +3,14 @@ import Stripe from 'stripe'
 import prisma from '@/lib/prisma'
 import { generateUniqueAccessCode, isAccessCodeLiveOnSeam } from '@/lib/seam'
 import { ensureKisiMembership } from '@/lib/kisi'
-import { withGymContext } from '@/lib/auth/gymContext'
+import { requirePermission } from '@/lib/permissions'
 import { maskPin, redactJsonText } from '@/lib/redact'
 
 const SEAM_API = 'https://connect.getseam.com'
 
 /**
  * POST /api/[gymSlug]/reverse-cancel
- * Staff-only (OWNER/ADMIN). Undoes a scheduled cancellation set by /cancel,
+ * Requires members.cancel (OWNER/ADMIN by default). Undoes a scheduled cancellation set by /cancel,
  * as long as the subscription hasn't actually lapsed yet. Runs alongside
  * the normal PIN access-code flow — doesn't touch it beyond reissuing a
  * code if the member's existing one was already revoked.
@@ -18,13 +18,8 @@ const SEAM_API = 'https://connect.getseam.com'
 export async function POST(request, { params }) {
   try {
     const { gymSlug } = await params
-    const { ctx, errorResponse } = await withGymContext(request, gymSlug)
+    const { ctx, errorResponse } = await requirePermission(request, gymSlug, 'members.cancel')
     if (errorResponse) return errorResponse
-
-    const role = (ctx.user.role ?? '').toUpperCase()
-    if (role !== 'OWNER' && role !== 'ADMIN') {
-      return NextResponse.json({ error: 'Only gym staff can reverse a cancellation' }, { status: 403 })
-    }
 
     const gymId = ctx.gym.id
     const gym = await prisma.gym.findUnique({

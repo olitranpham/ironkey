@@ -1,12 +1,14 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
-import { withGymContext } from '@/lib/auth/gymContext'
+import { requirePermission, trainerMemberScope, trainerMemberView } from '@/lib/permissions'
 
 export async function GET(request, { params }) {
   try {
     const { gymSlug } = await params
-    const { errorResponse } = await withGymContext(request, gymSlug)
+    const { ctx, errorResponse } = await requirePermission(request, gymSlug, 'members.view')
     if (errorResponse) return errorResponse
+    // TRAINER: only members from their own PT sessions, reduced fields
+    const scope = await trainerMemberScope(ctx)
     const { searchParams } = new URL(request.url)
     const status = searchParams.get('status')
     const search = searchParams.get('search')
@@ -24,6 +26,7 @@ export async function GET(request, { params }) {
 
     const where = {
       gymId,
+      ...(scope ? { id: { in: [...scope] } } : {}),
       ...(status ? { status } : {}),
       ...(search
         ? {
@@ -94,7 +97,7 @@ export async function GET(request, { params }) {
     })
 
     console.log(`[all] returned ${members.length} member(s) for gym ${gymId}`)
-    return NextResponse.json({ members })
+    return NextResponse.json({ members: scope ? members.map(trainerMemberView) : members })
   } catch (error) {
     console.error('[all] Unhandled error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

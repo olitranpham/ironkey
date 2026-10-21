@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import prisma from '@/lib/prisma'
-import { withGymContext } from '@/lib/auth/gymContext'
+import { requirePermission } from '@/lib/permissions'
 
 // ── Server-side cache ─────────────────────────────────────────────────────────
 
@@ -73,7 +73,7 @@ export async function GET(request, { params }) {
   const cached = revenueCache.get(gymSlug)
 
   try {
-    const { errorResponse } = await withGymContext(request, gymSlug)
+    const { errorResponse } = await requirePermission(request, gymSlug, 'billing.view')
     if (errorResponse) return errorResponse
 
     // Fresh cache — return immediately without touching Stripe.

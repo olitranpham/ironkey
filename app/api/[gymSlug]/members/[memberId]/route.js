@@ -3,7 +3,7 @@ import prisma from '@/lib/prisma'
 import { deleteSeamCodeByPin } from '@/lib/seam'
 import { ensureKisiMembership, revokeAccess as revokeKisiAccess, grantAccess as grantKisiAccess, groupIdForMembershipType } from '@/lib/kisi'
 import { normalizeGradSemester } from '@/lib/gradSemester'
-import { withGymContext } from '@/lib/auth/gymContext'
+import { requirePermission, can, forbidden, trainerMemberScope, trainerMemberView } from '@/lib/permissions'
 import { maskPin, redactJsonText } from '@/lib/redact'
 
 const SEAM_API = 'https://connect.getseam.com'
@@ -32,8 +32,11 @@ const MEMBER_SELECT = {
 export async function GET(request, { params }) {
   try {
     const { gymSlug, memberId } = params
-    const { errorResponse } = await withGymContext(request, gymSlug)
+    const { ctx, errorResponse } = await requirePermission(request, gymSlug, 'members.view')
     if (errorResponse) return errorResponse
+    // TRAINER is always limited to members from their own PT sessions
+    const scope = await trainerMemberScope(ctx)
+    if (scope && !scope.has(memberId)) return NextResponse.json({ error: 'Member not found' }, { status: 404 })
 
     const gym = await prisma.gym.findUnique({ where: { slug: gymSlug }, select: { id: true } })
     if (!gym) return NextResponse.json({ error: 'Gym not found' }, { status: 404 })
@@ -49,7 +52,7 @@ export async function GET(request, { params }) {
       return NextResponse.json({ error: 'Member not found' }, { status: 404 })
     }
 
-    return NextResponse.json({ member })
+    return NextResponse.json({ member: scope ? trainerMemberView(member) : member })
   } catch (error) {
     console.error('[members/get]', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
@@ -64,8 +67,11 @@ export async function GET(request, { params }) {
 export async function PATCH(request, { params }) {
   try {
     const { gymSlug, memberId } = params
-    const { errorResponse } = await withGymContext(request, gymSlug)
+    const { ctx, errorResponse } = await requirePermission(request, gymSlug, 'members.edit')
     if (errorResponse) return errorResponse
+    // TRAINER is always limited to members from their own PT sessions
+    const scope = await trainerMemberScope(ctx)
+    if (scope && !scope.has(memberId)) return NextResponse.json({ error: 'Member not found' }, { status: 404 })
     const body                  = await request.json()
 
     const gym = await prisma.gym.findUnique({
@@ -91,6 +97,16 @@ export async function PATCH(request, { params }) {
 
     if (!existing) {
       return NextResponse.json({ error: 'Member not found' }, { status: 404 })
+    }
+
+    // ── Field-level permissions ───────────────────────────────────────────────
+    // Door codes reprogram the lock; status changes mirror the freeze/cancel routes.
+    if ((accessCode !== undefined || resendKisiInvite === true) && !can(ctx.user, 'door.manage')) {
+      return forbidden()
+    }
+    if (status !== undefined && status !== existing.status) {
+      const needs = status === 'CANCELED' || existing.status === 'CANCELED' ? 'members.cancel' : 'members.freeze'
+      if (!can(ctx.user, needs)) return forbidden()
     }
 
     const now  = new Date()
@@ -330,8 +346,11 @@ export async function PATCH(request, { params }) {
 export async function DELETE(request, { params }) {
   try {
     const { gymSlug, memberId } = params
-    const { errorResponse } = await withGymContext(request, gymSlug)
+    const { ctx, errorResponse } = await requirePermission(request, gymSlug, 'members.delete')
     if (errorResponse) return errorResponse
+    // TRAINER is always limited to members from their own PT sessions
+    const scope = await trainerMemberScope(ctx)
+    if (scope && !scope.has(memberId)) return NextResponse.json({ error: 'Member not found' }, { status: 404 })
 
     const gym = await prisma.gym.findUnique({
       where:  { slug: gymSlug },

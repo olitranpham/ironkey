@@ -2,16 +2,20 @@ import { NextResponse } from 'next/server'
 import bcrypt from 'bcryptjs'
 import prisma from '@/lib/prisma'
 import { withGymContext } from '@/lib/auth/gymContext'
+import { requirePermission, can } from '@/lib/permissions'
 
 /**
  * GET /api/[gymSlug]/settings
  * Returns gym settings (keys masked to boolean presence — never exposed in plaintext).
+ * Any active user may call this (the page also hosts their password change);
+ * without settings.manage the response is empty — the password section needs nothing from it.
  */
 export async function GET(request, { params }) {
   try {
     const { gymSlug } = await params
     const { ctx, errorResponse } = await withGymContext(request, gymSlug)
     if (errorResponse) return errorResponse
+    if (!can(ctx.user, 'settings.manage')) return NextResponse.json({ settings: {} })
     const gymId = ctx.gym.id
 
     const gym = await prisma.gym.findUnique({
@@ -52,7 +56,7 @@ export async function GET(request, { params }) {
 
 /**
  * PATCH /api/[gymSlug]/settings
- * Updates gym settings. Only OWNER role may call this.
+ * Updates gym settings. Requires settings.manage (OWNER by default).
  *
  * Body variants:
  *   { type: 'gym',      name }
@@ -67,17 +71,13 @@ export async function GET(request, { params }) {
 export async function PATCH(request, { params }) {
   try {
     const { gymSlug } = await params
-    const { ctx, errorResponse } = await withGymContext(request, gymSlug)
+    const { ctx, errorResponse } = await requirePermission(request, gymSlug, 'settings.manage')
     if (errorResponse) return errorResponse
     const gymId  = ctx.gym.id
     const userId = ctx.user.id
     const role   = (ctx.user.role ?? '').toUpperCase()
 
     console.log('[settings PATCH] gymId=%s userId=%s role=%s', gymId, userId, role)
-
-    if (role !== 'OWNER') {
-      return NextResponse.json({ error: 'Only the gym owner can update settings' }, { status: 403 })
-    }
 
     const body = await request.json()
     const { type } = body
