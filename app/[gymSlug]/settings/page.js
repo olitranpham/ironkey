@@ -46,6 +46,9 @@ function SettingsPage() {
 
   const [connected,      setConnected]      = useState(false)
   const [settingsLoaded, setSettingsLoaded] = useState(false)
+  const [lockbox,        setLockbox]        = useState(null)   // null = not an owner (section hidden)
+  const [lockboxSaving,  setLockboxSaving]  = useState(false)
+  const [lockboxMsg,     setLockboxMsg]     = useState(null)   // { type: 'ok'|'err', text }
   const [disconnecting,  setDisconnecting]  = useState(false)
   const [connecting,     setConnecting]     = useState(false)
   const [stripeMsg,      setStripeMsg]      = useState(null) // { type: 'ok'|'err', text }
@@ -69,6 +72,8 @@ const [curPw,     setCurPw]     = useState('')
       if (!res.ok) return
       const { settings } = await res.json()
       setConnected(Boolean(settings.hasStripeConnect))
+      // Only returned to users with settings.manage
+      if ('lockboxCode' in settings) setLockbox(settings.lockboxCode ?? '')
     } finally {
       setSettingsLoaded(true)
     }
@@ -120,6 +125,28 @@ const [curPw,     setCurPw]     = useState('')
       setStripeMsg({ type: 'err', text: 'Failed to disconnect — please try again.' })
     } finally {
       setDisconnecting(false)
+    }
+  }
+
+  // ── Front-door lockbox code ────────────────────────────────────────────────
+  async function saveLockbox(e) {
+    e.preventDefault()
+    setLockboxSaving(true)
+    setLockboxMsg(null)
+    try {
+      const res  = await fetch(`/api/${gymSlug}/settings`, {
+        method:  'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` },
+        body:    JSON.stringify({ type: 'lockbox', lockboxCode: lockbox }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'could not save')
+      setLockbox(data.settings?.lockboxCode ?? '')
+      setLockboxMsg({ type: 'ok', text: data.settings?.lockboxCode ? 'lockbox code saved.' : 'lockbox code cleared.' })
+    } catch (err) {
+      setLockboxMsg({ type: 'err', text: err.message })
+    } finally {
+      setLockboxSaving(false)
     }
   }
 
@@ -203,6 +230,34 @@ const [curPw,     setCurPw]     = useState('')
               )}
             </div>
           </Section>
+
+{/* ── Lockbox code (owners only) ─────────────────────────────────── */}
+          {lockbox !== null && (
+            <Section title="front lockbox">
+              <form onSubmit={saveLockbox} className="space-y-3">
+                <p className="text-xs text-neutral-500">
+                  shown to guests and members only after a paid checkout. leave empty to hide it.
+                </p>
+                <input
+                  value={lockbox}
+                  onChange={e => setLockbox(e.target.value)}
+                  placeholder="lockbox code"
+                  maxLength={16}
+                  className="w-full bg-[#292929] border border-neutral-700 rounded-lg px-3 py-2 text-xs text-white placeholder-neutral-600 focus:outline-none focus:border-neutral-500 font-mono"
+                />
+                {lockboxMsg && (
+                  <p className={`text-xs ${lockboxMsg.type === 'ok' ? 'text-emerald-400' : 'text-red-400'}`}>{lockboxMsg.text}</p>
+                )}
+                <button
+                  type="submit"
+                  disabled={lockboxSaving}
+                  className="w-full py-2 rounded-lg text-xs font-medium bg-white text-black hover:bg-neutral-200 disabled:opacity-40 transition-colors"
+                >
+                  {lockboxSaving ? 'saving…' : 'save lockbox code'}
+                </button>
+              </form>
+            </Section>
+          )}
 
 {/* ── Change password ────────────────────────────────────────────── */}
           <Section title="change password">

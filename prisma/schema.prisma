@@ -41,6 +41,9 @@ model Gym {
   logoUrl String?
 
   // Zapier webhook URLs for outbound notifications
+  // Shared front-door lockbox code shown to guests/members after a PAID checkout (owner-set)
+  lockboxCode                        String?
+
   zapierGuestWebhookUrl              String?
   zapierMemberWebhookUrl             String?
   zapierOverdueWebhookUrl            String?

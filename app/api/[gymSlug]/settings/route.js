@@ -31,6 +31,7 @@ export async function GET(request, { params }) {
         kisiPlaceId:     true,
         kisiMemberGroupId:  true,
         kisiWeekendGroupId: true,
+        lockboxCode:     true,
       },
     })
 
@@ -47,6 +48,7 @@ export async function GET(request, { params }) {
         kisiPlaceId:        gym.kisiPlaceId ?? '',
         kisiMemberGroupId:  gym.kisiMemberGroupId ?? '',
         kisiWeekendGroupId: gym.kisiWeekendGroupId ?? '',
+        lockboxCode:        gym.lockboxCode ?? '',
       },
     })
   } catch (error) {
@@ -64,6 +66,7 @@ export async function GET(request, { params }) {
  *   { type: 'stripe',   stripeSecretKey?, stripeWebhookSecret? }
  *   { type: 'seam',     seamApiKey?, seamDeviceId? }
  *   { type: 'kisi',     kisiApiKey?, kisiPlaceId?, kisiMemberGroupId?, kisiWeekendGroupId? }
+ *   { type: 'lockbox',  lockboxCode }   — '' clears it
  *   { type: 'password', currentPassword, newPassword }
  *
  * Key fields: non-empty string → update, empty/absent → keep existing.
@@ -162,6 +165,18 @@ export async function PATCH(request, { params }) {
           seamDeviceId: updated.seamDeviceId ?? '',
         },
       })
+    }
+
+    // ── Front-door lockbox code (shown after a paid checkout) ──────────────
+    if (type === 'lockbox') {
+      const raw = body.lockboxCode == null ? '' : String(body.lockboxCode).trim()
+      if (raw && !/^[0-9A-Za-z-]{1,16}$/.test(raw)) {
+        return NextResponse.json({ error: 'Lockbox code must be up to 16 letters, digits or dashes' }, { status: 400 })
+      }
+      const data = { lockboxCode: raw || null }
+      await prisma.gym.update({ where: { id: gymId }, data })
+      writeAudit(ctx, 'settings.update', 'Gym', gymId, { type, fields: Object.keys(data) })
+      return NextResponse.json({ settings: { lockboxCode: data.lockboxCode ?? '' } })
     }
 
     // ── Kisi integration ──────────────────────────────────────────────────────

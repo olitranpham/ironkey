@@ -12,6 +12,7 @@ export default function GuestSuccessPage() {
   const [gymName,    setGymName]    = useState('')
   const [gymLogo,    setGymLogo]    = useState(null)
   const [sentTo,      setSentTo]      = useState(null)
+  const [lockboxCode, setLockboxCode] = useState(null)   // only sent for a verified paid session
   const [loading,     setLoading]     = useState(Boolean(sessionId))
   const [resendState, setResendState] = useState(null)   // null | 'sending' | 'sent'
   const [resendError, setResendError] = useState(null)
@@ -38,6 +39,7 @@ export default function GuestSuccessPage() {
       try {
         const res  = await fetch(`/api/${gymSlug}/guest/session-result?session_id=${encodeURIComponent(sessionId)}`)
         const json = await res.json()
+        if (json.lockboxCode) setLockboxCode(json.lockboxCode)
         if (json.ok) {
           setSentTo(json.sentTo)
           setLoading(false)
@@ -93,6 +95,14 @@ export default function GuestSuccessPage() {
 
         <h1 className="text-xl font-bold text-white">welcome to {gymName || gymSlug}!</h1>
 
+        {/* Shared lockbox code — only present after the session was verified as paid */}
+        {!loading && lockboxCode && (
+          <div className="w-full bg-neutral-900 rounded-xl p-4 flex items-center justify-between">
+            <span className="text-xs text-neutral-400">front lockbox</span>
+            <span className="text-lg font-bold text-white font-mono tracking-widest">{lockboxCode}</span>
+          </div>
+        )}
+
         {loading ? (
           <div className="w-full bg-neutral-900 rounded-xl p-4 flex items-center justify-center gap-2">
             <Loader2 size={14} className="text-neutral-500 animate-spin" />
@@ -100,12 +110,6 @@ export default function GuestSuccessPage() {
           </div>
         ) : sentTo ? (
           <div className="w-full bg-neutral-900 rounded-xl p-4 text-left space-y-3">
-            {gymSlug === 'oasis-boston' && (
-              <div className="flex items-center justify-between">
-                <span className="text-xs text-neutral-400">front lockbox</span>
-                <span className="text-lg font-bold text-white font-mono tracking-widest">4532</span>
-              </div>
-            )}
             {/* The door code is never shown here — it's emailed to the address on the profile */}
             <p className="text-sm text-neutral-300">
               your access code was emailed to <span className="text-white font-semibold">{sentTo}</span>.

@@ -498,7 +498,7 @@ export default function DoorAccessPage() {
             <div className="flex gap-2 mb-4">
               <input
                 type="text"
-                placeholder="e.g. 8472"
+                placeholder="4–6 digits"
                 maxLength={6}
                 value={newCode}
                 onChange={e => setNewCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
@@ -638,7 +638,7 @@ export default function DoorAccessPage() {
                     <input
                       value={addForm.accessCode}
                       onChange={e => setAddForm(p => ({ ...p, accessCode: e.target.value.replace(/\D/g, '').slice(0, 6) }))}
-                      placeholder="e.g. 4821" maxLength={6}
+                      placeholder="4–6 digits" maxLength={6}
                       className="w-full bg-[#252525] border border-neutral-700 rounded-lg px-3 py-2 text-xs text-white placeholder-neutral-600 focus:outline-none focus:border-neutral-500 font-mono"
                     />
                   </div>
