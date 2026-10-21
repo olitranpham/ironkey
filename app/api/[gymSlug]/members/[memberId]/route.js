@@ -110,6 +110,10 @@ export async function PATCH(request, { params }) {
     if ((accessCode !== undefined || resendKisiInvite === true) && !can(ctx.user, 'door.manage')) {
       return forbidden()
     }
+    // Re-pointing a member at a different Stripe customer/subscription is a billing action.
+    if ((stripeCustomerId !== undefined || stripeSubscriptionId !== undefined) && !can(ctx.user, 'billing.act')) {
+      return forbidden()
+    }
 
     const now  = new Date()
     const data = { updatedAt: now }
