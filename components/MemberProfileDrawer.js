@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { X, Phone, KeyRound, History, User, ShieldAlert, DoorOpen, UserCheck } from 'lucide-react'
 import { formatPhone } from '@/lib/phone'
+import { fillSuggestedPin } from '@/lib/suggestPin'
 import { formatMembershipTypeDisplay } from '@/lib/membershipCategory'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -892,7 +893,7 @@ function DrawerContent({ member, gymSlug, membershipBorder, onClose, onStatusCha
                   className="bg-[#252525] border border-neutral-700 rounded px-2 py-1 text-xs text-white placeholder-neutral-600 focus:outline-none focus:border-neutral-500 w-20 font-mono"
                 />
                 <button
-                  onClick={() => setCodeInput(String(Math.floor(1000 + Math.random() * 9000)))}
+                  onClick={() => fillSuggestedPin(gymSlug, setCodeInput)}
                   className="text-[10px] px-2 py-1 rounded bg-white/5 text-neutral-400 hover:text-white hover:bg-white/10 transition-colors shrink-0"
                 >
                   gen

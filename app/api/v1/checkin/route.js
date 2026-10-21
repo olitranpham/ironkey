@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { deleteSeamCodeByPin, waitForAccessCodeGone, generateUniqueAccessCode } from '@/lib/seam'
+import { generateUniquePin } from '@/lib/pins'
 import { maskPin, redactObject } from '@/lib/redact'
 
 const SEAM_API = 'https://connect.getseam.com'
@@ -64,7 +65,7 @@ export async function POST(request) {
 
     let accessCode = guestProfile.accessCode
     if (!accessCode) {
-      accessCode = String(Math.floor(1000 + Math.random() * 9000))
+      accessCode = await generateUniquePin(gym.id)
       await prisma.guest.update({ where: { id: guestProfile.id }, data: { accessCode } })
     }
 
@@ -110,11 +111,12 @@ export async function POST(request) {
 
         // Defensive fallback — if it's still a duplicate even after
         // confirming the delete propagated (or the wait itself timed out),
-        // don't fail the checkin outright: generate a genuinely different,
-        // collision-checked code and retry once, persisting it so this
-        // guest's stored PIN (and future checkins) move to the new value.
-        if (!createRes.ok && createJson?.error?.type === 'duplicate_access_code') {
-          console.warn('[rep-gym-pass/checkin] still duplicate_access_code after wait — falling back to a new code for guest=%s', user_email)
+        // generate a genuinely different, collision-checked code and retry,
+        // persisting it so this guest's stored PIN (and future checkins)
+        // move to the new value. Still a duplicate after 3 → provisioning_failed.
+        // A duplicate is never success — retry with up to 3 fresh PINs, then fail.
+        for (let retry = 1; retry <= 3 && !createRes.ok && createJson?.error?.type === 'duplicate_access_code'; retry++) {
+          console.warn('[rep-gym-pass/checkin] duplicate_access_code — falling back to a new code (retry %d/3) for guest=%s', retry, user_email)
           accessCode = await generateUniqueAccessCode({
             prisma, gymId: gym.id, apiKey: gym.seamApiKey, deviceId: gym.seamDeviceId, logPrefix: '[rep-gym-pass/checkin]',
           })

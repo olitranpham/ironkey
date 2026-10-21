@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation'
 import { RefreshCw, KeyRound, AlertTriangle, X, Search, UserPlus } from 'lucide-react'
 import { getGymTheme } from '@/lib/gymThemes'
 import MemberProfileDrawer from '@/components/MemberProfileDrawer'
+import { fillSuggestedPin } from '@/lib/suggestPin'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -499,7 +500,7 @@ export default function DoorAccessPage() {
               />
               <button
                 type="button"
-                onClick={() => setNewCode(String(Math.floor(1000 + Math.random() * 9000)))}
+                onClick={() => fillSuggestedPin(gymSlug, setNewCode)}
                 className="px-3 py-2 rounded-lg text-xs font-medium bg-neutral-800 text-neutral-400 hover:text-white hover:bg-neutral-700 border border-neutral-700 transition-colors whitespace-nowrap"
               >
                 generate

@@ -3,8 +3,47 @@ import prisma from '@/lib/prisma'
 import { deleteSeamCodeByPin } from '@/lib/seam'
 import { maskPin, redactObject } from '@/lib/redact'
 import { intakeGuestPass } from '@/lib/guestPassIntake'
+import { generateUniquePin, DEFAULT_PIN_LENGTH } from '@/lib/pins'
 
 const SEAM_API = 'https://connect.getseam.com'
+
+const DAY_MS                = 24 * 60 * 60 * 1000
+const MAX_DUPLICATE_RETRIES = 5
+
+/**
+ * Create a 24-hr code for `pin` on the lock. Seam's duplicate_access_code
+ * means the PIN is already taken on the lock — that is a failure, never
+ * success: retry with a fresh collision-checked PIN (up to 5 times).
+ * @returns {Promise<{ ok: boolean, pin: string }>} pin may differ from the one passed in
+ */
+async function createGuestSeamCode({ seamHeaders, deviceId, gymId, pin, name, seamCodes = [], logPrefix }) {
+  const tried   = new Set()
+  let candidate = pin
+  for (let attempt = 1; attempt <= MAX_DUPLICATE_RETRIES; attempt++) {
+    const createPayload = {
+      device_id: deviceId,
+      name,
+      code:      candidate,
+      starts_at: new Date().toISOString(),
+      ends_at:   new Date(Date.now() + DAY_MS).toISOString(),
+    }
+    console.log('%s Seam create payload — %j', logPrefix, redactObject(createPayload))
+    const createRes  = await fetch(`${SEAM_API}/access_codes/create`, {
+      method: 'POST', headers: seamHeaders,
+      body:   JSON.stringify(createPayload),
+    })
+    const createJson = await createRes.json().catch(() => ({}))
+    console.log('%s Seam create response — status=%d body=%j', logPrefix, createRes.status, redactObject(createJson))
+
+    if (createRes.ok) return { ok: true, pin: candidate }
+    if (createJson?.error?.type !== 'duplicate_access_code') return { ok: false, pin: candidate }
+
+    tried.add(candidate)
+    console.warn('%s duplicate_access_code for pin=%s — retrying with a new PIN (attempt %d/%d)', logPrefix, maskPin(candidate), attempt, MAX_DUPLICATE_RETRIES)
+    candidate = await generateUniquePin(gymId, candidate.length, { seamCodes, exclude: tried })
+  }
+  return { ok: false, pin: candidate }
+}
 
 const PASS_TYPE_LABEL = {
   SINGLE:     'Day Pass',
@@ -111,139 +150,86 @@ export async function POST(request, { params }) {
         },
       })
 
-      // ── Refresh 24-hr Seam code on every checkin ────────────────────────
+      // ── Refresh 24-hr Seam code on every check-in ───────────────────────
       let alreadyActive = false
+      let codeFailed    = false
       console.log('[checkin] Seam gate check — newCount=%s profile=%s seamApiKey=%s seamDeviceId=%s',
         newCount, profile?.id ?? 'null', gym.seamApiKey ? '(set)' : 'null', gym.seamDeviceId ?? 'null')
-      if (newCount > 0 && profile && gym.seamApiKey && gym.seamDeviceId) {
-        console.log('[checkin] entering Seam refresh block')
-        // Use existing code or generate a new one
-        const hadExistingAccessCode = Boolean(profile.accessCode)
-        let accessCode = profile.accessCode
-        if (!accessCode) {
-          accessCode = String(Math.floor(1000 + Math.random() * 9000))
-          console.log('[checkin] generated missing accessCode=%s for guest=%s', maskPin(accessCode), email)
-        }
 
+      if (profile && gym.seamApiKey && gym.seamDeviceId && (newCount > 0 || profile.accessCode)) {
         const seamHeaders = { Authorization: `Bearer ${gym.seamApiKey}`, 'Content-Type': 'application/json' }
-        const pin         = String(accessCode).trim()
+        const storedPin   = profile.accessCode ? String(profile.accessCode).trim() : null
 
         // Repeat check-in within the same window — a valid, non-expired code
         // already exists for this PIN, so skip the delete/recreate entirely.
-        const validCode = hadExistingAccessCode ? await findValidSeamCode(seamHeaders, gym.seamDeviceId, pin) : null
+        const validCode = storedPin ? await findValidSeamCode(seamHeaders, gym.seamDeviceId, storedPin) : null
 
         if (validCode) {
           alreadyActive = true
-          console.log('[checkin] repeat check-in within window — code already valid, skipping refresh — pin=%s ends_at=%s', maskPin(pin), validCode.ends_at)
+          console.log('[checkin] repeat check-in within window — code already valid, skipping refresh — pin=%s ends_at=%s', maskPin(storedPin), validCode.ends_at)
         } else {
-        // Step 1: delete any existing code for this PIN (best-effort — never blocks create)
-        try {
-          const listRes  = await fetch(`${SEAM_API}/access_codes/list`, {
-            method: 'POST', headers: seamHeaders,
-            body:   JSON.stringify({ device_id: gym.seamDeviceId }),
-          })
-          const listJson = listRes.ok ? await listRes.json() : { access_codes: [] }
-          const oldCode  = listJson.access_codes?.find(c => String(c.code).trim() === pin)
-          if (oldCode) {
-            await fetch(`${SEAM_API}/access_codes/delete`, {
+          // Step 1: snapshot the lock's codes, and delete this guest's own
+          // stale code (best-effort — never blocks create)
+          let seamCodes = []
+          try {
+            const listRes  = await fetch(`${SEAM_API}/access_codes/list`, {
               method: 'POST', headers: seamHeaders,
-              body:   JSON.stringify({ access_code_id: oldCode.access_code_id }),
+              body:   JSON.stringify({ device_id: gym.seamDeviceId }),
             })
-            console.log('[checkin] deleted old Seam code — id=%s code=%s', oldCode.access_code_id, maskPin(pin))
-          } else {
-            console.log('[checkin] no existing Seam code found for pin=%s', maskPin(pin))
+            const listJson = listRes.ok ? await listRes.json() : { access_codes: [] }
+            seamCodes = (listJson.access_codes ?? []).map(c => String(c.code).trim())
+            const oldCode = storedPin ? listJson.access_codes?.find(c => String(c.code).trim() === storedPin) : null
+            if (oldCode) {
+              await fetch(`${SEAM_API}/access_codes/delete`, {
+                method: 'POST', headers: seamHeaders,
+                body:   JSON.stringify({ access_code_id: oldCode.access_code_id }),
+              })
+              console.log('[checkin] deleted old Seam code — id=%s code=%s', oldCode.access_code_id, maskPin(storedPin))
+            } else if (storedPin) {
+              console.log('[checkin] no existing Seam code found for pin=%s', maskPin(storedPin))
+            }
+          } catch (deleteErr) {
+            console.error('[checkin] Seam delete step error (continuing to create):', deleteErr.message)
           }
-        } catch (deleteErr) {
-          console.error('[checkin] Seam delete step error (continuing to create):', deleteErr.message)
-        }
 
-        // Step 2: always create a fresh 24-hr code
-        try {
-          const startsAt      = new Date().toISOString()
-          const endsAt        = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
-          const createPayload = {
-            device_id: gym.seamDeviceId,
-            name:      profile.name || email,
-            code:      pin,
-            starts_at: startsAt,
-            ends_at:   endsAt,
-          }
-          console.log('[checkin] Seam create payload — %j', redactObject(createPayload))
-          const createRes  = await fetch(`${SEAM_API}/access_codes/create`, {
-            method: 'POST', headers: seamHeaders,
-            body:   JSON.stringify(createPayload),
-          })
-          const createJson = await createRes.json()
-          console.log('[checkin] Seam create response — status=%d body=%j', createRes.status, redactObject(createJson))
-          if (!createRes.ok && createJson?.error?.type === 'duplicate_access_code') {
-            alreadyActive = true
-            console.log('[checkin] duplicate_access_code — code already active for pin=%s', maskPin(pin))
-          }
-        } catch (createErr) {
-          console.error('[checkin] Seam create step error:', createErr.message)
-        }
-        }
+          // Step 2: create a fresh 24-hr code (the final window when the pack
+          // is now exhausted — Seam auto-expires it). New guests get a
+          // collision-checked PIN; duplicates are retried with a new PIN.
+          try {
+            const pin = storedPin
+              ?? await generateUniquePin(gym.id, DEFAULT_PIN_LENGTH, { seamCodes })
+            if (!storedPin) console.log('[checkin] generated accessCode=%s for guest=%s', maskPin(pin), email)
 
-        // Persist accessCode to DB (handles null case or newly generated code)
-        if (accessCode !== profile.accessCode) {
-          await prisma.guest.update({ where: { id: profile.id }, data: { accessCode } })
-          profile = { ...profile, accessCode }
+            const result = await createGuestSeamCode({
+              seamHeaders, deviceId: gym.seamDeviceId, gymId: gym.id,
+              pin, name: profile.name || email, seamCodes,
+              logPrefix: newCount === 0 ? '[checkin] exhausted —' : '[checkin]',
+            })
+            if (result.ok) {
+              if (result.pin !== profile.accessCode) {
+                await prisma.guest.update({ where: { id: profile.id }, data: { accessCode: result.pin } })
+                profile = { ...profile, accessCode: result.pin }
+              }
+            } else {
+              codeFailed = true
+            }
+          } catch (createErr) {
+            console.error('[checkin] Seam create step error:', createErr.message)
+            codeFailed = true
+          }
         }
       }
 
-      // ── Pack exhausted — give guest a final 24-hr window then let Seam auto-expire ──
-      if (newCount === 0 && profile?.accessCode && gym.seamApiKey && gym.seamDeviceId) {
-        const seamHeaders = { Authorization: `Bearer ${gym.seamApiKey}`, 'Content-Type': 'application/json' }
-        const pin         = String(profile.accessCode).trim()
-
-        // Repeat check-in within the window — access is already live, skip touching it
-        const validCode = await findValidSeamCode(seamHeaders, gym.seamDeviceId, pin)
-
-        if (validCode) {
-          alreadyActive = true
-          console.log('[checkin] exhausted — repeat check-in within window, code already valid, skipping refresh — pin=%s ends_at=%s', maskPin(pin), validCode.ends_at)
-        } else {
-        // Delete existing code first
-        try {
-          const listRes  = await fetch(`${SEAM_API}/access_codes/list`, {
-            method: 'POST', headers: seamHeaders,
-            body:   JSON.stringify({ device_id: gym.seamDeviceId }),
-          })
-          const listJson = listRes.ok ? await listRes.json() : { access_codes: [] }
-          const oldCode  = listJson.access_codes?.find(c => String(c.code).trim() === pin)
-          if (oldCode) {
-            await fetch(`${SEAM_API}/access_codes/delete`, {
-              method: 'POST', headers: seamHeaders,
-              body:   JSON.stringify({ access_code_id: oldCode.access_code_id }),
-            })
-            console.log('[checkin] exhausted — deleted old Seam code id=%s code=%s', oldCode.access_code_id, maskPin(pin))
-          }
-        } catch (deleteErr) {
-          console.error('[checkin] exhausted — Seam delete error (continuing to create):', deleteErr.message)
-        }
-
-        // Create a final 24-hr code — Seam will auto-expire it, no manual delete needed
-        try {
-          const startsAt      = new Date().toISOString()
-          const endsAt        = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
-          const createPayload = {
-            device_id: gym.seamDeviceId,
-            name:      profile.name || email,
-            code:      pin,
-            starts_at: startsAt,
-            ends_at:   endsAt,
-          }
-          console.log('[checkin] exhausted — creating final 24-hr Seam code — %j', redactObject(createPayload))
-          const createRes  = await fetch(`${SEAM_API}/access_codes/create`, {
-            method: 'POST', headers: seamHeaders,
-            body:   JSON.stringify(createPayload),
-          })
-          const createJson = await createRes.json()
-          console.log('[checkin] exhausted — Seam create response status=%d body=%j', createRes.status, redactObject(createJson))
-        } catch (createErr) {
-          console.error('[checkin] exhausted — Seam create error:', createErr.message)
-        }
-        }
+      // No working door code — undo this check-in's pass deduction and fail
+      if (codeFailed) {
+        await prisma.guestVisit.update({
+          where: { id: existing.id },
+          data:  { passesLeft: existing.passesLeft, usedAt: existing.usedAt },
+        })
+        return NextResponse.json(
+          { error: 'could not activate a door code — please see the front desk' },
+          { status: 503 },
+        )
       }
 
       // ── Fire Zapier guest webhook (check-in) ─────────────────────────────

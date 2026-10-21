@@ -9,6 +9,7 @@ import { maskPin, redactObject } from '@/lib/redact'
 import { intakeMember } from '@/lib/memberIntake'
 import { intakeGuestPass } from '@/lib/guestPassIntake'
 import { writeAudit } from '@/lib/audit'
+import { generateUniquePin } from '@/lib/pins'
 
 const SEAM_API = 'https://connect.getseam.com'
 
@@ -187,7 +188,7 @@ export async function POST(request) {
 
       let accessCode = guestProfile?.accessCode ?? null
       if (!accessCode) {
-        accessCode = String(Math.floor(1000 + Math.random() * 9000))
+        accessCode = await generateUniquePin(gym.id)
         if (guestProfile) {
           await prisma.guest.update({
             where: { id: guestProfile.id },
@@ -222,30 +223,51 @@ export async function POST(request) {
               devices = devList
             }
           }
-          const seamResults = await Promise.all(
-            devices.map(dev =>
-              fetch(`${SEAM_API}/access_codes/create`, {
-                method:  'POST',
-                headers: seamHeaders,
-                body:    JSON.stringify({
-                  device_id: dev.device_id,
-                  name:      guestName || email,
-                  code:      accessCode,
-                  starts_at: startDt,
-                  ends_at:   endDt,
-                }),
+          // duplicate_access_code means the PIN is already taken on a lock —
+          // a failure, never success. Undo this attempt's codes on the other
+          // devices and retry with a fresh collision-checked PIN.
+          const createOnDevice = (dev, code) =>
+            fetch(`${SEAM_API}/access_codes/create`, {
+              method:  'POST',
+              headers: seamHeaders,
+              body:    JSON.stringify({
+                device_id: dev.device_id,
+                name:      guestName || email,
+                code,
+                starts_at: startDt,
+                ends_at:   endDt,
+              }),
+            })
+              .then(r => r.json())
+              .then(r => {
+                const errType = r.error?.type ?? null
+                console.log('[platform/webhook] Seam guest code — device=%s code=%s passType=%s result=%s', dev.device_id, maskPin(code), passType, r.access_code?.access_code_id ?? errType ?? 'unknown')
+                return { duplicate: errType === 'duplicate_access_code', codeId: r.access_code?.access_code_id ?? null }
               })
-                .then(r => r.json())
-                .then(r => {
-                  const errType = r.error?.type ?? null
-                  const isDuplicate = errType === 'duplicate_access_code'
-                  console.log('[platform/webhook] Seam guest code — device=%s code=%s passType=%s result=%s', dev.device_id, maskPin(accessCode), passType, isDuplicate ? 'already_active (duplicate)' : (r.access_code?.access_code_id ?? errType ?? 'unknown'))
-                  return { deviceId: dev.device_id, alreadyActive: isDuplicate, success: isDuplicate || Boolean(r.access_code?.access_code_id) }
-                })
-                .catch(e => { console.error('[platform/webhook] Seam guest code error:', e.message); return { alreadyActive: false, success: false } })
-            )
-          )
-          alreadyActive = seamResults.some(r => r.alreadyActive) && !seamResults.some(r => r.success && !r.alreadyActive)
+              .catch(e => { console.error('[platform/webhook] Seam guest code error:', e.message); return { duplicate: false, codeId: null } })
+
+          const tried = new Set()
+          for (let attempt = 1; attempt <= 5; attempt++) {
+            const results = await Promise.all(devices.map(dev => createOnDevice(dev, accessCode)))
+            if (!results.some(r => r.duplicate)) break
+
+            await Promise.all(results.filter(r => r.codeId).map(r =>
+              fetch(`${SEAM_API}/access_codes/delete`, {
+                method: 'POST', headers: seamHeaders, body: JSON.stringify({ access_code_id: r.codeId }),
+              }).catch(() => {}),
+            ))
+            tried.add(accessCode)
+            if (attempt === 5) {
+              console.error('[platform/webhook] Seam guest code — still duplicate after %d PINs for guest=%s', attempt, email)
+              break
+            }
+            const previous = accessCode
+            accessCode = await generateUniquePin(gym.id, previous.length, { exclude: tried })
+            console.warn('[platform/webhook] duplicate_access_code for pin=%s — retrying with %s', maskPin(previous), maskPin(accessCode))
+            if (guestProfile) {
+              await prisma.guest.update({ where: { id: guestProfile.id }, data: { accessCode } })
+            }
+          }
         } catch (seamErr) {
           console.error('[platform/webhook] Seam guest error:', seamErr.message)
         }

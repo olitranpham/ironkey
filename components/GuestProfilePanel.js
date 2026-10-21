@@ -2,7 +2,9 @@
 
 import { useState, useEffect } from 'react'
 import { X, KeyRound, Phone, User, ShieldAlert, UserCheck } from 'lucide-react'
+import { useParams } from 'next/navigation'
 import { formatPhone } from '@/lib/phone'
+import { fillSuggestedPin } from '@/lib/suggestPin'
 
 // ── Shared constants ──────────────────────────────────────────────────────────
 
@@ -96,6 +98,7 @@ function ImageLightbox({ src, onClose }) {
 
 export function GuestProfilePanel({ profile, passTypeBorder, onClose, onSaveCode, saving, onSavePassesLeft, onSaveProfile, source, onDelete, onRemoveGuest, removingGuest }) {
   const [codeInput,    setCodeInput]    = useState(profile.accessCode ?? '')
+  const { gymSlug } = useParams()
   const [passEdits,    setPassEdits]    = useState({})
   const [savingPassId, setSavingPassId] = useState(null)
   const [lightboxSrc,  setLightboxSrc]  = useState(null)
@@ -356,7 +359,7 @@ export function GuestProfilePanel({ profile, passTypeBorder, onClose, onSaveCode
                 <>
                   <button
                     type="button"
-                    onClick={() => setCodeInput(String(Math.floor(1000 + Math.random() * 9000)))}
+                    onClick={() => fillSuggestedPin(gymSlug, setCodeInput)}
                     className="text-[10px] px-2 py-1 rounded bg-white/5 text-neutral-400 hover:text-white hover:bg-white/10 transition-colors shrink-0"
                   >
                     gen
