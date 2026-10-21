@@ -92,10 +92,11 @@ export async function PATCH(request, { params }) {
  * silently destroy another gym's customer history, and Postgres would
  * reject the delete anyway while a GuestWaiver still references it.
  *
- * full=true — used by the guest-passes page's "remove member" action: a hard
- * delete of the guest everywhere. Removes their Seam code, all of their
- * GuestPass (GuestVisit) records and GuestWaiver records across every gym,
- * then the GuestProfile (Guest) record itself.
+ * full=true — used by the guest-passes page's "remove member" action: removes
+ * the guest from THIS gym. Deletes their code from this gym's Seam lock and
+ * this gym's GuestPass (GuestVisit), GuestWaiver and partner check-in records.
+ * The shared GuestProfile (Guest) is deleted only if no other gym has any
+ * records for it. Requires guestpasses.delete.
  */
 export async function DELETE(request, { params }) {
   try {
@@ -134,14 +135,37 @@ export async function DELETE(request, { params }) {
         console.log('[guest-profile DELETE full] skipping Seam — accessCode=%s apiKey=%s', profile.accessCode ? maskPin(profile.accessCode) : 'none', apiKey ? '(set)' : 'MISSING')
       }
 
-      // GuestWaiver has no cascade on Guest — must clear it before the Guest delete.
-      await prisma.guestWaiver.deleteMany({ where: { guestProfileId: profileId } })
-      const { count: passesDeleted } = await prisma.guestVisit.deleteMany({ where: { guestProfileId: profileId } })
-      await prisma.guest.delete({ where: { id: profileId } })
+      // Delete only THIS gym's records. The Guest profile is shared across gyms
+      // (keyed by email), so it's removed only when no other gym still has
+      // passes, waivers or partner check-ins for it — all in one transaction.
+      const result = await prisma.$transaction(async (tx) => {
+        const { count: waiversDeleted } = await tx.guestWaiver.deleteMany({ where: { guestProfileId: profileId, gymId: gym.id } })
+        const { count: passesDeleted }  = await tx.guestVisit.deleteMany({ where: { guestProfileId: profileId, gymId: gym.id } })
+        const { count: checkinsDeleted } = profile.email
+          ? await tx.repGymPassCheckin.deleteMany({ where: { userEmail: profile.email, gymId: gym.id } })
+          : { count: 0 }
 
-      console.log('[guest-profile DELETE full] deleted profileId=%s passesDeleted=%d', profileId, passesDeleted)
-      writeAudit(ctx, 'guest.delete_full', 'Guest', profileId, { passesDeleted })
-      return NextResponse.json({ ok: true, profileDeleted: true, passesDeleted })
+        // Anything left now belongs to another gym
+        const [otherWaivers, otherPasses, otherCheckins] = await Promise.all([
+          tx.guestWaiver.count({ where: { guestProfileId: profileId } }),
+          tx.guestVisit.count({ where: { guestProfileId: profileId } }),
+          profile.email ? tx.repGymPassCheckin.count({ where: { userEmail: profile.email } }) : 0,
+        ])
+
+        let profileDeleted = false
+        if (otherWaivers === 0 && otherPasses === 0 && otherCheckins === 0) {
+          await tx.guest.delete({ where: { id: profileId } })
+          profileDeleted = true
+        }
+        return { waiversDeleted, passesDeleted, checkinsDeleted, profileDeleted }
+      })
+
+      console.log(
+        '[guest-profile DELETE full] profileId=%s gym=%s passes=%d waivers=%d checkins=%d profileDeleted=%s',
+        profileId, gymSlug, result.passesDeleted, result.waiversDeleted, result.checkinsDeleted, result.profileDeleted,
+      )
+      writeAudit(ctx, 'guest.delete_full', 'Guest', profileId, result)
+      return NextResponse.json({ ok: true, ...result })
     }
 
     // Auth boundary: same as PATCH — must have a rep gym pass check-in or a
