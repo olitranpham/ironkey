@@ -11,6 +11,14 @@ import { intakeGuestPass } from '@/lib/guestPassIntake'
 import { writeAudit } from '@/lib/audit'
 import { generateUniquePin } from '@/lib/pins'
 import { postWebhook } from '@/lib/guestCodeDelivery'
+import { OASIS_GYM_SLUG, OASIS_GUEST_PASS_PRODUCTS, isOasisGuestPassProduct } from '@/lib/oasisGuestPasses'
+
+/** Trimmed string, or null for null/undefined/blank. */
+function normalizePhone(value) {
+  if (value == null) return null
+  const s = String(value).trim()
+  return s || null
+}
 
 /**
  * Deliver a purchase payload (with the door code) to a Zapier webhook and wait
@@ -109,38 +117,43 @@ export async function POST(request) {
     if (meta.source === 'guest_pass') {
       const guestName  = meta.guestName ?? ''
       const email      = (session.customer_email ?? meta.email ?? '').toLowerCase()
-      const phone      = formatPhone(meta.phone || null)
+      // Ironkey checkout form phone (session metadata): formatted, trimmed, blank → null.
+      // Same value is saved to the profile and sent in the Oasis payload.
+      const phone      = normalizePhone(formatPhone(meta.phone || null))
       const passesLeft = parseInt(meta.passesLeft, 10) || 1
 
       // Expand line items to log the price/product IDs for debugging
       let lineItemPriceId   = null
       let lineItemProductId = null
+      let lineItemProduct   = null   // expanded product object (id + metadata), when available
       try {
         const expandOptions = gym.stripeSecretKey
           ? {}
           : { stripeAccount: connectedAccountId }
         const expanded = await accountStripe.checkout.sessions.retrieve(session.id, {
-          expand: ['line_items'],
+          expand: ['line_items', 'line_items.data.price.product'],
           ...expandOptions,
         })
         const lineItem = expanded.line_items?.data?.[0]
         lineItemPriceId   = lineItem?.price?.id      ?? null
-        lineItemProductId = lineItem?.price?.product ?? null
+        const product     = lineItem?.price?.product ?? null
+        lineItemProduct   = typeof product === 'object' ? product : null
+        lineItemProductId = typeof product === 'string' ? product : product?.id ?? null
         console.log('[platform/webhook] guest pass line item — priceId:', lineItemPriceId, '| productId:', lineItemProductId)
       } catch (err) {
         console.error('[platform/webhook] failed to expand guest pass line items:', err.message)
       }
 
       // Fallback product → passType map (used when metadata passType is missing)
-      const PRODUCT_TO_PASS_TYPE = {
-        'prod_UdG5qNSMCuYDhN': 'SINGLE',  // Oasis single pass
-        'prod_UdG5tLURJQAEog': 'VALUE',   // Oasis value pack
-        'prod_UdG5qpIhMMjmyA': 'DELUXE',  // Oasis deluxe pack
-      }
-
       const passType = meta.passType
-        || (lineItemProductId && PRODUCT_TO_PASS_TYPE[lineItemProductId])
+        || (lineItemProductId && OASIS_GUEST_PASS_PRODUCTS[lineItemProductId]?.passType)
         || 'SINGLE'
+
+      // Oasis guest passes send the buyer's phone to Zapier (below). Product-ID
+      // keyed (same rule as the kiosk listing); if the line items couldn't be
+      // loaded, a guest_pass checkout at Oasis is still a guest pass.
+      const isOasisGuestPass = gymSlug === OASIS_GYM_SLUG
+        && (!lineItemProductId || isOasisGuestPassProduct(lineItemProduct ?? lineItemProductId))
 
       console.log('[platform/webhook] guest pass — passType:', passType, '| source:', meta.passType ? 'metadata' : lineItemProductId ? 'product map' : 'default')
 
@@ -329,10 +342,19 @@ export async function POST(request) {
         console.error('[platform/webhook] guest-passes notify error:', e.message)
       }
 
+      // Oasis payload phone: checkout form phone → phone already on the profile → null
+      const oasisPayloadPhone = isOasisGuestPass
+        ? (phone ?? normalizePhone(guestProfile?.phone) ?? null)
+        : null
+      if (isOasisGuestPass) {
+        console.log('[platform/webhook] oasis guest pass phone source=%s',
+          phone ? 'checkout_form' : normalizePhone(guestProfile?.phone) ? 'profile' : 'none')
+      }
       const zapierGuestUrl = gym.zapierGuestWebhookUrl || process.env.ZAPIER_GUEST_WEBHOOK_URL
       console.log('[platform/webhook] firing Zapier guest webhook (configured=%s)', Boolean(zapierGuestUrl))
       await deliverOrAudit(gym, zapierGuestUrl, {
         name: guestName, email, accessCode, passType, passesLeft: savedPassesLeft, firstTime, alreadyActive,
+        ...(isOasisGuestPass ? { phone: oasisPayloadPhone } : {}),
         isMinor:               guestIsMinor,
         guardianName:          guestIsMinor ? (meta.guardianName         || null) : null,
         guardianEmail:         guestIsMinor ? (meta.guardianEmail        || null) : null,

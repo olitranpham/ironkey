@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import prisma from '@/lib/prisma'
+import { OASIS_GYM_SLUG, OASIS_GUEST_PASS_PRODUCTS, isOasisGuestPassProduct } from '@/lib/oasisGuestPasses'
 
 // Keywords that identify a price as a guest day pass product
 const GUEST_PASS_KEYWORDS = ['day pass', 'single', '3-pack', 'three-pack', '5-pack', 'five-pack', '10-pack', 'ten-pack']
@@ -48,19 +49,10 @@ export async function GET(request, { params }) {
       const stripe = new Stripe(gym.stripeSecretKey, { apiVersion: '2024-06-20' })
       const prices = await stripe.prices.list({ active: true, limit: 100, expand: ['data.product'] })
 
-      const OASIS_PRODUCT_MAP = {
-        'prod_UdG5qNSMCuYDhN': { passType: 'SINGLE', passesLeft: 1  }, // Single — $22.50
-        'prod_UdG5tLURJQAEog': { passType: 'VALUE',  passesLeft: 5  }, // Value  — $85
-        'prod_UdG5qpIhMMjmyA': { passType: 'DELUXE', passesLeft: 10 }, // Deluxe — $135
-      }
-
       plans = prices.data
         .filter(p => !p.recurring && p.unit_amount != null && p.product?.active)   // one-time only, not subscriptions, product not disabled
         .filter(p => {
-          if (gymSlug === 'oasis-boston') {
-            return (p.product?.id in OASIS_PRODUCT_MAP)
-              || p.product?.metadata?.ironkey_kind === 'guest_pass'
-          }
+          if (gymSlug === OASIS_GYM_SLUG) return isOasisGuestPassProduct(p.product)
           const name = p.nickname ?? p.product?.name ?? ''
           // Products created via the staff "products" page are tagged with
           // this metadata, so they always qualify regardless of name.
@@ -69,8 +61,8 @@ export async function GET(request, { params }) {
         .map(p => {
           const name = p.nickname ?? p.product?.name ?? 'Guest Pass'
           let passType, passesLeft
-          if (gymSlug === 'oasis-boston' && OASIS_PRODUCT_MAP[p.product?.id]) {
-            ({ passType, passesLeft } = OASIS_PRODUCT_MAP[p.product.id])
+          if (gymSlug === OASIS_GYM_SLUG && OASIS_GUEST_PASS_PRODUCTS[p.product?.id]) {
+            ({ passType, passesLeft } = OASIS_GUEST_PASS_PRODUCTS[p.product.id])
           } else if (p.product?.metadata?.passes) {
             // Trust the exact count set on the products page over name-guessing
             passesLeft = parseInt(p.product.metadata.passes, 10)

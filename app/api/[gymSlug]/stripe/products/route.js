@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import prisma from '@/lib/prisma'
 import { requirePermission } from '@/lib/permissions'
+import { OASIS_GUEST_PASS_PRODUCTS } from '@/lib/oasisGuestPasses'
 
 // Legacy guest-pass products (created before this page existed) are only
 // identifiable by name — mirrors the keyword list in /api/[gymSlug]/guest.
@@ -14,16 +15,12 @@ function isLegacyGuestPassName(name = '') {
 // Oasis Boston's three original guest-pass products predate the
 // ironkey_kind metadata tag and don't follow the keyword naming convention
 // above ("Value Pack", "Deluxe Pack" don't contain any of those substrings),
-// so they're allowlisted here by ID — mirrors the same OASIS_PRODUCT_MAP
-// fallback in the live guest checkout route (/api/[gymSlug]/guest). Any
+// so they're allowlisted here by ID — the shared OASIS_GUEST_PASS_PRODUCTS map
+// (lib/oasisGuestPasses.js) also used by the kiosk listing. Any
 // newer oasis-boston guest pass (including these three) is also recognized
 // there via ironkey_kind === 'guest_pass', same as every other gym — this ID
 // list only exists to keep the three legacy products working.
-const OASIS_GUEST_PASS_PRODUCT_IDS = new Set([
-  'prod_UdG5qNSMCuYDhN', // Single Pass
-  'prod_UdG5tLURJQAEog', // Value Pack
-  'prod_UdG5qpIhMMjmyA', // Deluxe Pack
-])
+const OASIS_GUEST_PASS_PRODUCT_IDS = new Set(Object.keys(OASIS_GUEST_PASS_PRODUCTS))
 
 function inferPasses(name = '') {
   const n = name.toLowerCase()
