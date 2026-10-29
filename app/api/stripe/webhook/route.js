@@ -53,15 +53,17 @@ export async function POST(request) {
   const sig     = request.headers.get('stripe-signature')
 
   // ── Verify signature ──────────────────────────────────────────────────────
-  const stripe         = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2024-06-20' })
-  const webhookSecret  = process.env.STRIPE_WEBHOOK_SECRET
+  // Every event must be signed. An unverified body is never parsed or acted on.
+  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET
+  if (!webhookSecret) {
+    console.error('[platform/webhook] STRIPE_WEBHOOK_SECRET is not set — rejecting event')
+    return NextResponse.json({ error: 'Webhook not configured' }, { status: 500 })
+  }
+
+  const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2024-06-20' })
   let event
   try {
-    if (webhookSecret) {
-      event = stripe.webhooks.constructEvent(rawBody, sig, webhookSecret)
-    } else {
-      event = JSON.parse(rawBody)
-    }
+    event = stripe.webhooks.constructEvent(rawBody, sig, webhookSecret)
   } catch (err) {
     console.error('[platform/webhook] signature verification failed:', err.message)
     return NextResponse.json({ error: 'Invalid signature' }, { status: 400 })
