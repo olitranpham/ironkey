@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { X, Phone, KeyRound, History, User, ShieldAlert, DoorOpen, UserCheck } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import { X, Phone, KeyRound, History, User, ShieldAlert, DoorOpen, UserCheck, ChevronDown, Loader2 } from 'lucide-react'
 import { formatPhone } from '@/lib/phone'
 import { fillSuggestedPin } from '@/lib/suggestPin'
 import { formatMembershipTypeDisplay } from '@/lib/membershipCategory'
@@ -138,15 +138,21 @@ const money = (cents, currency = 'usd') =>
   cents == null ? '—' : new Intl.NumberFormat(undefined, { style: 'currency', currency: currency.toUpperCase() }).format(cents / 100)
 const per = o => (o?.interval ? `/${o.intervalCount > 1 ? `${o.intervalCount} ` : ''}${o.interval}` : '')
 
-function ChangeMembership({ member, gymSlug, onPlanChanged }) {
+function MembershipTypeControl({ member, gymSlug, onPlanChanged }) {
   const [allowed, setAllowed] = useState(false)
-  const [state,   setState]   = useState('idle')   // idle | loading | ready | blocked | confirm | saving | done
-  const [plan,    setPlan]    = useState(null)
-  const [choice,  setChoice]  = useState('')
-  const [message, setMessage] = useState(null)
+  const [plan,    setPlan]    = useState(null)      // GET .../plan result
+  const [loading, setLoading] = useState(false)
+  const [open,    setOpen]    = useState(false)     // dropdown under the value
+  const [choice,  setChoice]  = useState(null)      // option chosen → confirm step
+  const [saving,  setSaving]  = useState(false)
+  const [message, setMessage] = useState(null)      // confirm-step error, or success text
+  const [done,    setDone]    = useState(false)
+  const [reload,  setReload]  = useState(0)
+  const wrapRef = useRef(null)
   const auth = () => ({ Authorization: `Bearer ${localStorage.getItem('ik_token')}` })
+  const typeLabel = formatMembershipTypeDisplay(member.membershipType) || '—'
 
-  // Only users with billing.act see the control (no Stripe call here)
+  // Only users with billing.act get the control (no Stripe call here)
   useEffect(() => {
     fetch(`/api/${gymSlug}/me`, { headers: auth() })
       .then(r => (r.ok ? r.json() : null))
@@ -155,64 +161,109 @@ function ChangeMembership({ member, gymSlug, onPlanChanged }) {
   }, [gymSlug])
 
   // Reset when a different member is shown
-  useEffect(() => { setState('idle'); setPlan(null); setChoice(''); setMessage(null) }, [member.id])
+  useEffect(() => { setOpen(false); setChoice(null); setMessage(null); setDone(false) }, [member.id])
 
-  if (!allowed || member.status === 'CANCELED') return null
+  // Eligibility: one read-only subscription check per opened member
+  useEffect(() => {
+    setPlan(null)
+    if (!allowed || member.status === 'CANCELED') return
+    let cancelled = false
+    setLoading(true)
+    fetch(`/api/${gymSlug}/members/${member.id}/plan`, { headers: auth() })
+      .then(r => (r.ok ? r.json() : null))
+      .then(json => { if (!cancelled) setPlan(json) })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
+  }, [allowed, gymSlug, member.id, member.status, reload])
 
-  async function open() {
-    setState('loading'); setMessage(null)
-    try {
-      const res  = await fetch(`/api/${gymSlug}/members/${member.id}/plan`, { headers: auth() })
-      const json = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(json.error || 'could not load plans')
-      setPlan(json)
-      if (!json.canChange) { setMessage(json.message); setState('blocked'); return }
-      setChoice(json.options[0]?.priceId ?? '')
-      setState('ready')
-    } catch (err) { setMessage(err.message); setState('blocked') }
-  }
+  // Close the dropdown on outside click / Escape
+  useEffect(() => {
+    if (!open) return
+    const onDown = e => { if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false) }
+    const onKey  = e => { if (e.key === 'Escape') { e.stopPropagation(); setOpen(false) } }
+    document.addEventListener('mousedown', onDown)
+    document.addEventListener('keydown', onKey, true)
+    return () => { document.removeEventListener('mousedown', onDown); document.removeEventListener('keydown', onKey, true) }
+  }, [open])
+
+  const external    = plan?.canChange === false && plan.reason === 'external_subscription'
+  const interactive = allowed && member.status !== 'CANCELED' && (plan?.canChange || external)
 
   async function save() {
-    setState('saving'); setMessage(null)
+    setSaving(true); setMessage(null)
     try {
       const res  = await fetch(`/api/${gymSlug}/members/${member.id}/plan`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json', ...auth() }, body: JSON.stringify({ priceId: choice }),
+        method: 'POST', headers: { 'Content-Type': 'application/json', ...auth() }, body: JSON.stringify({ priceId: choice.priceId }),
       })
       const json = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(json.error || 'stripe rejected the change')   // e.g. the Stripe error message
       onPlanChanged?.(json.member)
+      setChoice(null)
       setMessage(json.warning || 'membership changed. the new price starts at the next renewal.')
-      setState('done')
-    } catch (err) { setMessage(err.message); setState('confirm') }
+      setDone(true)
+      setReload(n => n + 1)   // refresh options for the new current plan
+    } catch (err) {
+      setMessage(err.message)
+    } finally {
+      setSaving(false)
+    }
   }
 
-  const target = plan?.options?.find(o => o.priceId === choice)
-  const when   = plan?.effectiveAt ? new Date(plan.effectiveAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }).toLowerCase() : 'the next renewal'
-  const btn    = 'text-[11px] px-2.5 py-1 rounded-md border border-neutral-700 text-neutral-300 hover:text-white hover:border-neutral-500 disabled:opacity-40 transition-colors'
+  const when = plan?.effectiveAt ? new Date(plan.effectiveAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }).toLowerCase() : 'the next renewal'
+  const btn  = 'text-[11px] px-2.5 py-1 rounded-md border border-neutral-700 text-neutral-300 hover:text-white hover:border-neutral-500 disabled:opacity-40 transition-colors'
 
   return (
-    <div className="mt-2 space-y-2">
-      {state === 'idle' && <button type="button" onClick={open} className={btn}>change membership</button>}
-      {state === 'loading' && <p className="text-[11px] text-neutral-500">checking subscription…</p>}
-      {state === 'blocked' && <p className="text-[11px] text-amber-400">{message}</p>}
-      {state === 'ready' && (
-        <div className="flex items-center gap-2">
-          <select value={choice} onChange={e => setChoice(e.target.value)}
-            className="bg-[#252525] border border-neutral-700 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-neutral-500">
-            {plan.options.map(o => (
-              <option key={o.priceId} value={o.priceId}>{(o.name ?? '').toLowerCase()} — {money(o.amount, o.currency)}{per(o)}</option>
-            ))}
-          </select>
-          <button type="button" onClick={() => setState('confirm')} disabled={!choice} className={btn}>continue</button>
-          <button type="button" onClick={() => setState('idle')} className="text-[11px] text-neutral-500 hover:text-neutral-300">cancel</button>
+    <>
+      <DrawerField label="type">
+        <div ref={wrapRef} className="relative ml-4 flex justify-end min-w-0">
+          {interactive ? (
+            <button
+              type="button"
+              onClick={() => { setOpen(o => !o); setDone(false); setMessage(null) }}
+              className="inline-flex items-center gap-1 text-xs text-white text-right truncate max-w-[240px] hover:text-zinc-200 transition-colors"
+              aria-haspopup="listbox"
+              aria-expanded={open}
+            >
+              <span className="truncate">{typeLabel}</span>
+              <ChevronDown size={12} className={`shrink-0 text-zinc-500 transition-transform ${open ? 'rotate-180' : ''}`} />
+            </button>
+          ) : (
+            <span className="inline-flex items-center gap-1 text-xs text-white text-right truncate max-w-[240px]">
+              <span className="truncate">{typeLabel}</span>
+              {loading && <Loader2 size={12} className="shrink-0 text-zinc-500 animate-spin" />}
+            </span>
+          )}
+
+          {open && interactive && (
+            <div role="listbox" className="absolute right-0 top-full mt-1 z-20 min-w-[220px] max-w-[280px] rounded-lg border border-neutral-700 bg-[#252525] shadow-xl py-1">
+              {external ? (
+                <p className="px-3 py-2 text-[11px] text-amber-400">{plan.message}</p>
+              ) : (
+                plan.options.map(o => (
+                  <button
+                    key={o.priceId}
+                    type="button"
+                    role="option"
+                    onClick={() => { setChoice(o); setOpen(false); setMessage(null) }}
+                    className="w-full flex items-center justify-between gap-3 px-3 py-1.5 text-left text-xs text-zinc-200 hover:bg-white/5"
+                  >
+                    <span className="truncate">{(o.name ?? '').toLowerCase()}</span>
+                    <span className="shrink-0 text-zinc-500">{money(o.amount, o.currency)}{per(o)}</span>
+                  </button>
+                ))
+              )}
+            </div>
+          )}
         </div>
-      )}
-      {(state === 'confirm' || state === 'saving') && target && (
-        <div className="rounded-lg border border-neutral-700 bg-neutral-900 p-3 space-y-2">
+      </DrawerField>
+
+      {choice && plan?.canChange && (
+        <div className="rounded-lg border border-neutral-700 bg-neutral-900 p-3 space-y-2 mt-1">
           <p className="text-xs text-neutral-300">
             {(plan.current.name ?? member.membershipType ?? '').toLowerCase()} {money(plan.current.amount, plan.current.currency)}{per(plan.current)}
             {' → '}
-            <span className="text-white font-semibold">{(target.name ?? '').toLowerCase()} {money(target.amount, target.currency)}{per(target)}</span>
+            <span className="text-white font-semibold">{(choice.name ?? '').toLowerCase()} {money(choice.amount, choice.currency)}{per(choice)}</span>
           </p>
           <p className="text-[11px] text-neutral-500">
             takes effect at the next renewal ({when}). no proration, nothing is charged now.
@@ -220,13 +271,13 @@ function ChangeMembership({ member, gymSlug, onPlanChanged }) {
           </p>
           {message && <p className="text-[11px] text-red-400">{message}</p>}
           <div className="flex gap-2">
-            <button type="button" onClick={save} disabled={state === 'saving'} className={btn}>{state === 'saving' ? 'changing…' : 'confirm change'}</button>
-            <button type="button" onClick={() => { setState('ready'); setMessage(null) }} disabled={state === 'saving'} className="text-[11px] text-neutral-500 hover:text-neutral-300">back</button>
+            <button type="button" onClick={save} disabled={saving} className={btn}>{saving ? 'changing…' : 'confirm change'}</button>
+            <button type="button" onClick={() => { setChoice(null); setMessage(null) }} disabled={saving} className="text-[11px] text-neutral-500 hover:text-neutral-300">cancel</button>
           </div>
         </div>
       )}
-      {state === 'done' && <p className="text-[11px] text-emerald-400">{message}</p>}
-    </div>
+      {done && message && <p className="text-[11px] text-emerald-400 mt-1">{message}</p>}
+    </>
   )
 }
 
@@ -854,8 +905,9 @@ function DrawerContent({ member, gymSlug, membershipBorder, onClose, onStatusCha
 
         {/* Membership */}
         <DrawerSection icon={KeyRound} title="membership">
-          <DrawerField label="type" value={formatMembershipTypeDisplay(member.membershipType) || '—'} />
-          {!simplified && <ChangeMembership member={member} gymSlug={gymSlug} onPlanChanged={onPlanChanged} />}
+          {simplified
+            ? <DrawerField label="type" value={formatMembershipTypeDisplay(member.membershipType) || '—'} />
+            : <MembershipTypeControl member={member} gymSlug={gymSlug} onPlanChanged={onPlanChanged} />}
 
           {/* Hydra's bundled Student/Military/EMT plan — category picker first */}
           {isHydraBundledPlan && (

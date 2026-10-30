@@ -40,8 +40,6 @@ const NAV_GROUPS = [
       { label: 'guest passes', slug: 'guest-passes', icon: Ticket },
     ],
     repGymPass: { label: 'partner check-ins', slug: 'partner-checkins', icon: Handshake },
-    // Shown only to users with leads.view (from /me)
-    leads: { label: 'leads', slug: 'leads', icon: UserPlus },
   },
   {
     label: 'billing',
@@ -54,6 +52,8 @@ const NAV_GROUPS = [
   },
   {
     label: 'operations',
+    // Shown first, only to users with leads.view (from /me)
+    leads: { label: 'leads', slug: 'leads', icon: UserPlus },
     items: [
       { label: 'inventory',          slug: 'inventory',          icon: Package },
       { label: 'personal training',  slug: 'personal-training',  icon: Dumbbell },
@@ -230,9 +230,9 @@ function PortalLayout({ gymSlug, children }) {
           {NAV_GROUPS.map((group, gi) => {
             const items = [
               ...(group.seam && (hasSeam || hasKisi) ? [group.seam] : []),
+              ...(group.leads && canViewLeads ? [group.leads] : []),
               ...group.items,
               ...(group.repGymPass && repGymPass ? [group.repGymPass] : []),
-              ...(group.leads && canViewLeads ? [group.leads] : []),
             ]
             return (
               <div key={group.label} className={gi > 0 ? 'mt-4' : ''}>
