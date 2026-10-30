@@ -250,6 +250,7 @@ function AddCouponModal({ productSections, onSave, onClose, saving }) {
   const [restrictedIds,    setRestrictedIds]    = useState([])
   const [expiresAt,        setExpiresAt]        = useState('')
   const [maxRedemptions,   setMaxRedemptions]   = useState('')
+  const [oncePerCustomer,  setOncePerCustomer]  = useState(false)
   const [err,              setErr]              = useState(null)
 
   function toggleProduct(id) {
@@ -273,6 +274,7 @@ function AddCouponModal({ productSections, onSave, onClose, saving }) {
       restrictedProductIds: restrictedIds.length > 0 ? restrictedIds : undefined,
       expiresAt:            expiresAt || undefined,
       maxRedemptions:       maxRedemptions ? parseInt(maxRedemptions, 10) : undefined,
+      oncePerCustomer,
     })
   }
 
@@ -391,6 +393,19 @@ function AddCouponModal({ productSections, onSave, onClose, saving }) {
             className="bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-2 text-xs text-white placeholder-neutral-600 focus:outline-none focus:border-neutral-500"
           />
         </div>
+
+        <label className="flex items-start gap-2 text-xs text-neutral-300 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={oncePerCustomer}
+            onChange={e => setOncePerCustomer(e.target.checked)}
+            className="accent-white mt-0.5"
+          />
+          <span>
+            once per customer
+            <span className="block text-[11px] text-neutral-500">each email can use this code one time at checkout</span>
+          </span>
+        </label>
 
         {err && <p className="text-xs text-rose-400">{err}</p>}
 
@@ -881,6 +896,7 @@ export default function ProductsPage() {
                         <tr key={c.id} className={`hover:bg-white/5 transition-colors ${!c.active ? 'opacity-50' : ''} ${i % 2 === 0 ? 'bg-white/[0.02]' : ''}`}>
                           <td className="px-5 py-3">
                             <span className="text-sm text-white font-mono">{c.code}</span>
+                            {c.oncePerCustomer && <span className="ml-2 text-[10px] text-neutral-500">once per customer</span>}
                             {!c.active && <span className="ml-2 text-[10px] text-neutral-500">inactive</span>}
                           </td>
                           <td className="px-5 py-3"><span className="text-xs text-neutral-300">{c.discount}</span></td>

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import prisma from '@/lib/prisma'
 import { limitRequest } from '@/lib/rateLimit'
+import { preparePromotionCode, rethrowPromoSessionError, PromoCodeError, promoCodeErrorResponse } from '@/lib/couponRedemption'
 
 /**
  * POST /api/[gymSlug]/guest/checkout
@@ -12,6 +13,7 @@ import { limitRequest } from '@/lib/rateLimit'
  *   firstName, lastName, email, phone, dob, address,
  *   emergencyName, emergencyPhone, emergencyRelationship,
  *   isNewGuest,
+ *   promotionCode,   // optional — validated here (incl. once-per-customer) and applied via discounts
  * }
  */
 export async function POST(request, { params }) {
@@ -96,13 +98,15 @@ export async function POST(request, { params }) {
       }
     }
 
+    const promo = await preparePromotionCode(stripe, gym, body.promotionCode, email)
+
     console.log('[guest/checkout] creating session — priceId:', priceId, '| passType from body:', passType, '| passesLeft:', passesLeft, '| metadata.passType will be:', passType ?? 'SINGLE')
 
     const session = await stripe.checkout.sessions.create({
       mode:                  'payment',
       customer_email:        email.trim().toLowerCase(),
       line_items:            [{ price: priceId, quantity: 1 }],
-      allow_promotion_codes: true,
+      ...(promo ? { discounts: promo.discounts } : {}),
       success_url: `${origin}/${gymSlug}/guest/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url:  `${origin}/${gymSlug}/guest`,
       metadata: {
@@ -131,11 +135,13 @@ export async function POST(request, { params }) {
         guardianEmail:         guardianEmail         ?? '',
         guardianPhone:         guardianPhone         ?? '',
         guardianRelationship:  guardianRelationship  ?? '',
+        ...(promo?.metadata ?? {}),
       },
-    })
+    }).catch(err => rethrowPromoSessionError(err, promo))
 
     return NextResponse.json({ url: session.url })
   } catch (error) {
+    if (error instanceof PromoCodeError) return promoCodeErrorResponse(error)
     console.error('[guest/checkout POST]', error)
     return NextResponse.json({ error: error.message ?? 'Internal server error' }, { status: 500 })
   }

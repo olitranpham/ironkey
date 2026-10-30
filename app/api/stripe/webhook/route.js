@@ -12,6 +12,7 @@ import { writeAudit } from '@/lib/audit'
 import { generateUniquePin } from '@/lib/pins'
 import { postWebhook } from '@/lib/guestCodeDelivery'
 import { OASIS_GYM_SLUG, OASIS_GUEST_PASS_PRODUCTS, isOasisGuestPassProduct } from '@/lib/oasisGuestPasses'
+import { recordCouponRedemption } from '@/lib/couponRedemption'
 
 /** Trimmed string, or null for null/undefined/blank. */
 function normalizePhone(value) {
@@ -390,6 +391,8 @@ export async function POST(request) {
         guardianRelationship:  guestIsMinor ? (meta.guardianRelationship || null) : null,
       }, 'guest', 'Guest', guestProfile?.id ?? null)
 
+      await recordCouponRedemption(gym, session, 'guest_pass')
+
       return NextResponse.json({ received: true })
     }
 
@@ -437,6 +440,8 @@ export async function POST(request) {
       } catch (err) {
         console.error('[platform/webhook] concessions inventory decrement error:', err.message)
       }
+
+      await recordCouponRedemption(gym, session, 'concessions')
 
       return NextResponse.json({ received: true })
     }
@@ -646,6 +651,8 @@ export async function POST(request) {
         guardianRelationship: isMinor ? (meta.guardianRelationship || null) : null,
       }, 'member', 'Member', member.id)
 
+      await recordCouponRedemption(gym, session, 'join')
+
       return NextResponse.json({ received: true })
     }
 
@@ -735,6 +742,8 @@ export async function POST(request) {
     }, { reactivate: Boolean(subId), via: 'stripe_checkout' })
       .then(({ status, json }) => { if (status >= 400) console.error('[platform/webhook] members notify failed:', status, json.error) })
       .catch(e => console.error('[platform/webhook] members notify error:', e.message))
+
+    await recordCouponRedemption(gym, session, 'join')
   }
 
   // ── customer.subscription.updated ────────────────────────────────────────

@@ -264,6 +264,7 @@ export default function JoinPage() {
   const [groupTrainingPlans, setGroupTrainingPlans] = useState([])
   const [loading,          setLoading]          = useState(true)
   const [submitting,       setSubmitting]       = useState(false)
+  const [promotionCode,    setPromotionCode]    = useState('')
   const [error,            setError]            = useState(null)
   const [waiverOpen,          setWaiverOpen]          = useState(false)
   const [studentIdFile,       setStudentIdFile]       = useState(null)
@@ -468,6 +469,7 @@ export default function JoinPage() {
         guardianEmail:         isMinor ? accountEmail : '',
         guardianPhone:         isMinor ? accountPhone : '',
         guardianRelationship:  isMinor ? form.guardianRelationship.trim() : '',
+        promotionCode:         promotionCode.trim(),
       }
 
       // PT/programming/coaching plans: go to intake form first, then Stripe
@@ -1221,6 +1223,14 @@ export default function JoinPage() {
             )}
           </span>
         </label>
+
+        <Field label="promo code (optional)">
+          <input
+            type="text" autoComplete="off" autoCapitalize="characters"
+            value={promotionCode} onChange={e => setPromotionCode(e.target.value)}
+            className={INPUT}
+          />
+        </Field>
 
         {error && (
           <div className="flex items-start gap-2.5 bg-rose-500/10 border border-rose-500/20 rounded-lg px-3.5 py-3">

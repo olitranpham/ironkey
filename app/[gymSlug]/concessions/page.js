@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { useParams } from 'next/navigation'
 import { Loader2, Minus, Plus, ShoppingBag } from 'lucide-react'
 import PublicPageHeader from '@/components/PublicPageHeader'
-import { SectionDivider, BUTTON_PRIMARY } from '@/components/PublicPageStyles'
+import { Field, SectionDivider, INPUT, BUTTON_PRIMARY } from '@/components/PublicPageStyles'
 
 function fmt(n) {
   return Number(n).toLocaleString('en-US', { style: 'currency', currency: 'USD' })
@@ -34,6 +34,8 @@ export default function ConcessionsPage() {
   const [loading,    setLoading]    = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [error,      setError]      = useState(null)
+  const [email,      setEmail]      = useState('')
+  const [promotionCode, setPromotionCode] = useState('')
 
   useEffect(() => {
     fetch(`/api/${gymSlug}/concessions/items`)
@@ -62,13 +64,14 @@ export default function ConcessionsPage() {
       .filter(item => (quantities[item.id] ?? 0) > 0)
       .map(item => ({ stripeProductId: item.stripeProductId, quantity: quantities[item.id] }))
     if (!selected.length) return
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) { setError('enter a valid email.'); return }
 
     setSubmitting(true)
     try {
       const res  = await fetch(`/api/${gymSlug}/concessions/checkout`, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ items: selected }),
+        body:    JSON.stringify({ items: selected, email: email.trim(), promotionCode: promotionCode.trim() }),
       })
       const json = await res.json()
       if (!res.ok) throw new Error(json.error ?? 'Something went wrong')
@@ -158,6 +161,22 @@ export default function ConcessionsPage() {
               <span className="text-lg font-bold text-white">{fmt(total)}</span>
             </div>
 
+            <Field label="email" required>
+              <input
+                type="email" autoComplete="email" placeholder="you@example.com"
+                value={email} onChange={e => setEmail(e.target.value)}
+                className={INPUT}
+              />
+            </Field>
+
+            <Field label="promo code (optional)">
+              <input
+                type="text" autoComplete="off" autoCapitalize="characters"
+                value={promotionCode} onChange={e => setPromotionCode(e.target.value)}
+                className={INPUT}
+              />
+            </Field>
+
             {error && (
               <div className="flex items-start gap-2.5 bg-rose-500/10 border border-rose-500/20 rounded-lg px-3.5 py-3">
                 <span className="text-rose-400 mt-px shrink-0">⚠</span>
@@ -167,7 +186,7 @@ export default function ConcessionsPage() {
 
             <button
               onClick={handleCheckout}
-              disabled={submitting || selectedCount === 0}
+              disabled={submitting || selectedCount === 0 || !email.trim()}
               className={BUTTON_PRIMARY}
             >
               {submitting ? (

@@ -68,6 +68,7 @@ model Gym {
   auditLogs            AuditLog[]
   leads                Lead[]
   guestCheckIns        GuestCheckIn[]
+  couponRedemptions    CouponRedemption[]
 }
 
 // ─── Member ───────────────────────────────────────────────────────────────────
@@ -158,6 +159,7 @@ model Member {
   guestVisits      GuestVisit[]
   membershipEvents MembershipEvent[]
   ptSessions       PTSessionMember[]
+  couponRedemptions CouponRedemption[]
 
   @@unique([gymId, email])
 }
@@ -204,6 +206,7 @@ model Guest {
   waivers  GuestWaiver[]
   leads    Lead[]
   checkIns GuestCheckIn[]
+  couponRedemptions CouponRedemption[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -347,6 +350,31 @@ model Lead {
   updatedAt      DateTime  @updatedAt
 
   @@unique([gymId, guestProfileId])
+}
+
+// ─── CouponRedemption ─────────────────────────────────────────────────────────
+// One row per paid checkout that used a once-per-customer promotion code
+// (promotion code metadata ironkey_once_per_customer=true). Identity is the
+// normalized buyer email; guestProfileId / memberId are filled when that email
+// resolves to a guest profile with a pass here / a member of this gym.
+// Written by the platform webhook on checkout.session.completed.
+
+model CouponRedemption {
+  id                String   @id @default(cuid())
+  gymId             String
+  gym               Gym      @relation(fields: [gymId], references: [id], onDelete: Cascade)
+  promotionCodeId   String
+  code              String
+  email             String   // trimmed + lowercased
+  guestProfileId    String?
+  guestProfile      Guest?   @relation(fields: [guestProfileId], references: [id], onDelete: SetNull)
+  memberId          String?
+  member            Member?  @relation(fields: [memberId], references: [id], onDelete: SetNull)
+  checkoutSessionId String   @unique
+  source            String   // 'join' | 'guest_pass' | 'concessions'
+  createdAt         DateTime @default(now())
+
+  @@unique([gymId, promotionCodeId, email])
 }
 
 // ─── RepGymPassCheckin ────────────────────────────────────────────────────────

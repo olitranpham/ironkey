@@ -257,6 +257,7 @@ export default function GuestPage() {
   const [step,       setStep]       = useState('intent')
   const [mode,       setMode]       = useState(null)   // 'purchase' | 'checkin' | 'flex'
   const [submitting, setSubmitting] = useState(false)
+  const [promotionCode, setPromotionCode] = useState('')
   const [error,      setError]      = useState(null)
   const [waiverOpen, setWaiverOpen] = useState(false)
 
@@ -461,6 +462,7 @@ export default function GuestPage() {
           guardianPhone:         isMinor ? accountPhone : '',
           guardianRelationship:  isMinor ? form.guardianRelationship.trim() : '',
           studentIdUploadId,
+          promotionCode:         promotionCode.trim(),
         }),
       })
       const json = await res.json()
@@ -506,6 +508,7 @@ export default function GuestPage() {
           email:      lookupEmail.trim(),
           isNewGuest: false,
           studentIdUploadId,
+          promotionCode: promotionCode.trim(),
         }),
       })
       const json = await res.json()
@@ -992,6 +995,14 @@ export default function GuestPage() {
               </span>
             </label>
 
+            <Field label="promo code (optional)">
+              <input
+                type="text" autoComplete="off" autoCapitalize="characters"
+                value={promotionCode} onChange={e => setPromotionCode(e.target.value)}
+                className={INPUT}
+              />
+            </Field>
+
             {error && (
               <p className="text-xs text-rose-400 bg-rose-500/10 border border-rose-500/20 rounded-lg px-3 py-2">
                 {error}
@@ -1116,6 +1127,14 @@ export default function GuestPage() {
                 </div>
               </Field>
             )}
+
+            <Field label="promo code (optional)">
+              <input
+                type="text" autoComplete="off" autoCapitalize="characters"
+                value={promotionCode} onChange={e => setPromotionCode(e.target.value)}
+                className={INPUT}
+              />
+            </Field>
 
             {error && (
               <p className="text-xs text-rose-400 bg-rose-500/10 border border-rose-500/20 rounded-lg px-3 py-2">

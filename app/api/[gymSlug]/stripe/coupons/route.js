@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import prisma from '@/lib/prisma'
 import { requirePermission } from '@/lib/permissions'
+import { ONCE_PER_CUSTOMER_KEY } from '@/lib/couponRedemption'
 
 async function getGym(gymSlug) {
   return prisma.gym.findUnique({
@@ -65,6 +66,7 @@ export async function GET(request, { params }) {
         expiresAt:         pc.expires_at ? new Date(pc.expires_at * 1000).toISOString() : null,
         maxRedemptions:    pc.max_redemptions ?? null,
         timesRedeemed:     pc.times_redeemed ?? 0,
+        oncePerCustomer:   pc.metadata?.[ONCE_PER_CUSTOMER_KEY] === 'true',
       }
     })
 
@@ -86,6 +88,8 @@ export async function GET(request, { params }) {
  *   code, discountType: 'percent' | 'amount', value,
  *   duration: 'once' | 'repeating', durationInMonths,
  *   restrictedProductIds, expiresAt, maxRedemptions,
+ *   oncePerCustomer,   // true → promotion code metadata ironkey_once_per_customer=true;
+ *                      // enforced by email in the join/guest/concessions checkouts
  * }
  */
 export async function POST(request, { params }) {
@@ -96,7 +100,7 @@ export async function POST(request, { params }) {
     const body = await request.json()
     const {
       code, discountType, value, duration, durationInMonths,
-      restrictedProductIds, expiresAt, maxRedemptions,
+      restrictedProductIds, expiresAt, maxRedemptions, oncePerCustomer,
     } = body
 
     if (!code?.trim()) {
@@ -144,6 +148,7 @@ export async function POST(request, { params }) {
         code:   code.trim(),
         ...(maxRedemptions ? { max_redemptions: Math.max(1, parseInt(maxRedemptions, 10)) } : {}),
         ...(expiresAt ? { expires_at: Math.floor(new Date(expiresAt).getTime() / 1000) } : {}),
+        ...(oncePerCustomer === true ? { metadata: { [ONCE_PER_CUSTOMER_KEY]: 'true' } } : {}),
       })
     } catch (err) {
       // Don't leave an orphaned coupon behind if the promo code step fails

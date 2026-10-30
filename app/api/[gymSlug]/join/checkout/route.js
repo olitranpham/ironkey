@@ -3,6 +3,7 @@ import Stripe from 'stripe'
 import prisma from '@/lib/prisma'
 import { planRequiresStudentId } from '@/lib/studentIdPlans'
 import { limitRequest } from '@/lib/rateLimit'
+import { preparePromotionCode, rethrowPromoSessionError, PromoCodeError, promoCodeErrorResponse } from '@/lib/couponRedemption'
 
 // Rutgers Powerlifting Club — one-off $5 non-recurring membership for
 // hydra-athletic-co. Stripe rejects a one-time price as a line item in
@@ -17,6 +18,7 @@ const HYDRA_RUTGERS_POWERLIFTING_PRICE_ID = 'price_1U84lzAHpnGUkbkC2kNFvTwD'
  *   firstName, lastName, email, phone, dob,
  *   emergencyName, emergencyPhone,
  *   priceId, membershipType,
+ *   promotionCode,   // optional — validated here (incl. once-per-customer) and applied via discounts
  * }
  */
 export async function POST(request, { params }) {
@@ -100,13 +102,15 @@ export async function POST(request, { params }) {
       : [{ price: priceId, quantity: 1 }]
     if (addonPriceId) lineItems.push({ price: addonPriceId, quantity: 1 })
 
+    const promo = await preparePromotionCode(stripe, gym, body.promotionCode, email)
+
     const isRutgersPowerliftingOneOff = gymSlug === 'hydra-athletic-co' && priceId === HYDRA_RUTGERS_POWERLIFTING_PRICE_ID
 
     const session = await stripe.checkout.sessions.create({
       mode:                  isRutgersPowerliftingOneOff ? 'payment' : 'subscription',
       customer_email:        email,
       line_items:            lineItems,
-      allow_promotion_codes: true,
+      ...(promo ? { discounts: promo.discounts } : {}),
       success_url: `${origin}/${gymSlug}/join/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url:  `${origin}/${gymSlug}/join`,
       metadata: {
@@ -137,11 +141,13 @@ export async function POST(request, { params }) {
         guardianEmail:         guardianEmail         ?? '',
         guardianPhone:         guardianPhone         ?? '',
         guardianRelationship:  guardianRelationship  ?? '',
+        ...(promo?.metadata ?? {}),
       },
-    })
+    }).catch(err => rethrowPromoSessionError(err, promo))
 
     return NextResponse.json({ url: session.url })
   } catch (error) {
+    if (error instanceof PromoCodeError) return promoCodeErrorResponse(error)
     console.error('[join/checkout POST]', error)
     return NextResponse.json({ error: error.message ?? 'Internal server error' }, { status: 500 })
   }
