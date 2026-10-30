@@ -7,7 +7,6 @@ import { Loader2 } from 'lucide-react'
 const token = () => localStorage.getItem('ik_token')
 
 const fmtDate  = d => (d ? new Date(d).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }).toLowerCase() : '—')
-const fmtMoney = cents => (cents == null ? '—' : `$${(cents / 100).toFixed(2)}`)
 
 const STATUS_STYLE = {
   new:       'bg-sky-500/10 text-sky-300 border-sky-500/20',
@@ -149,7 +148,7 @@ export default function LeadsPage() {
             <table className="w-full text-xs text-left">
               <thead className="text-[10px] uppercase tracking-wider text-neutral-500 bg-white/[0.02]">
                 <tr>
-                  {['name', 'email', 'phone', 'first visit', 'last visit', 'visits', 'passes bought', 'total spent', 'status', ''].map(h => (
+                  {['name', 'email', 'phone', 'first visit', 'last visit', 'visits', 'status', ''].map(h => (
                     <th key={h} className="px-3 py-2 font-medium whitespace-nowrap">{h}</th>
                   ))}
                 </tr>
@@ -163,8 +162,6 @@ export default function LeadsPage() {
                     <td className="px-3 py-2 whitespace-nowrap">{fmtDate(lead.firstVisit)}</td>
                     <td className="px-3 py-2 whitespace-nowrap">{fmtDate(lead.lastVisit)}</td>
                     <td className="px-3 py-2">{lead.visitCount}</td>
-                    <td className="px-3 py-2">{lead.passesBought}</td>
-                    <td className="px-3 py-2">{fmtMoney(lead.totalSpent)}</td>
                     <td className="px-3 py-2">
                       {canManage ? (
                         <select
