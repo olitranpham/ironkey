@@ -52,10 +52,45 @@ async function getGym(gymSlug) {
 }
 
 /**
+ * Concession products for the coupon form's "restrict to products" list.
+ * Concession Stripe products carry no ironkey_kind tag, so they're identified
+ * by ID: the stripeProductId of this gym's sellable concessions/merchandise
+ * inventory items (the same rows the concessions checkout sells from), kept
+ * only while the Stripe product is still active. Deduped by product ID.
+ */
+async function listConcessionProducts(stripe, gymId) {
+  const items = await prisma.inventoryItem.findMany({
+    where: {
+      gymId,
+      category:        { in: ['concessions', 'merchandise'], mode: 'insensitive' },
+      stripeProductId: { not: null },
+      price:           { not: null },
+    },
+    select: { name: true, stripeProductId: true },
+  })
+  const names = new Map()
+  for (const i of items) if (!names.has(i.stripeProductId)) names.set(i.stripeProductId, i.name)
+  if (names.size === 0) return []
+
+  const active = new Set()
+  const ids = [...names.keys()]
+  for (let i = 0; i < ids.length; i += 100) {
+    const res = await stripe.products.list({ ids: ids.slice(i, i + 100), active: true, limit: 100 })
+    for (const p of res.data) active.add(p.id)
+  }
+
+  return ids
+    .filter(id => active.has(id))
+    .map(id => ({ id, name: names.get(id), active: true }))
+    .sort((a, b) => a.name.localeCompare(b.name))
+}
+
+/**
  * GET /api/[gymSlug]/stripe/products
  * Public to gym staff — returns Stripe prices for this gym's account, split
  * into membership plans (recurring prices) and guest pass types (one-time
- * prices tagged as guest passes, by metadata or legacy name).
+ * prices tagged as guest passes, by metadata or legacy name), plus the active
+ * concession products (see listConcessionProducts) for coupon restrictions.
  *
  * Fetches by PRICE (not by product's default_price) so a product with
  * multiple active prices — e.g. Triumph's "Personal Training + Membership"
@@ -171,7 +206,9 @@ export async function GET(request, { params }) {
       JSON.stringify(membershipPlans.map(p => p.name)),
     )
 
-    return NextResponse.json({ membershipPlans, guestPasses })
+    const concessions = await listConcessionProducts(stripe, gym.id)
+
+    return NextResponse.json({ membershipPlans, guestPasses, concessions })
   } catch (error) {
     console.error('[stripe/products GET]', error)
     return NextResponse.json({ error: error.message ?? 'Internal server error' }, { status: 500 })

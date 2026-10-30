@@ -241,7 +241,7 @@ function AddGuestPassModal({ initial, onSave, onClose, saving }) {
 
 // ── Add Coupon Modal ──────────────────────────────────────────────────────────
 
-function AddCouponModal({ activeProducts, onSave, onClose, saving }) {
+function AddCouponModal({ productSections, onSave, onClose, saving }) {
   const [code,             setCode]             = useState('')
   const [discountType,     setDiscountType]     = useState('percent')
   const [value,            setValue]            = useState('')
@@ -350,20 +350,25 @@ function AddCouponModal({ activeProducts, onSave, onClose, saving }) {
           </div>
         )}
 
-        {activeProducts.length > 0 && (
+        {productSections.length > 0 && (
           <div className="flex flex-col gap-1.5">
-            <label className="text-[11px] text-neutral-500">restrict to plans (optional — leave blank for all)</label>
-            <div className="max-h-32 overflow-y-auto flex flex-col gap-1 bg-neutral-900 border border-neutral-700 rounded-lg p-2">
-              {activeProducts.map(p => (
-                <label key={p.id} className="flex items-center gap-2 text-xs text-neutral-300 px-1 py-0.5 cursor-pointer hover:text-white">
-                  <input
-                    type="checkbox"
-                    checked={restrictedIds.includes(p.id)}
-                    onChange={() => toggleProduct(p.id)}
-                    className="accent-white"
-                  />
-                  {p.name}
-                </label>
+            <label className="text-[11px] text-neutral-500">restrict to products (optional, leave blank for all)</label>
+            <div className="max-h-48 overflow-y-auto flex flex-col gap-2 bg-neutral-900 border border-neutral-700 rounded-lg p-2">
+              {productSections.map(s => (
+                <div key={s.label} className="flex flex-col gap-1">
+                  <p className="text-[10px] uppercase tracking-wider text-neutral-600 px-1">{s.label}</p>
+                  {s.products.map(p => (
+                    <label key={p.id} className="flex items-center gap-2 text-xs text-neutral-300 px-1 py-0.5 cursor-pointer hover:text-white">
+                      <input
+                        type="checkbox"
+                        checked={restrictedIds.includes(p.id)}
+                        onChange={() => toggleProduct(p.id)}
+                        className="accent-white"
+                      />
+                      {p.name}
+                    </label>
+                  ))}
+                </div>
               ))}
             </div>
           </div>
@@ -442,6 +447,7 @@ export default function ProductsPage() {
 
   const [membershipPlans, setMembershipPlans] = useState([])
   const [guestPasses,     setGuestPasses]      = useState([])
+  const [concessions,     setConcessions]      = useState([])
   const [loading,         setLoading]          = useState(true)
   const [err,             setErr]              = useState(null)
   const [addPlanOpen,     setAddPlanOpen]      = useState(false)
@@ -467,6 +473,7 @@ export default function ProductsPage() {
       if (!res.ok) throw new Error(json.error ?? res.status)
       setMembershipPlans(json.membershipPlans ?? [])
       setGuestPasses(json.guestPasses ?? [])
+      setConcessions(json.concessions ?? [])
     } catch (e) {
       setErr(e.message)
     } finally {
@@ -529,15 +536,26 @@ export default function ProductsPage() {
     }
   }
 
-  // Restrictable plans for the coupon form — active membership plans + guest
-  // pass types, deduped by product id (a plan can have several price rows,
-  // e.g. PT tiers, but a coupon restriction is a per-product setting).
-  const activeProducts = (() => {
-    const map = new Map()
-    for (const p of [...membershipPlans, ...guestPasses]) {
-      if (p.active && !map.has(p.id)) map.set(p.id, { id: p.id, name: p.name })
+  // Restrictable products for the coupon form, in sections — active
+  // membership plans, guest passes and concession products, each deduped by
+  // product id (a plan can have several price rows, e.g. PT tiers, but a
+  // coupon restriction is a per-product setting). A product appears in only
+  // the first section it matches.
+  const productSections = (() => {
+    const seen = new Set()
+    const section = list => {
+      const map = new Map()
+      for (const p of list) {
+        if (p.active && !seen.has(p.id) && !map.has(p.id)) map.set(p.id, { id: p.id, name: p.name })
+      }
+      for (const id of map.keys()) seen.add(id)
+      return [...map.values()].sort((a, b) => a.name.localeCompare(b.name))
     }
-    return [...map.values()].sort((a, b) => a.name.localeCompare(b.name))
+    return [
+      { label: 'memberships',  products: section(membershipPlans) },
+      { label: 'guest passes', products: section(guestPasses) },
+      { label: 'concessions & merch', products: section(concessions) },
+    ].filter(s => s.products.length > 0)
   })()
 
   async function createProduct(data) {
@@ -867,7 +885,7 @@ export default function ProductsPage() {
                           </td>
                           <td className="px-5 py-3"><span className="text-xs text-neutral-300">{c.discount}</span></td>
                           <td className="px-5 py-3"><span className="text-xs text-neutral-500">{fmtCouponDuration(c)}</span></td>
-                          <td className="px-5 py-3"><span className="text-xs text-neutral-500">{c.restrictedProducts.length > 0 ? c.restrictedProducts.join(', ') : 'all plans'}</span></td>
+                          <td className="px-5 py-3"><span className="text-xs text-neutral-500">{c.restrictedProducts.length > 0 ? c.restrictedProducts.join(', ') : 'all products'}</span></td>
                           <td className="px-5 py-3"><span className="text-xs text-neutral-500">{fmtCouponDate(c.expiresAt)}</span></td>
                           <td className="px-5 py-3">
                             <span className="text-xs text-neutral-500 tabular-nums">
@@ -910,7 +928,7 @@ export default function ProductsPage() {
         <AddGuestPassModal initial={editPass} onSave={saveEditedGuestPass} onClose={() => setEditPass(null)} saving={saving} />
       )}
       {addCouponOpen && (
-        <AddCouponModal activeProducts={activeProducts} onSave={createCoupon} onClose={() => setAddCouponOpen(false)} saving={couponSaving} />
+        <AddCouponModal productSections={productSections} onSave={createCoupon} onClose={() => setAddCouponOpen(false)} saving={couponSaving} />
       )}
     </div>
   )
