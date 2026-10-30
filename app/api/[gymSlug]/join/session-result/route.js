@@ -12,8 +12,7 @@ const PENDING = () => NextResponse.json({ ok: false, pending: true })
  * Never returns the access code. Returns { ok: true, sentTo } once the
  * session is a paid (or completed subscription) checkout on this gym's Stripe
  * account and the webhook has saved the member's code (which it emails);
- * otherwise { ok: false, pending: true } with no member data. lockboxCode (if the
- * gym set one) is included only once the session is verified as paid.
+ * otherwise { ok: false, pending: true } with no member data.
  */
 export async function GET(request, { params }) {
   try {
@@ -23,7 +22,7 @@ export async function GET(request, { params }) {
 
     const gym = await prisma.gym.findUnique({
       where:  { slug: gymSlug },
-      select: { id: true, stripeSecretKey: true, lockboxCode: true },
+      select: { id: true, stripeSecretKey: true },
     })
     if (!gym) return NextResponse.json({ error: 'Gym not found' }, { status: 404 })
 
@@ -34,13 +33,11 @@ export async function GET(request, { params }) {
       where:  { gymId: gym.id, email: verified.email },
       select: { email: true, accessCode: true },
     })
-    // The gym's shared lockbox code — only ever sent for a verified paid session
-    const lockbox = gym.lockboxCode ? { lockboxCode: gym.lockboxCode } : {}
 
     // Paid, but the webhook hasn't saved the code yet — keep polling
-    if (!member?.accessCode) return NextResponse.json({ ok: false, pending: true, ...lockbox })
+    if (!member?.accessCode) return NextResponse.json({ ok: false, pending: true })
 
-    return NextResponse.json({ ok: true, sentTo: maskEmail(member.email), ...lockbox })
+    return NextResponse.json({ ok: true, sentTo: maskEmail(member.email) })
   } catch (error) {
     console.error('[join/session-result]', error.message)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
