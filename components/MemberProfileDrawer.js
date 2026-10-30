@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useLayoutEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { X, Phone, KeyRound, History, User, ShieldAlert, DoorOpen, UserCheck, ChevronDown, Loader2 } from 'lucide-react'
 import { formatPhone } from '@/lib/phone'
 import { fillSuggestedPin } from '@/lib/suggestPin'
@@ -148,7 +149,9 @@ function MembershipTypeControl({ member, gymSlug, onPlanChanged }) {
   const [message, setMessage] = useState(null)      // confirm-step error, or success text
   const [done,    setDone]    = useState(false)
   const [reload,  setReload]  = useState(0)
-  const wrapRef = useRef(null)
+  const wrapRef    = useRef(null)   // the type value (trigger) — menu anchors to it
+  const menuRef    = useRef(null)   // the portaled menu
+  const [menuPos, setMenuPos] = useState(null)   // fixed-position style for the menu
   const auth = () => ({ Authorization: `Bearer ${localStorage.getItem('ik_token')}` })
   const typeLabel = formatMembershipTypeDisplay(member.membershipType) || '—'
 
@@ -177,15 +180,46 @@ function MembershipTypeControl({ member, gymSlug, onPlanChanged }) {
     return () => { cancelled = true }
   }, [allowed, gymSlug, member.id, member.status, reload])
 
-  // Close the dropdown on outside click / Escape
+  // Close the dropdown on outside click / Escape (the menu lives in a portal,
+  // so "inside" means the trigger OR the menu)
   useEffect(() => {
     if (!open) return
-    const onDown = e => { if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false) }
+    const onDown = e => {
+      if (wrapRef.current?.contains(e.target) || menuRef.current?.contains(e.target)) return
+      setOpen(false)
+    }
     const onKey  = e => { if (e.key === 'Escape') { e.stopPropagation(); setOpen(false) } }
     document.addEventListener('mousedown', onDown)
     document.addEventListener('keydown', onKey, true)
     return () => { document.removeEventListener('mousedown', onDown); document.removeEventListener('keydown', onKey, true) }
   }, [open])
+
+  // Position the portaled menu (fixed, right-aligned, 4px from the value).
+  // Opens upward when there isn't room below; height is capped to the space
+  // available so it scrolls instead of leaving the viewport.
+  useLayoutEffect(() => {
+    if (!open) { setMenuPos(null); return }
+    const GAP = 4, MARGIN = 8
+    function place() {
+      const anchor = wrapRef.current?.getBoundingClientRect()
+      if (!anchor) return
+      const menuH = menuRef.current?.scrollHeight ?? 0
+      const below = window.innerHeight - anchor.bottom - GAP - MARGIN
+      const above = anchor.top - GAP - MARGIN
+      const up    = menuH > below && above > below
+      setMenuPos({
+        position:  'fixed',
+        right:     Math.max(MARGIN, window.innerWidth - anchor.right),
+        ...(up ? { bottom: window.innerHeight - anchor.top + GAP } : { top: anchor.bottom + GAP }),
+        maxHeight: Math.max(80, up ? above : below),
+      })
+    }
+    place()
+    // capture: true also catches scrolling inside the drawer's own scroll container
+    window.addEventListener('scroll', place, true)
+    window.addEventListener('resize', place)
+    return () => { window.removeEventListener('scroll', place, true); window.removeEventListener('resize', place) }
+  }, [open, plan])
 
   const external    = plan?.canChange === false && plan.reason === 'external_subscription'
   const interactive = allowed && member.status !== 'CANCELED' && (plan?.canChange || external)
@@ -235,28 +269,36 @@ function MembershipTypeControl({ member, gymSlug, onPlanChanged }) {
             </span>
           )}
 
-          {open && interactive && (
-            <div role="listbox" className="absolute right-0 top-full mt-1 z-20 min-w-[220px] max-w-[280px] rounded-lg border border-neutral-700 bg-[#252525] shadow-xl py-1">
-              {external ? (
-                <p className="px-3 py-2 text-[11px] text-amber-400">{plan.message}</p>
-              ) : (
-                plan.options.map(o => (
-                  <button
-                    key={o.priceId}
-                    type="button"
-                    role="option"
-                    onClick={() => { setChoice(o); setOpen(false); setMessage(null) }}
-                    className="w-full flex items-center justify-between gap-3 px-3 py-1.5 text-left text-xs text-zinc-200 hover:bg-white/5"
-                  >
-                    <span className="truncate">{(o.name ?? '').toLowerCase()}</span>
-                    <span className="shrink-0 text-zinc-500">{money(o.amount, o.currency)}{per(o)}</span>
-                  </button>
-                ))
-              )}
-            </div>
-          )}
         </div>
       </DrawerField>
+
+      {/* Portaled so the section card's overflow-hidden / rounded corners can't clip it */}
+      {open && interactive && typeof document !== 'undefined' && createPortal(
+        <div
+          ref={menuRef}
+          role="listbox"
+          style={menuPos ?? { position: 'fixed', top: -9999, right: 0, visibility: 'hidden' }}
+          className="z-[60] min-w-[220px] max-w-[280px] overflow-y-auto rounded-lg border border-neutral-700 bg-[#252525] shadow-xl py-1"
+        >
+          {external ? (
+            <p className="px-3 py-2 text-[11px] text-amber-400">{plan.message}</p>
+          ) : (
+            plan.options.map(o => (
+              <button
+                key={o.priceId}
+                type="button"
+                role="option"
+                onClick={() => { setChoice(o); setOpen(false); setMessage(null) }}
+                className="w-full flex items-center justify-between gap-3 px-3 py-1.5 text-left text-xs text-zinc-200 hover:bg-white/5"
+              >
+                <span className="truncate">{(o.name ?? '').toLowerCase()}</span>
+                <span className="shrink-0 text-zinc-500">{money(o.amount, o.currency)}{per(o)}</span>
+              </button>
+            ))
+          )}
+        </div>,
+        document.body,
+      )}
 
       {choice && plan?.canChange && (
         <div className="rounded-lg border border-neutral-700 bg-neutral-900 p-3 space-y-2 mt-1">
