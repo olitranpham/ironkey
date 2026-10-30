@@ -231,15 +231,24 @@ function EditGymModal({ gym, onClose, onUpdated, onDeleted, adminToken }) {
     }
   }
 
+  // Lock background page scroll while the modal is open
+  useEffect(() => {
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => { document.body.style.overflow = prev }
+  }, [])
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/70" onClick={!loading ? onClose : undefined} />
-      <div className="relative bg-[#1c1c1c] border border-neutral-800 rounded-xl w-full max-w-sm p-6 shadow-2xl">
-        <div className="flex items-center justify-between mb-5">
+      {/* Fixed header + footer; only the field area scrolls */}
+      <div className="relative bg-[#1c1c1c] border border-neutral-800 rounded-xl w-full max-w-sm shadow-2xl flex flex-col max-h-[calc(100vh-64px)]">
+        <div className="shrink-0 flex items-center justify-between px-6 pt-6 pb-5">
           <p className="text-sm font-semibold text-white">edit — {gym.name.toLowerCase()}</p>
           <button onClick={onClose} disabled={loading} className="p-1.5 rounded-lg text-neutral-600 hover:text-white hover:bg-white/5 transition-colors"><X size={14} /></button>
         </div>
-        <form onSubmit={handleSubmit} className="space-y-3">
+        <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
+          <div className="flex-1 min-h-0 overflow-y-auto px-6 space-y-3">
           <Field label="gym name" value={name} onChange={setName} />
           <Field label="slug"     value={slug} onChange={setSlug} mono />
           <Field label="seam device id" value={seamDeviceId} onChange={setSeamDeviceId} mono />
@@ -263,15 +272,6 @@ function EditGymModal({ gym, onClose, onUpdated, onDeleted, adminToken }) {
           <Field label="zapier overdue webhook url" value={zapierOverdueWebhookUrl} onChange={setZapierOverdueWebhookUrl} placeholder="https://hooks.zapier.com/…" />
           <Field label="zapier membership request webhook url" value={zapierMembershipRequestWebhookUrl} onChange={setZapierMembershipRequestWebhookUrl} placeholder="https://hooks.zapier.com/…" />
           <Field label="zapier lead invite webhook url" value={leadWebhookUrl} onChange={setLeadWebhookUrl} placeholder="https://hooks.zapier.com/…" />
-          {error && <p className="text-xs text-red-400">{error}</p>}
-          <div className="flex gap-2 pt-2">
-            <button type="button" onClick={onClose} disabled={loading} className="flex-1 py-2 rounded-lg text-xs font-medium border border-neutral-700 text-neutral-400 hover:text-white disabled:opacity-40 transition-colors">
-              cancel
-            </button>
-            <button type="submit" disabled={loading || saved} className={`flex-1 py-2 rounded-lg text-xs font-medium transition-colors disabled:opacity-40 ${saved ? 'bg-emerald-500 text-white' : 'bg-white text-[#1c1c1c] hover:bg-neutral-200'}`}>
-              {loading ? 'saving…' : saved ? '✓ saved' : 'save'}
-            </button>
-          </div>
 
           {/* Delete */}
           <div className="border-t border-neutral-800 pt-4 mt-2">
@@ -296,6 +296,20 @@ function EditGymModal({ gym, onClose, onUpdated, onDeleted, adminToken }) {
                 </div>
               </div>
             )}
+          </div>
+          </div>
+
+          {/* Footer — stays fixed below the scrolling fields */}
+          <div className="shrink-0 px-6 pt-3 pb-6 border-t border-neutral-800 mt-3 space-y-2">
+            {error && <p className="text-xs text-red-400">{error}</p>}
+            <div className="flex gap-2">
+            <button type="button" onClick={onClose} disabled={loading} className="flex-1 py-2 rounded-lg text-xs font-medium border border-neutral-700 text-neutral-400 hover:text-white disabled:opacity-40 transition-colors">
+              cancel
+            </button>
+            <button type="submit" disabled={loading || saved} className={`flex-1 py-2 rounded-lg text-xs font-medium transition-colors disabled:opacity-40 ${saved ? 'bg-emerald-500 text-white' : 'bg-white text-[#1c1c1c] hover:bg-neutral-200'}`}>
+              {loading ? 'saving…' : saved ? '✓ saved' : 'save'}
+            </button>
+            </div>
           </div>
         </form>
       </div>
