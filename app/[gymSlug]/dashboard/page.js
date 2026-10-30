@@ -435,6 +435,10 @@ export default function DashboardPage() {
         onRemoveMember={() => { setRemoveError(null); setRemoveTarget(selectedMember) }}
         onReverseCancel={() => handleReverseCancel(selectedMember.id)}
         updating={updatingStatus}
+        onPlanChanged={updated => {
+          setMembers(prev => prev.map(m => m.id === updated.id ? { ...m, ...updated } : m))
+          setSelectedMember(prev => prev?.id === updated.id ? { ...prev, ...updated } : prev)
+        }}
       />
 
       {/* ── Remove member confirm modal ───────────────────────────────────── */}

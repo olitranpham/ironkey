@@ -522,6 +522,10 @@ export default function MembersPage() {
         onSaveAccessCode={handleSaveAccessCode}
         onSaveField={handleSaveField}
         updating={actionLoading}
+        onPlanChanged={updated => {
+          setMembers(prev => prev.map(m => m.id === updated.id ? { ...m, ...updated } : m))
+          setSelectedMember(prev => prev?.id === updated.id ? { ...prev, ...updated } : prev)
+        }}
       />
 
       {/* ── Confirm modal ─────────────────────────────────────────────────── */}

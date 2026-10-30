@@ -429,8 +429,13 @@ model MembershipEvent {
   id       String   @id @default(cuid())
   memberId String
   gymId    String
-  type     String   // 'joined' | 'reactivated' | 'frozen' | 'unfrozen' | 'canceled'
+  type     String   // 'joined' | 'reactivated' | 'frozen' | 'unfrozen' | 'canceled' | 'plan_changed'
   date     DateTime @default(now())
+
+  // plan_changed: { fromType, toType, fromPriceId, toPriceId, fromAmount, toAmount, currency, effectiveAt }
+  meta     Json?
+  // GymUser who made the change (null for webhook/system events)
+  actorId  String?
 
   member   Member   @relation(fields: [memberId], references: [id], onDelete: Cascade)
 

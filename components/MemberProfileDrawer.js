@@ -133,7 +133,104 @@ function ImageLightbox({ src, onClose }) {
 
 // ── Drawer content ────────────────────────────────────────────────────────────
 
-function DrawerContent({ member, gymSlug, membershipBorder, onClose, onStatusChange, onSaveAccessCode, onSaveField, onDeleteCode, onRemoveMember, onReverseCancel, updating, simplified }) {
+// ── Change membership (Stripe-backed; requires billing.act) ───────────────────
+const money = (cents, currency = 'usd') =>
+  cents == null ? '—' : new Intl.NumberFormat(undefined, { style: 'currency', currency: currency.toUpperCase() }).format(cents / 100)
+const per = o => (o?.interval ? `/${o.intervalCount > 1 ? `${o.intervalCount} ` : ''}${o.interval}` : '')
+
+function ChangeMembership({ member, gymSlug, onPlanChanged }) {
+  const [allowed, setAllowed] = useState(false)
+  const [state,   setState]   = useState('idle')   // idle | loading | ready | blocked | confirm | saving | done
+  const [plan,    setPlan]    = useState(null)
+  const [choice,  setChoice]  = useState('')
+  const [message, setMessage] = useState(null)
+  const auth = () => ({ Authorization: `Bearer ${localStorage.getItem('ik_token')}` })
+
+  // Only users with billing.act see the control (no Stripe call here)
+  useEffect(() => {
+    fetch(`/api/${gymSlug}/me`, { headers: auth() })
+      .then(r => (r.ok ? r.json() : null))
+      .then(me => setAllowed(Boolean(me?.permissions?.includes('billing.act'))))
+      .catch(() => setAllowed(false))
+  }, [gymSlug])
+
+  // Reset when a different member is shown
+  useEffect(() => { setState('idle'); setPlan(null); setChoice(''); setMessage(null) }, [member.id])
+
+  if (!allowed || member.status === 'CANCELED') return null
+
+  async function open() {
+    setState('loading'); setMessage(null)
+    try {
+      const res  = await fetch(`/api/${gymSlug}/members/${member.id}/plan`, { headers: auth() })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(json.error || 'could not load plans')
+      setPlan(json)
+      if (!json.canChange) { setMessage(json.message); setState('blocked'); return }
+      setChoice(json.options[0]?.priceId ?? '')
+      setState('ready')
+    } catch (err) { setMessage(err.message); setState('blocked') }
+  }
+
+  async function save() {
+    setState('saving'); setMessage(null)
+    try {
+      const res  = await fetch(`/api/${gymSlug}/members/${member.id}/plan`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json', ...auth() }, body: JSON.stringify({ priceId: choice }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(json.error || 'stripe rejected the change')   // e.g. the Stripe error message
+      onPlanChanged?.(json.member)
+      setMessage(json.warning || 'membership changed. the new price starts at the next renewal.')
+      setState('done')
+    } catch (err) { setMessage(err.message); setState('confirm') }
+  }
+
+  const target = plan?.options?.find(o => o.priceId === choice)
+  const when   = plan?.effectiveAt ? new Date(plan.effectiveAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }).toLowerCase() : 'the next renewal'
+  const btn    = 'text-[11px] px-2.5 py-1 rounded-md border border-neutral-700 text-neutral-300 hover:text-white hover:border-neutral-500 disabled:opacity-40 transition-colors'
+
+  return (
+    <div className="mt-2 space-y-2">
+      {state === 'idle' && <button type="button" onClick={open} className={btn}>change membership</button>}
+      {state === 'loading' && <p className="text-[11px] text-neutral-500">checking subscription…</p>}
+      {state === 'blocked' && <p className="text-[11px] text-amber-400">{message}</p>}
+      {state === 'ready' && (
+        <div className="flex items-center gap-2">
+          <select value={choice} onChange={e => setChoice(e.target.value)}
+            className="bg-[#252525] border border-neutral-700 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-neutral-500">
+            {plan.options.map(o => (
+              <option key={o.priceId} value={o.priceId}>{(o.name ?? '').toLowerCase()} — {money(o.amount, o.currency)}{per(o)}</option>
+            ))}
+          </select>
+          <button type="button" onClick={() => setState('confirm')} disabled={!choice} className={btn}>continue</button>
+          <button type="button" onClick={() => setState('idle')} className="text-[11px] text-neutral-500 hover:text-neutral-300">cancel</button>
+        </div>
+      )}
+      {(state === 'confirm' || state === 'saving') && target && (
+        <div className="rounded-lg border border-neutral-700 bg-neutral-900 p-3 space-y-2">
+          <p className="text-xs text-neutral-300">
+            {(plan.current.name ?? member.membershipType ?? '').toLowerCase()} {money(plan.current.amount, plan.current.currency)}{per(plan.current)}
+            {' → '}
+            <span className="text-white font-semibold">{(target.name ?? '').toLowerCase()} {money(target.amount, target.currency)}{per(target)}</span>
+          </p>
+          <p className="text-[11px] text-neutral-500">
+            takes effect at the next renewal ({when}). no proration, nothing is charged now.
+            {plan.paused ? ' billing stays paused while the member is frozen.' : ''}
+          </p>
+          {message && <p className="text-[11px] text-red-400">{message}</p>}
+          <div className="flex gap-2">
+            <button type="button" onClick={save} disabled={state === 'saving'} className={btn}>{state === 'saving' ? 'changing…' : 'confirm change'}</button>
+            <button type="button" onClick={() => { setState('ready'); setMessage(null) }} disabled={state === 'saving'} className="text-[11px] text-neutral-500 hover:text-neutral-300">back</button>
+          </div>
+        </div>
+      )}
+      {state === 'done' && <p className="text-[11px] text-emerald-400">{message}</p>}
+    </div>
+  )
+}
+
+function DrawerContent({ member, gymSlug, membershipBorder, onClose, onStatusChange, onSaveAccessCode, onSaveField, onDeleteCode, onRemoveMember, onReverseCancel, onPlanChanged, updating, simplified }) {
   const initials = (member.firstName?.[0] ?? '') + (member.lastName?.[0] ?? '')
 
   // Student graduation tracking — gated by gym + membershipType.
@@ -758,6 +855,7 @@ function DrawerContent({ member, gymSlug, membershipBorder, onClose, onStatusCha
         {/* Membership */}
         <DrawerSection icon={KeyRound} title="membership">
           <DrawerField label="type" value={formatMembershipTypeDisplay(member.membershipType) || '—'} />
+          {!simplified && <ChangeMembership member={member} gymSlug={gymSlug} onPlanChanged={onPlanChanged} />}
 
           {/* Hydra's bundled Student/Military/EMT plan — category picker first */}
           {isHydraBundledPlan && (
@@ -1053,6 +1151,7 @@ export default function MemberProfileDrawer({
   onDeleteCode,
   onRemoveMember,
   onReverseCancel,
+  onPlanChanged,
   updating = false,
   simplified = false,
 }) {
@@ -1085,6 +1184,7 @@ export default function MemberProfileDrawer({
             onDeleteCode={onDeleteCode}
             onRemoveMember={onRemoveMember}
             onReverseCancel={onReverseCancel}
+            onPlanChanged={onPlanChanged}
             updating={updating}
             simplified={simplified}
           />

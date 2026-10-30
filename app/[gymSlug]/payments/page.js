@@ -380,8 +380,22 @@ function PaymentPanel({ member, gymSlug, onClose, onAction, onSaveField, actionL
   const [ecPhoneInput,        setEcPhoneInput]        = useState(member.emergencyContactPhone            ?? '')
   const [ecRelInput,          setEcRelInput]          = useState(member.emergencyContactRelationship     ?? '')
   const [membershipTypeInput, setMembershipTypeInput] = useState(member.membershipType                   ?? '')
+  // Free-text type editing is only for subscriptions Ironkey can't change
+  // (created in the Stripe dashboard) — staff mirror the dashboard change here.
+  const [externalSub,         setExternalSub]         = useState(false)
   const [subIdInput,          setSubIdInput]          = useState(member.stripeSubscriptionId             ?? '')
   const [custIdInput,         setCustIdInput]         = useState(member.stripeCustomerId                 ?? '')
+
+  useEffect(() => {
+    let cancelled = false
+    setExternalSub(false)
+    if (!member.stripeSubscriptionId || member.status === 'CANCELED') return
+    fetch(`/api/${gymSlug}/members/${member.id}/plan`, { headers: { Authorization: `Bearer ${localStorage.getItem('ik_token')}` } })
+      .then(r => (r.ok ? r.json() : null))
+      .then(json => { if (!cancelled) setExternalSub(json?.reason === 'external_subscription') })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [gymSlug, member.id, member.stripeSubscriptionId, member.status])
 
   // ── saving state ─────────────────────────────────────────────────────────────
   const [savingName,           setSavingName]           = useState(false)
@@ -557,14 +571,21 @@ function PaymentPanel({ member, gymSlug, onClose, onAction, onSaveField, actionL
 
         {/* Membership */}
         <DrawerSection icon={KeyRound} title="membership">
-          <DrawerField label="type">
-            <div className="flex items-center gap-2 ml-4">
-              <input type="text" value={membershipTypeInput} onChange={e => setMembershipTypeInput(e.target.value)} className={`${INPUT} w-36`} />
-              <button onClick={() => save({ membershipType: membershipTypeInput.trim() }, setSavingMembershipType)} disabled={savingMembershipType || membershipTypeInput.trim() === (member.membershipType ?? '')} className={SAVE_BTN}>
-                {savingMembershipType ? '…' : 'save'}
-              </button>
-            </div>
-          </DrawerField>
+          {externalSub ? (
+            <>
+              <DrawerField label="type">
+                <div className="flex items-center gap-2 ml-4">
+                  <input type="text" value={membershipTypeInput} onChange={e => setMembershipTypeInput(e.target.value)} className={`${INPUT} w-36`} />
+                  <button onClick={() => save({ membershipType: membershipTypeInput.trim() }, setSavingMembershipType)} disabled={savingMembershipType || membershipTypeInput.trim() === (member.membershipType ?? '')} className={SAVE_BTN}>
+                    {savingMembershipType ? '…' : 'save'}
+                  </button>
+                </div>
+              </DrawerField>
+              <p className="text-[11px] text-neutral-500 mt-1">this subscription was created outside ironkey — change the plan in stripe, then update the type here to match.</p>
+            </>
+          ) : (
+            <DrawerField label="type" value={member.membershipType || '—'} />
+          )}
         </DrawerSection>
 
         {/* Billing */}

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import prisma from '@/lib/prisma'
+import { OASIS_MEMBERSHIP_PRODUCT_IDS } from '@/lib/membershipPlans'
 import { planRequiresStudentId } from '@/lib/studentIdPlans'
 
 // Hydra's bundled Student/Military/Police/EMT membership product — matched by
@@ -91,15 +92,8 @@ export async function GET(request, { params }) {
           .map(toplan)
           .sort((a, b) => a.amount - b.amount)
       } else if (gymSlug === 'oasis-boston') {
-        const OASIS_PRODUCT_IDS = new Set([
-          'prod_Ucv94U6uvm7am9', // Semiannual Student Membership
-          'prod_Ucv9fkBOT5aDKS', // Semiannual General Membership
-          'prod_Ucv729ZXdrh80c', // Student Membership
-          'prod_Ucv6OCNGmeTpA7', // General Membership
-          'prod_T4wCwq1jBQDqhy', // Flex Membership
-        ])
         membershipPlans = recurring
-          .filter(p => OASIS_PRODUCT_IDS.has(p.product?.id) || isTaggedMembership(p))
+          .filter(p => OASIS_MEMBERSHIP_PRODUCT_IDS.has(p.product?.id) || isTaggedMembership(p))
           .map(toplan)
           .sort((a, b) => a.amount - b.amount)
 
