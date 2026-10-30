@@ -79,14 +79,20 @@ function GymCard({ gym, onEdit, onOpenPortal }) {
           <span className="text-[11px] text-neutral-600">stripe</span>
           <StatusBadge on={gym.hasStripe} />
         </div>
-        <div className="flex items-center gap-1.5">
-          <span className="text-[11px] text-neutral-600">seam</span>
-          <StatusBadge on={gym.hasSeam} />
-        </div>
-        <div className="flex items-center gap-1.5">
-          <span className="text-[11px] text-neutral-600">kisi</span>
-          <StatusBadge on={gym.hasKisi} />
-        </div>
+        {/* Door-access provider: only the one this gym uses. accessProvider is a
+            non-null enum (default SEAM); it's only missing on a just-created gym
+            from the POST response, which is SEAM by default. */}
+        {(gym.accessProvider ?? 'SEAM') === 'KISI' ? (
+          <div className="flex items-center gap-1.5">
+            <span className="text-[11px] text-neutral-600">kisi</span>
+            <StatusBadge on={gym.hasKisi} />
+          </div>
+        ) : (
+          <div className="flex items-center gap-1.5">
+            <span className="text-[11px] text-neutral-600">seam</span>
+            <StatusBadge on={gym.hasSeam} />
+          </div>
+        )}
       </div>
 
       {/* Actions */}
