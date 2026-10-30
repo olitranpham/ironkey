@@ -253,6 +253,7 @@ export default function JoinPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const planParam = searchParams.get('plan')
+  const inviteToken = searchParams.get('invite')   // lead invite link from the staff portal
 
   const [gymName,          setGymName]          = useState('')
   const [gymLogo,          setGymLogo]          = useState(null)
@@ -307,6 +308,27 @@ export default function JoinPage() {
   const isStudent  = form.requiresStudentId
   const age        = form.dob ? calculateAge(form.dob) : null
   const isMinor    = age !== null && age < 18
+  // Lead invite: exchange the signed token for prefill fields (name, email,
+  // phone). They still choose a plan and complete the whole form, agreement
+  // and waiver. An invalid/expired token just leaves the form blank.
+  useEffect(() => {
+    if (!inviteToken) return
+    fetch(`/api/${gymSlug}/join/invite?token=${encodeURIComponent(inviteToken)}`)
+      .then(r => (r.ok ? r.json() : null))
+      .then(p => {
+        if (!p) return
+        setForm(f => ({
+          ...f,
+          firstName:    f.firstName    || p.firstName || '',
+          lastName:     f.lastName     || p.lastName  || '',
+          email:        f.email        || p.email     || '',
+          confirmEmail: f.confirmEmail || p.email     || '',
+          phone:        f.phone        || (p.phone ? maskPhone(p.phone) : ''),
+        }))
+      })
+      .catch(() => {})
+  }, [gymSlug, inviteToken])
+
   useEffect(() => {
     const query = planParam ? `?plan=${encodeURIComponent(planParam)}` : ''
     fetch(`/api/${gymSlug}/join${query}`)

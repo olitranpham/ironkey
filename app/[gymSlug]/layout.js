@@ -22,6 +22,7 @@ import {
   Dumbbell,
   Mail,
   Tag,
+  UserPlus,
 } from 'lucide-react'
 
 const NAV_GROUPS = [
@@ -39,6 +40,8 @@ const NAV_GROUPS = [
       { label: 'guest passes', slug: 'guest-passes', icon: Ticket },
     ],
     repGymPass: { label: 'partner check-ins', slug: 'partner-checkins', icon: Handshake },
+    // Shown only to users with leads.view (from /me)
+    leads: { label: 'leads', slug: 'leads', icon: UserPlus },
   },
   {
     label: 'billing',
@@ -99,6 +102,7 @@ function PortalLayout({ gymSlug, children }) {
   const [hasSeam,       setHasSeam]       = useState(false)
   const [hasKisi,       setHasKisi]       = useState(false)
   const [repGymPass,    setRepGymPass]    = useState(false)
+  const [canViewLeads,  setCanViewLeads]  = useState(false)
 
   // Set title synchronously before first paint — slug as immediate fallback,
   // then overwrite with real gym name from localStorage if available
@@ -142,6 +146,12 @@ function PortalLayout({ gymSlug, children }) {
         // Fall back to URL slug on error
         setGymName(gymSlug.toLowerCase())
       })
+
+    // Permissions — only the leads tab is gated on them for now
+    fetch(`/api/${gymSlug}/me`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => (r.ok ? r.json() : null))
+      .then(me => setCanViewLeads(Boolean(me?.permissions?.includes('leads.view'))))
+      .catch(() => setCanViewLeads(false))
   }, [gymSlug, router])
 
   const isActive = (slug) => pathname === `/${gymSlug}/${slug}`
@@ -222,6 +232,7 @@ function PortalLayout({ gymSlug, children }) {
               ...(group.seam && (hasSeam || hasKisi) ? [group.seam] : []),
               ...group.items,
               ...(group.repGymPass && repGymPass ? [group.repGymPass] : []),
+              ...(group.leads && canViewLeads ? [group.leads] : []),
             ]
             return (
               <div key={group.label} className={gi > 0 ? 'mt-4' : ''}>

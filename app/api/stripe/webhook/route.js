@@ -21,6 +21,27 @@ function normalizePhone(value) {
 }
 
 /**
+ * If a guest profile with this email has a Lead row at this gym that isn't
+ * converted yet, mark it converted. Failures are logged, never thrown.
+ */
+async function markLeadConverted(gym, email) {
+  try {
+    const normalized = (email ?? '').trim().toLowerCase()
+    if (!normalized) return
+    const { count } = await prisma.lead.updateMany({
+      where: { gymId: gym.id, status: { not: 'converted' }, guestProfile: { email: normalized } },
+      data:  { status: 'converted', convertedAt: new Date() },
+    })
+    if (count) {
+      console.log('[platform/webhook] lead converted gym=%s', gym.slug)
+      writeAudit({ gym, user: null }, 'lead.converted', 'Lead', null, { via: 'stripe_checkout' })
+    }
+  } catch (err) {
+    console.error('[platform/webhook] lead conversion update failed:', err.message)
+  }
+}
+
+/**
  * Deliver a purchase payload (with the door code) to a Zapier webhook and wait
  * up to 5 s. Never fails the Stripe webhook: a non-2xx / timeout / missing URL
  * is logged (gym slug + status) and audited as code.delivery_failed.
@@ -315,6 +336,11 @@ export async function POST(request) {
         if (zapStatus >= 400) {
           console.error('[platform/webhook] guest-passes notify failed:', zapStatus, redactObject(zapJson))
         } else {
+          // What the guest actually paid (cents, after discounts) — leads "total spent"
+          if (zapJson.pass?.id && Number.isInteger(session.amount_total)) {
+            await prisma.guestVisit.update({ where: { id: zapJson.pass.id }, data: { amountPaid: session.amount_total } })
+              .catch(e => console.error('[platform/webhook] amountPaid write failed:', e.message))
+          }
           savedPassesLeft = zapJson.pass?.passesLeft ?? savedPassesLeft
           console.log('[platform/webhook] guest-passes notified for', email, '| passType:', passType, '| savedPassesLeft:', savedPassesLeft)
 
@@ -584,6 +610,9 @@ export async function POST(request) {
     await prisma.membershipEvent.create({
       data: { memberId: member.id, gymId: gym.id, type: isNew ? 'joined' : 'reactivated' },
     })
+
+    // A lead at this gym with this email just became a member → converted
+    await markLeadConverted(gym, email)
 
     // ── Kisi gyms (DNA Strength only) — grant access, skip all Seam logic
     // below entirely, including the /members loopback (which exists only to

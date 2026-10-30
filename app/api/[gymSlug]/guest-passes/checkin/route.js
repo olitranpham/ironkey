@@ -263,6 +263,11 @@ export async function POST(request, { params }) {
       return DELIVERY_FAILED()
     }
 
+    // Record the visit (leads "visit count"). Written only once the check-in
+    // fully succeeded, so a rolled-back check-in leaves no row.
+    await prisma.guestCheckIn.create({ data: { gymId: gym.id, guestPassId: existing.id, guestProfileId: profile.id } })
+      .catch(e => console.error('[checkin] guestCheckIn write failed:', e.message))
+
     // The code is never returned — it's emailed by the gym's guest webhook
     return NextResponse.json({ ok: true, sentTo: maskEmail(profile.email), passesLeft: updated.passesLeft, expiresAt: codeExpiresAt })
   } catch (error) {

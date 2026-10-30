@@ -45,6 +45,8 @@ model Gym {
   lockboxCode                        String?
 
   zapierGuestWebhookUrl              String?
+  // Zapier "lead invite" — emails a lead their personalised join link
+  leadWebhookUrl                     String?
   zapierMemberWebhookUrl             String?
   zapierOverdueWebhookUrl            String?
   zapierMembershipRequestWebhookUrl  String?
@@ -64,6 +66,8 @@ model Gym {
   ptIntakes            PTIntake[]
   membershipRequests   MembershipRequest[]
   auditLogs            AuditLog[]
+  leads                Lead[]
+  guestCheckIns        GuestCheckIn[]
 }
 
 // ─── Member ───────────────────────────────────────────────────────────────────
@@ -198,6 +202,8 @@ model Guest {
 
   passes   GuestVisit[]
   waivers  GuestWaiver[]
+  leads    Lead[]
+  checkIns GuestCheckIn[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -234,6 +240,12 @@ model GuestVisit {
 
   usedAt    DateTime?
   expiresAt DateTime
+
+  // Stripe session.amount_total in cents — set by the platform webhook for
+  // purchases from this point on; null for older passes
+  amountPaid Int?
+
+  checkIns   GuestCheckIn[]
 
   createdAt DateTime @default(now())
 
@@ -298,6 +310,43 @@ model GuestWaiver {
   gym            Gym   @relation(fields: [gymId], references: [id])
 
   @@unique([guestProfileId, gymId])
+}
+
+// ─── GuestCheckIn ────────────────────────────────────────────────────────────
+// One row per successful kiosk guest check-in (from this point on; no backfill).
+
+model GuestCheckIn {
+  id             String     @id @default(cuid())
+  gymId          String
+  gym            Gym        @relation(fields: [gymId], references: [id], onDelete: Cascade)
+  guestPassId    String
+  guestPass      GuestVisit @relation(fields: [guestPassId], references: [id], onDelete: Cascade)
+  guestProfileId String?
+  guestProfile   Guest?     @relation(fields: [guestProfileId], references: [id], onDelete: SetNull)
+  createdAt      DateTime   @default(now())
+
+  @@index([gymId, guestProfileId])
+  @@index([guestPassId])
+}
+
+// ─── Lead ────────────────────────────────────────────────────────────────────
+// Staff-tracked status for a guest who isn't a member yet. A row exists only
+// once staff act on the lead (or it converts); no row = status "new".
+
+model Lead {
+  id             String    @id @default(cuid())
+  gymId          String
+  gym            Gym       @relation(fields: [gymId], references: [id], onDelete: Cascade)
+  guestProfileId String
+  guestProfile   Guest     @relation(fields: [guestProfileId], references: [id], onDelete: Cascade)
+  status         String    @default("new")   // 'new' | 'contacted' | 'converted'
+  contactedAt    DateTime?
+  convertedAt    DateTime?
+  notes          String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@unique([gymId, guestProfileId])
 }
 
 // ─── RepGymPassCheckin ────────────────────────────────────────────────────────

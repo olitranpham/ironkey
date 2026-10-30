@@ -35,6 +35,7 @@ export async function PATCH(request, { params }) {
     if (body.zapierGuestWebhookUrl   !== undefined) data.zapierGuestWebhookUrl   = body.zapierGuestWebhookUrl.trim()   || null
     if (body.zapierOverdueWebhookUrl !== undefined) data.zapierOverdueWebhookUrl = body.zapierOverdueWebhookUrl.trim() || null
     if (body.zapierMembershipRequestWebhookUrl !== undefined) data.zapierMembershipRequestWebhookUrl = body.zapierMembershipRequestWebhookUrl.trim() || null
+    if (body.leadWebhookUrl !== undefined) data.leadWebhookUrl = String(body.leadWebhookUrl).trim() || null
 
     console.log('[admin/gyms PATCH] gymId=%s writing fields=%j', gymId, Object.keys(data))
 
@@ -45,7 +46,7 @@ export async function PATCH(request, { params }) {
     const gym = await prisma.gym.update({
       where:  { id: gymId },
       data,
-      select: { id: true, name: true, slug: true, stripeAccountId: true, seamApiKey: true, seamDeviceId: true, accessProvider: true, kisiApiKey: true, kisiPlaceId: true, kisiMemberGroupId: true, kisiWeekendGroupId: true, zapierMemberWebhookUrl: true, zapierGuestWebhookUrl: true, zapierOverdueWebhookUrl: true, zapierMembershipRequestWebhookUrl: true },
+      select: { id: true, name: true, slug: true, stripeAccountId: true, seamApiKey: true, seamDeviceId: true, accessProvider: true, kisiApiKey: true, kisiPlaceId: true, kisiMemberGroupId: true, kisiWeekendGroupId: true, zapierMemberWebhookUrl: true, zapierGuestWebhookUrl: true, zapierOverdueWebhookUrl: true, zapierMembershipRequestWebhookUrl: true, leadWebhookUrl: true },
     })
     console.log('[admin/gyms PATCH] DB result: name=%j slug=%j seamDeviceId=%j accessProvider=%j', gym.name, gym.slug, gym.seamDeviceId, gym.accessProvider)
 
@@ -66,6 +67,7 @@ export async function PATCH(request, { params }) {
         zapierGuestWebhookUrl:   gym.zapierGuestWebhookUrl   ?? '',
         zapierOverdueWebhookUrl: gym.zapierOverdueWebhookUrl ?? '',
         zapierMembershipRequestWebhookUrl: gym.zapierMembershipRequestWebhookUrl ?? '',
+        leadWebhookUrl:     gym.leadWebhookUrl ?? '',
       },
     })
   } catch (error) {
