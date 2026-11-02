@@ -13,6 +13,7 @@ import { generateUniquePin } from '@/lib/pins'
 import { postWebhook } from '@/lib/guestCodeDelivery'
 import { OASIS_GYM_SLUG, OASIS_GUEST_PASS_PRODUCTS, isOasisGuestPassProduct } from '@/lib/oasisGuestPasses'
 import { recordCouponRedemption } from '@/lib/couponRedemption'
+import { resolvePackSize } from '@/lib/gymPassTypes'
 
 /** Trimmed string, or null for null/undefined/blank. */
 function normalizePhone(value) {
@@ -139,6 +140,14 @@ export async function POST(request) {
 
     // ── Guest pass purchase ─────────────────────────────────────────────────
     if (meta.source === 'guest_pass') {
+      // Repeated delivery of a session already recorded → no-op (no second
+      // pass, Seam code or email)
+      const recorded = await prisma.guestVisit.findUnique({ where: { stripeSessionId: session.id }, select: { id: true } })
+      if (recorded) {
+        console.log('[platform/webhook] guest pass already recorded for session', session.id, '— ignoring repeat delivery')
+        return NextResponse.json({ received: true })
+      }
+
       const guestName  = meta.guestName ?? ''
       const email      = (session.customer_email ?? meta.email ?? '').toLowerCase()
       // Ironkey checkout form phone (session metadata): formatted, trimmed, blank → null.
@@ -146,7 +155,7 @@ export async function POST(request) {
       const phone      = normalizePhone(formatPhone(meta.phone || null))
       const passesLeft = parseInt(meta.passesLeft, 10) || 1
 
-      // Expand line items to log the price/product IDs for debugging
+      // Expand line items — the price/product IDs give the pass type and pack size
       let lineItemPriceId   = null
       let lineItemProductId = null
       let lineItemProduct   = null   // expanded product object (id + metadata), when available
@@ -231,6 +240,9 @@ export async function POST(request) {
         if (!existingWaiver) {
           await prisma.guestWaiver.create({
             data: { guestProfileId: guestProfile.id, gymId: gym.id },
+          }).catch(err => {
+            // A concurrent delivery of this session created it first
+            if (err.code !== 'P2002') throw err
           })
         }
       }
@@ -333,15 +345,20 @@ export async function POST(request) {
           passType:   passType.toLowerCase(),
           passesLeft: passType === 'SINGLE' ? null : passesLeft,
           accessCode,
+          stripeSessionId: session.id,
+          stripePriceId:   lineItemPriceId,
+          packSize:        resolvePackSize(gymSlug, { priceId: lineItemPriceId, product: lineItemProduct ?? lineItemProductId }),
+          // What the guest actually paid (cents, after discounts)
+          amountPaid:      session.amount_total,
         })
+        if (zapJson.duplicate) {
+          // A concurrent delivery of this session recorded it first
+          console.log('[platform/webhook] guest pass already recorded for session', session.id, '— skipping delivery')
+          return NextResponse.json({ received: true })
+        }
         if (zapStatus >= 400) {
           console.error('[platform/webhook] guest-passes notify failed:', zapStatus, redactObject(zapJson))
         } else {
-          // What the guest actually paid (cents, after discounts) — leads "total spent"
-          if (zapJson.pass?.id && Number.isInteger(session.amount_total)) {
-            await prisma.guestVisit.update({ where: { id: zapJson.pass.id }, data: { amountPaid: session.amount_total } })
-              .catch(e => console.error('[platform/webhook] amountPaid write failed:', e.message))
-          }
           savedPassesLeft = zapJson.pass?.passesLeft ?? savedPassesLeft
           console.log('[platform/webhook] guest-passes notified for', email, '| passType:', passType, '| savedPassesLeft:', savedPassesLeft)
 

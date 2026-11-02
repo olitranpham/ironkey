@@ -20,7 +20,8 @@ export async function POST(request, { params }) {
     const auth = await authorizeIntake(request, gymSlug, 'door.manage', 'POST /api/[gymSlug]/guest-passes')
     if (auth.errorResponse) return auth.errorResponse
 
-    const body = await request.json()
+    // Stripe fields are set only by the platform webhook, never by Zapier
+    const { stripeSessionId, stripePriceId, packSize, amountPaid, ...body } = await request.json()
     const { status, json } = await intakeGuestPass(gymSlug, body)
     return NextResponse.json(json, { status })
   } catch (error) {

@@ -248,6 +248,14 @@ model GuestVisit {
   // purchases from this point on; null for older passes
   amountPaid Int?
 
+  // Checkout session that created this pass — unique, so a repeated webhook
+  // delivery can't create a second row. Null for Zapier/imported passes.
+  stripeSessionId String? @unique
+  stripePriceId   String?
+  // Passes in the purchased pack (1 for a single), resolved from the price
+  // ID at purchase. Null for older passes — see packSizeForPass().
+  packSize        Int?
+
   checkIns   GuestCheckIn[]
 
   createdAt DateTime @default(now())
