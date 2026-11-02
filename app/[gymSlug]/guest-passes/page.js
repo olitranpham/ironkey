@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation'
 import { Search, RefreshCw, TrendingUp, AlertTriangle } from 'lucide-react'
 import { getGymTheme } from '@/lib/gymThemes'
 import { GuestProfilePanel, fmtDate } from '@/components/GuestProfilePanel'
+import { monthKey, DEFAULT_GYM_TIME_ZONE } from '@/lib/etMonth'
 import {
   AreaChart,
   Area,
@@ -31,13 +32,11 @@ const PASS_TAB_TYPE = {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-// Returns 'YYYY-MM' for a pass record using createdAt as the purchase month
-function passMonth(pass) {
-  const raw = pass.usedAt ?? pass.createdAt
-  if (!raw) return null
-  const d = new Date(raw)
-  if (isNaN(d.getTime())) return null
-  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`
+// Purchase month ('YYYY-MM') in the gym's timezone — the same bucketing as
+// the revenue page. usedAt is only "last used"; a check-in rewrites it, so it
+// would move a pack into whatever month it was last used.
+function passMonth(pass, timeZone) {
+  return monthKey(pass.createdAt, timeZone)
 }
 
 function fmtMonth(yyyymm) {
@@ -160,6 +159,7 @@ export default function GuestPassesPage() {
   const [search,      setSearch]      = useState('')
   const [activeTab,   setActiveTab]   = useState('all')
   const [monthFilter, setMonthFilter] = useState('')
+  const [timeZone,    setTimeZone]    = useState(DEFAULT_GYM_TIME_ZONE)
 
   const [selectedProfile, setSelectedProfile] = useState(null)
   const [panelOpen,       setPanelOpen]       = useState(false)
@@ -188,6 +188,7 @@ export default function GuestPassesPage() {
       setUnlinked(data.unlinked ?? [])
       setTotalCount(data.totalCount ?? null)
       setCountByType(data.countByType ?? {})
+      setTimeZone(data.timeZone ?? DEFAULT_GYM_TIME_ZONE)
       setFetchErr(null)
       if (statsRes.ok) {
         const stats = await statsRes.json()
@@ -317,15 +318,15 @@ export default function GuestPassesPage() {
   })]
 
   // Months present across all passes (unfiltered), sorted most recent first
-  const availableMonths = [...new Set(allPasses.map(passMonth).filter(Boolean))]
+  const availableMonths = [...new Set(allPasses.map(p => passMonth(p, timeZone)).filter(Boolean))]
     .sort((a, b) => b.localeCompare(a))
 
   // When a month is selected, trim each guest's passes to only those in that month.
   // A guest with 14 passes across many months only appears in the month(s) where
-  // they have a pass with usedAt in that month — and only with those passes.
+  // they bought a pass — and only with those passes.
   const guestsForView = monthFilter
     ? unified
-        .map(g => ({ ...g, passes: g.passes.filter(p => passMonth(p) === monthFilter) }))
+        .map(g => ({ ...g, passes: g.passes.filter(p => passMonth(p, timeZone) === monthFilter) }))
         .filter(g => g.passes.length > 0)
     : unified
 

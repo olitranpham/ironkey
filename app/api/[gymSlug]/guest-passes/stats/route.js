@@ -1,11 +1,12 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { requirePermission } from '@/lib/permissions'
+import { monthKey, DEFAULT_GYM_TIME_ZONE } from '@/lib/etMonth'
 
 /**
  * GET /api/[gymSlug]/guest-passes/stats
- * Returns monthly guest pass counts from the first purchase date to now.
- * Only counts passes where usedAt is not null.
+ * Returns monthly guest pass purchase counts (by createdAt, in the gym's
+ * timezone — same months as the revenue page) from the first purchase to now.
  * Requires JWT (staff portal endpoint).
  */
 export async function GET(request, { params }) {
@@ -16,7 +17,7 @@ export async function GET(request, { params }) {
 
     const gym = await prisma.gym.findUnique({
       where:  { slug: gymSlug },
-      select: { id: true },
+      select: { id: true, timezone: true },
     })
     if (!gym) {
       return NextResponse.json({ error: 'Gym not found' }, { status: 404 })
@@ -24,28 +25,26 @@ export async function GET(request, { params }) {
 
     const passes = await prisma.guestVisit.findMany({
       where:  { gymId: gym.id },
-      select: { usedAt: true, createdAt: true },
+      select: { createdAt: true },
     })
+    const timeZone = gym.timezone || DEFAULT_GYM_TIME_ZONE
 
     if (!passes.length) {
       return NextResponse.json({ data: [] })
     }
 
-    // Group by YYYY-MM using usedAt, falling back to createdAt for imported passes
+    // Group by purchase month — usedAt is rewritten by every check-in
     const counts = {}
     for (const p of passes) {
-      const raw = p.usedAt ?? p.createdAt
-      if (!raw) continue
-      const d   = new Date(raw)
-      const key = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`
+      const key = monthKey(p.createdAt, timeZone)
+      if (!key) continue
       counts[key] = (counts[key] ?? 0) + 1
     }
 
     // Fill every month from earliest to now so the chart has no gaps
     const keys   = Object.keys(counts).sort()
     const first  = keys[0].split('-').map(Number)
-    const now    = new Date()
-    const endKey = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`
+    const endKey = monthKey(new Date(), timeZone)
 
     const data = []
     let y = first[0], m = first[1]

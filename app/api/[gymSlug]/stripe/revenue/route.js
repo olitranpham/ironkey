@@ -2,30 +2,12 @@ import { NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import prisma from '@/lib/prisma'
 import { requirePermission } from '@/lib/permissions'
+import { monthStart, DEFAULT_GYM_TIME_ZONE } from '@/lib/etMonth'
 
 // ── Server-side cache ─────────────────────────────────────────────────────────
 
 const revenueCache = new Map()
 const CACHE_TTL    = 30 * 60 * 1000  // 30 minutes
-
-// Midnight on the 1st of `year`-`month` (0-indexed), as a UTC epoch second,
-// interpreted in `timeZone` rather than the server process's own local time.
-// Without this, "this month" silently follows whatever TZ the server
-// happens to run in (e.g. Railway's container defaults to UTC) instead of
-// the gym's actual local day — pushing early/late-month charges into the
-// wrong bucket relative to what a gym owner sees on their own clock.
-function monthStart(year, month, timeZone = 'America/New_York') {
-  const utcGuess = Date.UTC(year, month, 1)
-  const fmt = new Intl.DateTimeFormat('en-US', {
-    timeZone, hourCycle: 'h23',
-    year: 'numeric', month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit', second: '2-digit',
-  })
-  const parts = Object.fromEntries(fmt.formatToParts(utcGuess).map(p => [p.type, p.value]))
-  const asUTC = Date.UTC(+parts.year, +parts.month - 1, +parts.day, +parts.hour, +parts.minute, +parts.second)
-  const offsetMs = asUTC - utcGuess
-  return Math.floor((utcGuess - offsetMs) / 1000)
-}
 
 // Fallback keyword match for one-time payments whose Checkout Session predates
 // (or is otherwise missing) the metadata.source tagging — mirrors the keyword
@@ -93,7 +75,7 @@ export async function GET(request, { params }) {
     }
 
     const stripe   = new Stripe(gym.stripeSecretKey, { apiVersion: '2024-06-20' })
-    const gymTz    = gym.timezone || 'America/New_York'
+    const gymTz    = gym.timezone || DEFAULT_GYM_TIME_ZONE
 
     // "Now" in the gym's own timezone, not the server's — otherwise a gym
     // near a month boundary can have "this month" resolve to a different

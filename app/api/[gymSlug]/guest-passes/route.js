@@ -3,6 +3,7 @@ import prisma from '@/lib/prisma'
 import { requirePermission } from '@/lib/permissions'
 import { authorizeIntake } from '@/lib/webhookAuth'
 import { intakeGuestPass } from '@/lib/guestPassIntake'
+import { DEFAULT_GYM_TIME_ZONE } from '@/lib/etMonth'
 
 /**
  * POST /api/[gymSlug]/guest-passes
@@ -40,12 +41,13 @@ export async function GET(request, { params }) {
 
     const gym = await prisma.gym.findUnique({
       where:  { slug: gymSlug },
-      select: { id: true },
+      select: { id: true, timezone: true },
     })
     if (!gym) {
       return NextResponse.json({ error: 'Gym not found' }, { status: 404 })
     }
-    const gymId = gym.id
+    const gymId    = gym.id
+    const timeZone = gym.timezone || DEFAULT_GYM_TIME_ZONE
 
     // ── Fetch all pass records for this gym upfront ─────────────────────────────
     // We deliberately avoid using the nested `passes` relation on Guest, because
@@ -151,7 +153,7 @@ export async function GET(request, { params }) {
     )
 
     console.log(`[guest-passes GET] ${profiles.length} profile(s), ${unlinked.length} unlinked, ${totalCount} total passes for gym ${gymId}`)
-    return NextResponse.json({ profiles, unlinked, totalCount, countByType })
+    return NextResponse.json({ profiles, unlinked, totalCount, countByType, timeZone })
   } catch (error) {
     console.error('[guest-passes GET]', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
