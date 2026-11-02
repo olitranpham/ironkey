@@ -99,7 +99,8 @@ export async function POST(request, { params }) {
     // ── Everything this request changes, so it can be undone ────────────────
     const undo = {
       createdProfileId:   null,   // profile created by this request
-      restoreVisit:       null,   // { id, passesLeft, usedAt, guestProfileId }
+      restoreVisit:       null,   // { id, usedAt, guestProfileId } — passesLeft is re-incremented
+      checkInId:          null,   // GuestCheckIn written with the decrement
       activatedSeamCode:  null,   // { seamHeaders, codeId } activated by this request
       restoreProfileCode: null,   // { id, accessCode } previous profile code
     }
@@ -113,7 +114,12 @@ export async function POST(request, { params }) {
         }
         if (undo.restoreVisit) {
           const { id, ...data } = undo.restoreVisit
-          await prisma.guestVisit.update({ where: { id }, data })
+          // Give the pass back (increment, so a concurrent check-in's decrement
+          // isn't undone too) and drop this check-in's row, together
+          await prisma.$transaction([
+            ...(undo.checkInId ? [prisma.guestCheckIn.delete({ where: { id: undo.checkInId } })] : []),
+            prisma.guestVisit.update({ where: { id }, data: { ...data, passesLeft: { increment: 1 } } }),
+          ])
         }
         if (undo.restoreProfileCode) {
           await prisma.guest.update({ where: { id: undo.restoreProfileCode.id }, data: { accessCode: undo.restoreProfileCode.accessCode } })
@@ -156,16 +162,31 @@ export async function POST(request, { params }) {
     }
 
     const newCount = existing.passesLeft - 1
-    // Snapshot before writing, so a failed delivery can restore it exactly
-    undo.restoreVisit = { id: existing.id, passesLeft: existing.passesLeft, usedAt: existing.usedAt, guestProfileId: existing.guestProfileId }
-    const updated  = await prisma.guestVisit.update({
-      where: { id: existing.id },
-      data:  {
-        passesLeft:     newCount,
-        usedAt:         new Date(),
-        guestProfileId: profile.id,
-      },
+    // Decrement and record the visit together. The decrement only applies if
+    // passesLeft is still what was read above, so two simultaneous check-ins
+    // can't both spend the same pass.
+    const used = await prisma.$transaction(async tx => {
+      const { count } = await tx.guestVisit.updateMany({
+        where: { id: existing.id, passesLeft: existing.passesLeft },
+        data:  {
+          passesLeft:     newCount,
+          usedAt:         new Date(),
+          guestProfileId: profile.id,
+        },
+      })
+      if (count !== 1) return null
+      const checkIn = await tx.guestCheckIn.create({ data: { gymId: gym.id, guestPassId: existing.id, guestProfileId: profile.id } })
+      const visit   = await tx.guestVisit.findUnique({ where: { id: existing.id } })
+      return { checkIn, visit }
     })
+    if (!used) {
+      await rollback()
+      return NextResponse.json({ error: 'check-in already in progress — please try again' }, { status: 409 })
+    }
+    // So a failed delivery can undo this check-in
+    undo.restoreVisit = { id: existing.id, usedAt: existing.usedAt, guestProfileId: existing.guestProfileId }
+    undo.checkInId    = used.checkIn.id
+    const updated     = used.visit
 
     // ── Refresh 24-hr Seam code on every check-in ───────────────────────
     let codeFailed    = false
@@ -262,11 +283,6 @@ export async function POST(request, { params }) {
       await rollback()
       return DELIVERY_FAILED()
     }
-
-    // Record the visit (leads "visit count"). Written only once the check-in
-    // fully succeeded, so a rolled-back check-in leaves no row.
-    await prisma.guestCheckIn.create({ data: { gymId: gym.id, guestPassId: existing.id, guestProfileId: profile.id } })
-      .catch(e => console.error('[checkin] guestCheckIn write failed:', e.message))
 
     // The code is never returned — it's emailed by the gym's guest webhook
     return NextResponse.json({ ok: true, sentTo: maskEmail(profile.email), passesLeft: updated.passesLeft, expiresAt: codeExpiresAt })
