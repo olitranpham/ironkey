@@ -6,6 +6,7 @@ import { Search, RefreshCw, TrendingUp, AlertTriangle } from 'lucide-react'
 import { getGymTheme } from '@/lib/gymThemes'
 import { GuestProfilePanel, fmtDate } from '@/components/GuestProfilePanel'
 import { monthKey, DEFAULT_GYM_TIME_ZONE } from '@/lib/etMonth'
+import { GUEST_CHECKIN_LOGGING_STARTED } from '@/lib/guestPassMetrics'
 import {
   AreaChart,
   Area,
@@ -160,6 +161,7 @@ export default function GuestPassesPage() {
   const [activeTab,   setActiveTab]   = useState('all')
   const [monthFilter, setMonthFilter] = useState('')
   const [timeZone,    setTimeZone]    = useState(DEFAULT_GYM_TIME_ZONE)
+  const [metrics,     setMetrics]     = useState({})
 
   const [selectedProfile, setSelectedProfile] = useState(null)
   const [panelOpen,       setPanelOpen]       = useState(false)
@@ -189,6 +191,7 @@ export default function GuestPassesPage() {
       setTotalCount(data.totalCount ?? null)
       setCountByType(data.countByType ?? {})
       setTimeZone(data.timeZone ?? DEFAULT_GYM_TIME_ZONE)
+      setMetrics(data.metrics ?? {})
       setFetchErr(null)
       if (statsRes.ok) {
         const stats = await statsRes.json()
@@ -401,6 +404,9 @@ export default function GuestPassesPage() {
         </div>
 
         {/* Table card */}
+        {/* Metrics for the selected month (or all time) */}
+        {metrics[monthFilter || 'all'] && <GuestPassMetrics metrics={metrics[monthFilter || 'all']} />}
+
         <div className="md:flex-1 flex flex-col bg-white/[0.03] rounded-xl border border-white/5 md:overflow-hidden md:min-h-0">
 
           {/* Tabs */}
@@ -555,6 +561,36 @@ export default function GuestPassesPage() {
         </div>
       )}
 
+    </div>
+  )
+}
+
+// ── Month metrics ─────────────────────────────────────────────────────────────
+
+const CHECKIN_LOGGING_LABEL = new Date(`${GUEST_CHECKIN_LOGGING_STARTED}T12:00:00Z`)
+  .toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })
+  .toLowerCase()
+
+function GuestPassMetrics({ metrics: m }) {
+  const revenue = `$${(m.revenueCents / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+  const cells = [
+    { label: 'purchases',   value: m.purchases },
+    { label: 'passes sold', value: m.passesSold },
+    { label: 'paid',        value: m.paid },
+    { label: '$0 promo',    value: m.promo },
+    { label: 'revenue',     value: revenue, note: m.unknownAmount ? `${m.unknownAmount} without a recorded amount` : null },
+    // null → check-ins weren't logged for this whole period, so 0 would be wrong
+    { label: 'passes used', value: m.passesUsed ?? 'n/a', note: m.passesUsed == null ? `not tracked before ${CHECKIN_LOGGING_LABEL}` : null },
+  ]
+  return (
+    <div className="shrink-0 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+      {cells.map(c => (
+        <div key={c.label} className="bg-white/[0.03] border border-white/5 rounded-xl px-4 py-3">
+          <p className="text-[11px] text-neutral-500">{c.label}</p>
+          <p className="text-lg font-semibold text-white tabular-nums">{c.value}</p>
+          {c.note && <p className="text-[10px] text-neutral-600 leading-tight mt-0.5">{c.note}</p>}
+        </div>
+      ))}
     </div>
   )
 }

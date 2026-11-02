@@ -4,6 +4,7 @@ import { requirePermission } from '@/lib/permissions'
 import { authorizeIntake } from '@/lib/webhookAuth'
 import { intakeGuestPass } from '@/lib/guestPassIntake'
 import { DEFAULT_GYM_TIME_ZONE } from '@/lib/etMonth'
+import { guestPassMetrics } from '@/lib/guestPassMetrics'
 
 /**
  * POST /api/[gymSlug]/guest-passes
@@ -32,7 +33,8 @@ export async function POST(request, { params }) {
 
 /**
  * GET /api/[gymSlug]/guest-passes
- * Returns guest profiles with their full pass history, sorted by most recent activity.
+ * Returns guest profiles with their full pass history, sorted by most recent
+ * activity, plus purchase metrics per month (see lib/guestPassMetrics).
  */
 export async function GET(request, { params }) {
   try {
@@ -140,21 +142,31 @@ export async function GET(request, { params }) {
     })
 
     // Authoritative counts — single DB query, not derived from in-memory arrays
-    const [totalCount, typeRows] = await Promise.all([
+    const [totalCount, typeRows, metricPasses, checkIns] = await Promise.all([
       prisma.guestVisit.count({ where: { gymId } }),
       prisma.guestVisit.groupBy({
         by:    ['passType'],
         where: { gymId },
         _count: { passType: true },
       }),
+      prisma.guestVisit.findMany({
+        where:  { gymId },
+        select: { createdAt: true, passType: true, packSize: true, amountPaid: true },
+      }),
+      prisma.guestCheckIn.findMany({
+        where:  { gymId },
+        select: { createdAt: true },
+      }),
     ])
+    // Per purchase month (gym timezone) and `all`
+    const metrics = guestPassMetrics(metricPasses, checkIns, timeZone)
 
     const countByType = Object.fromEntries(
       typeRows.map(r => [r.passType, r._count.passType])
     )
 
     console.log(`[guest-passes GET] ${profiles.length} profile(s), ${unlinked.length} unlinked, ${totalCount} total passes for gym ${gymId}`)
-    return NextResponse.json({ profiles, unlinked, totalCount, countByType, timeZone })
+    return NextResponse.json({ profiles, unlinked, totalCount, countByType, timeZone, metrics })
   } catch (error) {
     console.error('[guest-passes GET]', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
