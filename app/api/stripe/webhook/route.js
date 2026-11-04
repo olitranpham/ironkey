@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import prisma from '@/lib/prisma'
-import { deleteSeamCodeByPin, generateUniqueAccessCode } from '@/lib/seam'
-import { ensureKisiMembership, revokeAccess as revokeKisiAccess } from '@/lib/kisi'
+import { deleteSeamCodeByPin } from '@/lib/seam'
+import { revokeAccess as revokeKisiAccess } from '@/lib/kisi'
 import { formatPhone } from '@/lib/phone'
 import { normalizeGradSemester } from '@/lib/gradSemester'
 import { maskPin, redactObject } from '@/lib/redact'
@@ -10,7 +10,6 @@ import { intakeMember } from '@/lib/memberIntake'
 import { intakeGuestPass } from '@/lib/guestPassIntake'
 import { writeAudit } from '@/lib/audit'
 import { generateUniquePin } from '@/lib/pins'
-import { postWebhook } from '@/lib/guestCodeDelivery'
 import { OASIS_GYM_SLUG, OASIS_GUEST_PASS_PRODUCTS, isOasisGuestPassProduct } from '@/lib/oasisGuestPasses'
 import { recordCouponRedemption } from '@/lib/couponRedemption'
 import { resolvePackSize } from '@/lib/gymPassTypes'
@@ -43,19 +42,6 @@ async function markLeadConverted(gym, email) {
     console.error('[platform/webhook] lead conversion update failed:', err.message)
   }
 }
-
-/**
- * Deliver a purchase payload (with the door code) to a Zapier webhook and wait
- * up to 5 s. Never fails the Stripe webhook: a non-2xx / timeout / missing URL
- * is logged (gym slug + status) and audited as code.delivery_failed.
- */
-async function deliverOrAudit(gym, url, payload, kind, targetType, targetId) {
-  const { ok, status } = await postWebhook(url, gym.slug, payload, kind)
-  if (!ok) writeAudit({ gym, user: null }, 'code.delivery_failed', targetType, targetId, { kind, status })
-  return ok
-}
-
-const SEAM_API = 'https://connect.getseam.com'
 
 /**
  * POST /api/stripe/webhook
@@ -419,6 +405,17 @@ export async function POST(request) {
     }
 
     // ── Member signup via join form ─────────────────────────────────────────
+    // Repeat delivery of a session already recorded → no-op (no second
+    // member update, code, Kisi grant or email)
+    const recordedJob = await prisma.webhookJob.findUnique({
+      where:  { kind_stripeSessionId: { kind: 'member_access', stripeSessionId: session.id } },
+      select: { id: true },
+    })
+    if (recordedJob) {
+      console.log('[platform/webhook] join already recorded for session', session.id, '— ignoring repeat delivery')
+      return NextResponse.json({ received: true })
+    }
+
     const firstName      = meta.firstName      ?? ''
     const lastName       = meta.lastName       ?? ''
     const email          = (session.customer_email ?? meta.email ?? '').toLowerCase()
@@ -478,15 +475,12 @@ export async function POST(request) {
       console.error('[platform/webhook] failed to retrieve session line items:', err.message)
     }
 
-    let member = await prisma.member.findFirst({
+    const memberBeforeUpdate = await prisma.member.findFirst({
       where: { gymId: gym.id, email: email.toLowerCase() },
     })
-
-    const isNew = !member
-    // Snapshot before member gets reassigned below (create/update) — Kisi's
-    // tier-change check needs the membershipType/assignment as they were
-    // BEFORE this checkout, not after.
-    const memberBeforeUpdate = member
+    // Snapshot of the member before this checkout — Kisi's tier-change check
+    // needs the membershipType/assignment as they were, not after.
+    const isNew = !memberBeforeUpdate
 
     // Build full address from individual metadata fields
     const addressParts = [
@@ -497,22 +491,13 @@ export async function POST(request) {
     ].filter(Boolean)
     const fullAddress = addressParts.length ? addressParts.join(', ') : (meta.address || null)
 
-    // Retrieve student ID image if an upload ID was provided
-    let studentIdImage = null
+    // Student ID image from the temp upload (deleted with the member write)
+    let studentIdUpload = null
     if (meta.studentIdUploadId) {
-      try {
-        const upload = await prisma.studentIdUpload.findUnique({
-          where: { id: meta.studentIdUploadId },
-        })
-        if (upload) {
-          studentIdImage = upload.fileData
-          await prisma.studentIdUpload.delete({ where: { id: upload.id } })
-          console.log('[platform/webhook] student ID image retrieved and upload record deleted:', meta.studentIdUploadId)
-        }
-      } catch (err) {
-        console.error('[platform/webhook] failed to retrieve student ID upload:', err.message)
-      }
+      studentIdUpload = await prisma.studentIdUpload.findUnique({ where: { id: meta.studentIdUploadId } })
+        .catch(err => { console.error('[platform/webhook] failed to retrieve student ID upload:', err.message); return null })
     }
+    const studentIdImage = studentIdUpload?.fileData ?? null
 
     // Stripe metadata values are always strings — normalize casing and coerce
     // the year to Int to match the Member schema.
@@ -520,116 +505,7 @@ export async function POST(request) {
     const parsedGradYear     = meta.gradYear ? parseInt(meta.gradYear, 10) : null
 
     const isMinor = meta.isMinor === 'true'
-
-    if (!member) {
-      member = await prisma.member.create({
-        data: {
-          gymId:               gym.id,
-          firstName,
-          lastName,
-          email:               email.toLowerCase(),
-          phone:               phone || null,
-          status:              'ACTIVE',
-          membershipType:      resolvedMembershipType,
-          stripeSubscriptionId: subId,
-          priceId,
-          dateAccessed:        new Date(),
-          dateOfBirth:           meta.dob               || null,
-          address:               fullAddress,
-          emergencyContactName:         meta.emergencyName         || null,
-          emergencyContactPhone:        meta.emergencyPhone        || null,
-          emergencyContactRelationship: meta.emergencyRelationship || null,
-          gradSemester:                 parsedGradSemester,
-          gradYear:                     Number.isNaN(parsedGradYear) ? null : parsedGradYear,
-          studentIdImage:               studentIdImage,
-          hearAboutUs:                  meta.hearAboutUs           || null,
-          isMinor:                      isMinor,
-          guardianName:                 isMinor ? (meta.guardianName         || null) : null,
-          guardianEmail:                isMinor ? (meta.guardianEmail        || null) : null,
-          guardianPhone:                isMinor ? (meta.guardianPhone        || null) : null,
-          guardianRelationship:         isMinor ? (meta.guardianRelationship || null) : null,
-        },
-      })
-      console.log('[platform/webhook] created member from checkout:', member.id, email, '| hearAboutUs=%s', meta.hearAboutUs || '(none)', '| isMinor=%s', isMinor)
-    } else {
-      member = await prisma.member.update({
-        where: { id: member.id },
-        data: {
-          status:              'ACTIVE',
-          membershipType:      resolvedMembershipType || undefined,
-          stripeSubscriptionId: subId ?? member.stripeSubscriptionId,
-          priceId:             priceId ?? member.priceId,
-          dateAccessed:        new Date(),
-          // Only set when the form actually submitted a phone this time —
-          // never overwrite an existing stored phone with null/blank.
-          ...(phone ? { phone } : {}),
-          ...(parsedGradSemester ? { gradSemester: parsedGradSemester } : {}),
-          ...(parsedGradYear && !Number.isNaN(parsedGradYear) ? { gradYear: parsedGradYear } : {}),
-          ...(studentIdImage          ? { studentIdImage }                               : {}),
-          ...(meta.hearAboutUs        ? { hearAboutUs: meta.hearAboutUs }               : {}),
-          ...(isMinor ? {
-            isMinor:              true,
-            guardianName:         meta.guardianName         || null,
-            guardianEmail:        meta.guardianEmail        || null,
-            guardianPhone:        meta.guardianPhone        || null,
-            guardianRelationship: meta.guardianRelationship || null,
-          } : {}),
-        },
-      })
-      console.log('[platform/webhook] updated existing member from checkout:', member.id, email)
-      if (memberBeforeUpdate.status !== 'ACTIVE') {
-        writeAudit({ gym, user: null }, 'member.reactivate', 'Member', member.id, {
-          via: 'stripe_checkout', from: memberBeforeUpdate.status, subscription: Boolean(subId),
-        })
-      }
-    }
-
-    await prisma.membershipEvent.create({
-      data: { memberId: member.id, gymId: gym.id, type: isNew ? 'joined' : 'reactivated' },
-    })
-
-    // A lead at this gym with this email just became a member → converted
-    await markLeadConverted(gym, email)
-
-    // ── Kisi gyms (DNA Strength only) — grant access, skip all Seam logic
-    // below entirely, including the /members loopback (which exists only to
-    // re-trigger Seam programming and would otherwise redundantly re-run
-    // this same Kisi grant a second time).
-    if (gym.accessProvider === 'KISI') {
-      try {
-        const result = await ensureKisiMembership(gym, {
-          existingMember: memberBeforeUpdate,
-          email,
-          name: `${firstName} ${lastName}`.trim(),
-          membershipType: member.membershipType,
-        })
-        if (result) {
-          member = await prisma.member.update({
-            where: { id: member.id },
-            data:  { kisiUserId: result.kisiUserId, kisiRoleAssignmentId: result.kisiRoleAssignmentId },
-          })
-        }
-      } catch (err) {
-        console.error('[platform/webhook] Kisi grant error:', err.message)
-      }
-
-      const zapierMemberUrlKisi = gym.zapierMemberWebhookUrl || process.env.ZAPIER_MEMBER_WEBHOOK_URL
-      await deliverOrAudit(gym, zapierMemberUrlKisi, {
-        firstName, lastName, email, accessCode: null, membershipType,
-        isMinor,
-        guardianName:         isMinor ? (meta.guardianName         || null) : null,
-        guardianEmail:        isMinor ? (meta.guardianEmail        || null) : null,
-        guardianPhone:        isMinor ? (meta.guardianPhone        || null) : null,
-        guardianRelationship: isMinor ? (meta.guardianRelationship || null) : null,
-      }, 'member', 'Member', member.id)
-
-      await recordCouponRedemption(gym, session, 'join')
-
-      return NextResponse.json({ received: true })
-    }
-
-    const memberSeamApiKey   = gym.seamApiKey ?? process.env.SEAM_API_KEY
-    const memberSeamDeviceId = gym.seamDeviceId ?? process.env.SEAM_DEVICE_ID
+    const isKisi  = gym.accessProvider === 'KISI'
 
     // Rutgers Powerlifting Club — one-off $5 payment, club president lets
     // members in manually, so this membership type must never get a Seam
@@ -637,85 +513,173 @@ export async function POST(request) {
     const isRutgersPowerliftingOneOff = gymSlug === 'hydra-athletic-co'
       && (meta.membershipType ?? '').toLowerCase() === 'rutgers powerlifting'
 
-    let accessCode = null
-    if (!isRutgersPowerliftingOneOff) {
-      accessCode = await generateUniqueAccessCode({
-        prisma, gymId: gym.id, apiKey: memberSeamApiKey, deviceId: memberSeamDeviceId,
-        logPrefix: '[platform/webhook]',
-      })
-      member = await prisma.member.update({
-        where: { id: member.id },
-        data:  { accessCode },
-      })
-      console.log('[platform/webhook] access code generated for member:', member.id, '| code:', maskPin(accessCode))
-    } else {
-      console.log('[platform/webhook] Rutgers Powerlifting one-off — skipping access code generation for member:', member.id)
-    }
+    // Collision-checked against the gym's codes in the DB here; the job
+    // checks the lock's own codes before programming it (Seam calls don't
+    // belong in the request path).
+    const newAccessCode = !isKisi && !isRutgersPowerliftingOneOff ? await generateUniquePin(gym.id) : null
 
-    const zapierMemberUrl = gym.zapierMemberWebhookUrl || process.env.ZAPIER_MEMBER_WEBHOOK_URL
-    console.log('[platform/webhook] firing Zapier member webhook (configured=%s)', Boolean(zapierMemberUrl))
-    console.log('[platform/webhook] Zapier member payload: firstName=%s lastName=%s email=%s accessCode=%s membershipType=%s isMinor=%s', firstName, lastName, email, maskPin(accessCode), membershipType, isMinor)
-    await deliverOrAudit(gym, zapierMemberUrl, {
-      firstName, lastName, email, accessCode, membershipType,
+    const zapierPayload = {
+      firstName, lastName, email, membershipType,
       isMinor,
       guardianName:         isMinor ? (meta.guardianName         || null) : null,
       guardianEmail:        isMinor ? (meta.guardianEmail        || null) : null,
       guardianPhone:        isMinor ? (meta.guardianPhone        || null) : null,
       guardianRelationship: isMinor ? (meta.guardianRelationship || null) : null,
-    }, 'member', 'Member', member.id)
-
-    if (memberSeamApiKey && !isRutgersPowerliftingOneOff) {
-      const deviceId    = memberSeamDeviceId
-      const seamHeaders = {
-        Authorization:  `Bearer ${memberSeamApiKey}`,
-        'Content-Type': 'application/json',
-      }
-      try {
-        let devices = deviceId ? [{ device_id: deviceId }] : []
-        if (!deviceId) {
-          const devRes = await fetch(`${SEAM_API}/devices/list`, {
-            method: 'POST', headers: seamHeaders, body: JSON.stringify({}),
-          })
-          if (devRes.ok) {
-            const { devices: devList = [] } = await devRes.json()
-            devices = devList
-          }
-        }
-        await Promise.all(
-          devices.map(dev =>
-            fetch(`${SEAM_API}/access_codes/create`, {
-              method:  'POST',
-              headers: seamHeaders,
-              body:    JSON.stringify({ device_id: dev.device_id, name: `${firstName} ${lastName}`, code: accessCode }),
-            }).catch(e => console.error('[platform/webhook] Seam create error:', e.message))
-          )
-        )
-        console.log('[platform/webhook] Seam code programmed for member:', member.id)
-      } catch (seamErr) {
-        console.error('[platform/webhook] Seam error:', seamErr.message)
-      }
     }
 
-    // Direct call — previously a fire-and-forget HTTP POST to /api/[gymSlug]/members.
-    // reactivate only when this checkout created a new (active) subscription.
-    intakeMember(gymSlug, {
-      firstName,
-      lastName,
-      email,
-      phone:                 phone || null,
-      dob:                   meta.dob                   || null,
-      address:               meta.address               || null,
-      emergencyName:         meta.emergencyName         || null,
-      emergencyPhone:        meta.emergencyPhone        || null,
-      emergencyRelationship: meta.emergencyRelationship || null,
-      membershipType:        membershipType.toLowerCase(),
-      subId,
-      accessCode,
-    }, { reactivate: Boolean(subId), via: 'stripe_checkout' })
-      .then(({ status, json }) => { if (status >= 400) console.error('[platform/webhook] members notify failed:', status, json.error) })
-      .catch(e => console.error('[platform/webhook] members notify error:', e.message))
+    // Member + membership event + follow-up job in one transaction. Kisi /
+    // Seam and the Zapier email run in the job after Stripe has its 200.
+    let member
+    let job = null
+    try {
+      member = await prisma.$transaction(async tx => {
+        let m
+        if (!memberBeforeUpdate) {
+          m = await tx.member.create({
+            data: {
+              gymId:               gym.id,
+              firstName,
+              lastName,
+              email:               email.toLowerCase(),
+              phone:               phone || null,
+              status:              'ACTIVE',
+              membershipType:      resolvedMembershipType,
+              stripeSubscriptionId: subId,
+              priceId,
+              dateAccessed:        new Date(),
+              dateOfBirth:           meta.dob               || null,
+              address:               fullAddress,
+              emergencyContactName:         meta.emergencyName         || null,
+              emergencyContactPhone:        meta.emergencyPhone        || null,
+              emergencyContactRelationship: meta.emergencyRelationship || null,
+              gradSemester:                 parsedGradSemester,
+              gradYear:                     Number.isNaN(parsedGradYear) ? null : parsedGradYear,
+              studentIdImage:               studentIdImage,
+              hearAboutUs:                  meta.hearAboutUs           || null,
+              isMinor:                      isMinor,
+              guardianName:                 isMinor ? (meta.guardianName         || null) : null,
+              guardianEmail:                isMinor ? (meta.guardianEmail        || null) : null,
+              guardianPhone:                isMinor ? (meta.guardianPhone        || null) : null,
+              guardianRelationship:         isMinor ? (meta.guardianRelationship || null) : null,
+            },
+          })
+        } else {
+          m = await tx.member.update({
+            where: { id: memberBeforeUpdate.id },
+            data: {
+              status:              'ACTIVE',
+              membershipType:      resolvedMembershipType || undefined,
+              stripeSubscriptionId: subId ?? memberBeforeUpdate.stripeSubscriptionId,
+              priceId:             priceId ?? memberBeforeUpdate.priceId,
+              dateAccessed:        new Date(),
+              // Only set when the form actually submitted a phone this time —
+              // never overwrite an existing stored phone with null/blank.
+              ...(phone ? { phone } : {}),
+              ...(parsedGradSemester ? { gradSemester: parsedGradSemester } : {}),
+              ...(parsedGradYear && !Number.isNaN(parsedGradYear) ? { gradYear: parsedGradYear } : {}),
+              ...(studentIdImage          ? { studentIdImage }                               : {}),
+              ...(meta.hearAboutUs        ? { hearAboutUs: meta.hearAboutUs }               : {}),
+              ...(isMinor ? {
+                isMinor:              true,
+                guardianName:         meta.guardianName         || null,
+                guardianEmail:        meta.guardianEmail        || null,
+                guardianPhone:        meta.guardianPhone        || null,
+                guardianRelationship: meta.guardianRelationship || null,
+              } : {}),
+            },
+          })
+        }
+
+        await tx.membershipEvent.create({
+          data: { memberId: m.id, gymId: gym.id, type: isNew ? 'joined' : 'reactivated' },
+        })
+        if (studentIdUpload) await tx.studentIdUpload.deleteMany({ where: { id: studentIdUpload.id } })
+
+        if (!isKisi) {
+          if (newAccessCode) m = await tx.member.update({ where: { id: m.id }, data: { accessCode: newAccessCode } })
+          // Same member write the old /members loopback made (name, type,
+          // phone, subscription, code); its Seam part is the job's now.
+          // reactivate only when this checkout created a new (active) subscription.
+          const { status, json } = await intakeMember(gymSlug, {
+            firstName,
+            lastName,
+            email,
+            phone:                 phone || null,
+            dob:                   meta.dob                   || null,
+            address:               meta.address               || null,
+            emergencyName:         meta.emergencyName         || null,
+            emergencyPhone:        meta.emergencyPhone        || null,
+            emergencyRelationship: meta.emergencyRelationship || null,
+            membershipType:        membershipType.toLowerCase(),
+            subId,
+            accessCode:            newAccessCode,
+          }, { reactivate: Boolean(subId), via: 'stripe_checkout', db: tx, provision: false })
+          if (status >= 400) throw new Error(`member intake failed: ${status} ${json.error ?? ''}`)
+          m = await tx.member.findUnique({ where: { id: m.id } })
+        }
+
+        const name = `${firstName} ${lastName}`.trim()
+        job = await tx.webhookJob.create({
+          data: {
+            kind:            'member_access',
+            gymId:           gym.id,
+            memberId:        m.id,
+            stripeSessionId: session.id,
+            // Steps that don't apply are done from the start
+            kisiDone:        !isKisi,
+            seamDone:        isKisi || !m.accessCode,
+            payload: {
+              accessCode: isKisi ? null : m.accessCode,
+              seamName:   name,
+              seamCodes:  {},
+              kisi: isKisi ? {
+                existingMember: memberBeforeUpdate ? {
+                  kisiUserId:           memberBeforeUpdate.kisiUserId,
+                  kisiRoleAssignmentId: memberBeforeUpdate.kisiRoleAssignmentId,
+                  membershipType:       memberBeforeUpdate.membershipType,
+                } : null,
+                email, name, membershipType: m.membershipType,
+              } : null,
+              // Zapier member payload (accessCode is added at send time — a
+              // Seam PIN collision can change it)
+              zapier: zapierPayload,
+            },
+          },
+        })
+        return m
+      })
+    } catch (err) {
+      if (err.code === 'P2002') {
+        const raced = await prisma.webhookJob.findUnique({ where: { kind_stripeSessionId: { kind: 'member_access', stripeSessionId: session.id } }, select: { id: true } })
+        if (raced) {
+          console.log('[platform/webhook] join already recorded for session', session.id, '— skipping')
+          return NextResponse.json({ received: true })
+        }
+      }
+      // Nothing was recorded — fail so Stripe redelivers (the job's session
+      // key makes the redelivery safe)
+      console.error('[platform/webhook] join write failed session=%s: %s', session.id, err.message)
+      return NextResponse.json({ error: 'member not recorded' }, { status: 500 })
+    }
+
+    console.log('[platform/webhook] %s member from checkout: %s job=%s', isNew ? 'created' : 'updated', member.id, job.id, '| hearAboutUs=%s', meta.hearAboutUs || '(none)', '| isMinor=%s', isMinor)
+    if (memberBeforeUpdate && memberBeforeUpdate.status !== 'ACTIVE') {
+      writeAudit({ gym, user: null }, 'member.reactivate', 'Member', member.id, {
+        via: 'stripe_checkout', from: memberBeforeUpdate.status, subscription: Boolean(subId),
+      })
+    }
+    if (isRutgersPowerliftingOneOff) {
+      console.log('[platform/webhook] Rutgers Powerlifting one-off — no access code for member:', member.id)
+    }
+
+    // A lead at this gym with this email just became a member → converted
+    await markLeadConverted(gym, email)
 
     await recordCouponRedemption(gym, session, 'join')
+
+    // Kisi / Seam + Zapier, after the response
+    kickJob(job.id)
+    return NextResponse.json({ received: true })
   }
 
   // ── customer.subscription.updated ────────────────────────────────────────
