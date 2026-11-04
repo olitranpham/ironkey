@@ -30,7 +30,8 @@ export async function middleware(request) {
     /^\/api\/[^/]+\/join(\/|$)/.test(pathname) ||
     /^\/api\/[^/]+\/guest(\/|$)/.test(pathname) ||
     /^\/api\/[^/]+\/concessions(\/|$)/.test(pathname) ||
-    (request.method === 'POST' && /^\/api\/[^/]+\/overdue-cancel$/.test(pathname))
+    (request.method === 'POST' && /^\/api\/[^/]+\/overdue-cancel$/.test(pathname)) ||
+    (request.method === 'POST' && pathname === '/api/cron/webhook-jobs')
   ) {
     return next()
   }

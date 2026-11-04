@@ -14,6 +14,7 @@ import { postWebhook } from '@/lib/guestCodeDelivery'
 import { OASIS_GYM_SLUG, OASIS_GUEST_PASS_PRODUCTS, isOasisGuestPassProduct } from '@/lib/oasisGuestPasses'
 import { recordCouponRedemption } from '@/lib/couponRedemption'
 import { resolvePackSize } from '@/lib/gymPassTypes'
+import { kickJob } from '@/lib/webhookJobs'
 
 /** Trimmed string, or null for null/undefined/blank. */
 function normalizePhone(value) {
@@ -261,84 +262,22 @@ export async function POST(request) {
         console.log('[platform/webhook] reusing accessCode', maskPin(accessCode), 'for returning guest', email)
       }
 
-      // ── Program time-bound Seam access code for guest (24-hour window) ────────
-      let alreadyActive = false
-      const guestSeamApiKey = gym.seamApiKey ?? process.env.SEAM_API_KEY
-      if (guestSeamApiKey) {
-        const deviceId    = gym.seamDeviceId ?? process.env.SEAM_DEVICE_ID
-        const seamHeaders = {
-          Authorization:  `Bearer ${guestSeamApiKey}`,
-          'Content-Type': 'application/json',
-        }
-        const nowMs       = Date.now()
-        const startDt     = new Date(nowMs).toISOString()
-        const endDt       = new Date(nowMs + 24 * 60 * 60 * 1000).toISOString()
-        try {
-          let devices = deviceId ? [{ device_id: deviceId }] : []
-          if (!deviceId) {
-            const devRes = await fetch(`${SEAM_API}/devices/list`, {
-              method: 'POST', headers: seamHeaders, body: JSON.stringify({}),
-            })
-            if (devRes.ok) {
-              const { devices: devList = [] } = await devRes.json()
-              devices = devList
-            }
-          }
-          // duplicate_access_code means the PIN is already taken on a lock —
-          // a failure, never success. Undo this attempt's codes on the other
-          // devices and retry with a fresh collision-checked PIN.
-          const createOnDevice = (dev, code) =>
-            fetch(`${SEAM_API}/access_codes/create`, {
-              method:  'POST',
-              headers: seamHeaders,
-              body:    JSON.stringify({
-                device_id: dev.device_id,
-                name:      guestName || email,
-                code,
-                starts_at: startDt,
-                ends_at:   endDt,
-              }),
-            })
-              .then(r => r.json())
-              .then(r => {
-                const errType = r.error?.type ?? null
-                console.log('[platform/webhook] Seam guest code — device=%s code=%s passType=%s result=%s', dev.device_id, maskPin(code), passType, r.access_code?.access_code_id ?? errType ?? 'unknown')
-                return { duplicate: errType === 'duplicate_access_code', codeId: r.access_code?.access_code_id ?? null }
-              })
-              .catch(e => { console.error('[platform/webhook] Seam guest code error:', e.message); return { duplicate: false, codeId: null } })
-
-          const tried = new Set()
-          for (let attempt = 1; attempt <= 5; attempt++) {
-            const results = await Promise.all(devices.map(dev => createOnDevice(dev, accessCode)))
-            if (!results.some(r => r.duplicate)) break
-
-            await Promise.all(results.filter(r => r.codeId).map(r =>
-              fetch(`${SEAM_API}/access_codes/delete`, {
-                method: 'POST', headers: seamHeaders, body: JSON.stringify({ access_code_id: r.codeId }),
-              }).catch(() => {}),
-            ))
-            tried.add(accessCode)
-            if (attempt === 5) {
-              console.error('[platform/webhook] Seam guest code — still duplicate after %d PINs for guest=%s', attempt, email)
-              break
-            }
-            const previous = accessCode
-            accessCode = await generateUniquePin(gym.id, previous.length, { exclude: tried, guestId: guestProfile?.id ?? null })
-            console.warn('[platform/webhook] duplicate_access_code for pin=%s — retrying with %s', maskPin(previous), maskPin(accessCode))
-            if (guestProfile) {
-              await prisma.guest.update({ where: { id: guestProfile.id }, data: { accessCode } })
-            }
-          }
-        } catch (seamErr) {
-          console.error('[platform/webhook] Seam guest error:', seamErr.message)
-        }
+      // Oasis payload phone: checkout form phone → phone already on the profile → null
+      const oasisPayloadPhone = isOasisGuestPass
+        ? (phone ?? normalizePhone(guestProfile?.phone) ?? null)
+        : null
+      if (isOasisGuestPass) {
+        console.log('[platform/webhook] oasis guest pass phone source=%s',
+          phone ? 'checkout_form' : normalizePhone(guestProfile?.phone) ? 'profile' : 'none')
       }
 
-      // passesLeft from the saved DB record (guest-passes route subtracts 1 for the current use)
-      let savedPassesLeft = passType === 'SINGLE' ? null : passesLeft
+      // Pass + check-in + follow-up job in one transaction. The Seam code and
+      // the Zapier email run in the job after Stripe has its 200 (they used
+      // to run here and could take long enough for Stripe to give up and
+      // resend the event).
+      let job = null
       try {
-        // Direct call — previously an HTTP POST to /api/[gymSlug]/guest-passes
-        const { status: zapStatus, json: zapJson } = await intakeGuestPass(gymSlug, {
+        const { status: intakeStatus, json: intakeJson } = await intakeGuestPass(gymSlug, {
           name:       guestName,
           email,
           phone,
@@ -350,30 +289,61 @@ export async function POST(request) {
           packSize:        resolvePackSize(gymSlug, { priceId: lineItemPriceId, product: lineItemProduct ?? lineItemProductId }),
           // What the guest actually paid (cents, after discounts)
           amountPaid:      session.amount_total,
+        }, {
+          onCreate: async (tx, pass) => {
+            job = await tx.webhookJob.create({
+              data: {
+                kind:            'guest_access',
+                gymId:           gym.id,
+                guestPassId:     pass.id,
+                stripeSessionId: session.id,
+                payload: {
+                  guestProfileId: guestProfile?.id ?? null,
+                  accessCode,
+                  seamName:  guestName || email,
+                  // Same 24-hour window as the pass itself
+                  startsAt:  pass.createdAt.toISOString(),
+                  endsAt:    pass.expiresAt.toISOString(),
+                  seamCodes: {},
+                  // Zapier guest payload (accessCode is added at send time — a
+                  // Seam PIN collision can change it)
+                  zapier: {
+                    name: guestName, email, passType, passesLeft: pass.passesLeft, firstTime, alreadyActive: false,
+                    ...(isOasisGuestPass ? { phone: oasisPayloadPhone } : {}),
+                    isMinor:              guestIsMinor,
+                    guardianName:         guestIsMinor ? (meta.guardianName         || null) : null,
+                    guardianEmail:        guestIsMinor ? (meta.guardianEmail        || null) : null,
+                    guardianPhone:        guestIsMinor ? (meta.guardianPhone        || null) : null,
+                    guardianRelationship: guestIsMinor ? (meta.guardianRelationship || null) : null,
+                  },
+                },
+              },
+            })
+          },
         })
-        if (zapJson.duplicate) {
-          // A concurrent delivery of this session recorded it first
-          console.log('[platform/webhook] guest pass already recorded for session', session.id, '— skipping delivery')
+        if (intakeJson.duplicate) {
+          // A concurrent delivery of this session recorded it (and its job) first
+          console.log('[platform/webhook] guest pass already recorded for session', session.id, '— skipping')
           return NextResponse.json({ received: true })
         }
-        if (zapStatus >= 400) {
-          console.error('[platform/webhook] guest-passes notify failed:', zapStatus, redactObject(zapJson))
+        if (intakeStatus >= 400) {
+          console.error('[platform/webhook] guest pass not recorded session=%s status=%d %j', session.id, intakeStatus, redactObject(intakeJson))
+          writeAudit({ gym, user: null }, 'guest_pass.intake_failed', 'Guest', guestProfile?.id ?? null, { stripeSessionId: session.id, status: intakeStatus, error: intakeJson.error ?? null })
         } else {
-          savedPassesLeft = zapJson.pass?.passesLeft ?? savedPassesLeft
-          console.log('[platform/webhook] guest-passes notified for', email, '| passType:', passType, '| savedPassesLeft:', savedPassesLeft)
+          console.log('[platform/webhook] guest pass recorded pass=%s job=%s for', intakeJson.pass?.id, job?.id, email, '| passType:', passType)
 
           // Student ID photo — mirrors the Member resolution logic above:
           // look up the temp staging row by ID, copy its file data onto the
           // permanent record (here, this specific GuestVisit rather than the
           // globally-shared Guest), then delete the temp row.
-          if (meta.studentIdUploadId && zapJson.pass?.id) {
+          if (meta.studentIdUploadId && intakeJson.pass?.id) {
             try {
               const upload = await prisma.studentIdUpload.findUnique({
                 where: { id: meta.studentIdUploadId },
               })
               if (upload) {
                 await prisma.guestVisit.update({
-                  where: { id: zapJson.pass.id },
+                  where: { id: intakeJson.pass.id },
                   data:  { studentIdImage: upload.fileData },
                 })
                 await prisma.studentIdUpload.delete({ where: { id: upload.id } })
@@ -385,31 +355,16 @@ export async function POST(request) {
           }
         }
       } catch (e) {
-        console.error('[platform/webhook] guest-passes notify error:', e.message)
+        // Nothing was recorded — fail so Stripe redelivers (the session ID
+        // makes the redelivery safe)
+        console.error('[platform/webhook] guest pass write failed session=%s: %s', session.id, e.message)
+        return NextResponse.json({ error: 'guest pass not recorded' }, { status: 500 })
       }
-
-      // Oasis payload phone: checkout form phone → phone already on the profile → null
-      const oasisPayloadPhone = isOasisGuestPass
-        ? (phone ?? normalizePhone(guestProfile?.phone) ?? null)
-        : null
-      if (isOasisGuestPass) {
-        console.log('[platform/webhook] oasis guest pass phone source=%s',
-          phone ? 'checkout_form' : normalizePhone(guestProfile?.phone) ? 'profile' : 'none')
-      }
-      const zapierGuestUrl = gym.zapierGuestWebhookUrl || process.env.ZAPIER_GUEST_WEBHOOK_URL
-      console.log('[platform/webhook] firing Zapier guest webhook (configured=%s)', Boolean(zapierGuestUrl))
-      await deliverOrAudit(gym, zapierGuestUrl, {
-        name: guestName, email, accessCode, passType, passesLeft: savedPassesLeft, firstTime, alreadyActive,
-        ...(isOasisGuestPass ? { phone: oasisPayloadPhone } : {}),
-        isMinor:               guestIsMinor,
-        guardianName:          guestIsMinor ? (meta.guardianName         || null) : null,
-        guardianEmail:         guestIsMinor ? (meta.guardianEmail        || null) : null,
-        guardianPhone:         guestIsMinor ? (meta.guardianPhone        || null) : null,
-        guardianRelationship:  guestIsMinor ? (meta.guardianRelationship || null) : null,
-      }, 'guest', 'Guest', guestProfile?.id ?? null)
 
       await recordCouponRedemption(gym, session, 'guest_pass')
 
+      // Seam + Zapier, after the response
+      if (job) kickJob(job.id)
       return NextResponse.json({ received: true })
     }
 

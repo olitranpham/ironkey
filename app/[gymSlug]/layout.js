@@ -38,6 +38,7 @@ const NAV_GROUPS = [
     items: [
       { label: 'members',      slug: 'members',      icon: Users },
       { label: 'guest passes', slug: 'guest-passes', icon: Ticket },
+      { label: 'access issues', slug: 'access-jobs', icon: AlertTriangle },
     ],
     repGymPass: { label: 'partner check-ins', slug: 'partner-checkins', icon: Handshake },
   },
