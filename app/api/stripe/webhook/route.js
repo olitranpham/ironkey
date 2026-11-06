@@ -15,6 +15,7 @@ import { OASIS_GUEST_PASS_PRODUCTS } from '@/lib/oasisGuestPasses'
 import { recordCouponRedemption } from '@/lib/couponRedemption'
 import { resolvePackSize } from '@/lib/gymPassTypes'
 import { withPhone, stripeSessionPhone } from '@/lib/zapierPayload'
+import { resolveAgreement } from '@/lib/agreements'
 
 /**
  * The typed waiver / agreement signature from checkout metadata, or null when
@@ -31,6 +32,22 @@ function signatureFromSession(session) {
     signatureUserAgent: meta.signatureUserAgent || null,
     signedAt:           new Date(session.created * 1000),
   }
+}
+
+/**
+ * The exact agreement text to snapshot for this signature (lib/agreements),
+ * by the version the signup page sent. An unknown or missing version (the
+ * text changed between page load and payment, or a session from before
+ * versions) stores the current text and logs a warning.
+ */
+async function agreementSnapshot(gymSlug, flow, session) {
+  const sent = session.metadata?.agreementVersion || null
+  const { text, version, matched } = await resolveAgreement(gymSlug, flow, sent)
+  if (!matched) {
+    console.warn('[platform/webhook] %s agreement version %s not found for %s — storing current text %s (session %s)',
+      flow, sent ?? '(none)', gymSlug, version, session.id)
+  }
+  return { text, version }
 }
 
 /** Trimmed string, or null for null/undefined/blank. */
@@ -249,13 +266,18 @@ export async function POST(request) {
           where: { guestProfileId_gymId: { guestProfileId: guestProfile.id, gymId: gym.id } },
         })
         firstTime = !existingWaiver
-        if (!existingWaiver) {
-          await prisma.guestWaiver.create({
-            data: { guestProfileId: guestProfile.id, gymId: gym.id, ...(signatureFromSession(session) ?? {}) },
-          }).catch(err => {
-            // A concurrent delivery of this session created it first
-            if (err.code !== 'P2002') throw err
-          })
+      }
+      // Written with the pass (inside its transaction, below), so a failed
+      // attempt can't leave a waiver that lets the guest skip signing
+      let waiverData = null
+      if (guestProfile && firstTime) {
+        const snapshot = await agreementSnapshot(gymSlug, 'guest', session)
+        waiverData = {
+          guestProfileId: guestProfile.id,
+          gymId:          gym.id,
+          ...(signatureFromSession(session) ?? {}),
+          waiverText:     snapshot.text,
+          waiverVersion:  snapshot.version,
         }
       }
 
@@ -362,6 +384,16 @@ export async function POST(request) {
           packSize:        resolvePackSize(gymSlug, { priceId: lineItemPriceId, product: lineItemProduct ?? lineItemProductId }),
           // What the guest actually paid (cents, after discounts)
           amountPaid:      session.amount_total,
+        }, {
+          onCreate: async tx => {
+            if (!waiverData) return
+            // upsert: a concurrent delivery may have written it — never overwrite
+            await tx.guestWaiver.upsert({
+              where:  { guestProfileId_gymId: { guestProfileId: waiverData.guestProfileId, gymId: waiverData.gymId } },
+              create: waiverData,
+              update: {},
+            })
+          },
         })
         if (zapJson.duplicate) {
           // A concurrent delivery of this session recorded it first
@@ -531,11 +563,14 @@ export async function POST(request) {
 
     // Typed agreement signature from the join form (null for older sessions)
     const joinSignature      = signatureFromSession(session)
+    const joinSnapshot       = joinSignature ? await agreementSnapshot(gymSlug, 'member', session) : null
     const agreementSignature = joinSignature ? {
       agreementSignedAt:           joinSignature.signedAt,
       agreementSignatureName:      joinSignature.signatureName,
       agreementSignatureIp:        joinSignature.signatureIp,
       agreementSignatureUserAgent: joinSignature.signatureUserAgent,
+      agreementText:               joinSnapshot.text,
+      agreementVersion:            joinSnapshot.version,
     } : {}
 
     let member = await prisma.member.findFirst({

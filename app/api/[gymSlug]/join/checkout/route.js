@@ -20,6 +20,7 @@ const HYDRA_RUTGERS_POWERLIFTING_PRICE_ID = 'price_1U84lzAHpnGUkbkC2kNFvTwD'
  *   emergencyName, emergencyPhone,
  *   priceId, membershipType,
  *   signatureName,   // typed signature — must match the name (the guardian's for a minor)
+ *   agreementVersion, // lib/agreements version the page showed; the webhook snapshots its text
  *   promotionCode,   // optional — validated here (incl. once-per-customer) and applied via discounts
  * }
  */
@@ -35,7 +36,7 @@ export async function POST(request, { params }) {
       priceId, membershipType, addonPriceId, groupTrainingPriceId,
       studentIdUploadId, gradSemester, gradYear, hearAboutUs,
       isMinor, guardianName, guardianEmail, guardianPhone, guardianRelationship,
-      signatureName,
+      signatureName, agreementVersion,
     } = body
 
     const limited = await limitRequest(request, 'join-checkout', email)
@@ -150,6 +151,7 @@ export async function POST(request, { params }) {
         signatureName:         metadataValue(signatureName.trim().replace(/\s+/g, ' ')),
         signatureIp:           metadataValue(clientIp(request)),
         signatureUserAgent:    metadataValue(request.headers.get('user-agent')),
+        agreementVersion:      metadataValue(agreementVersion),
         ...(promo?.metadata ?? {}),
       },
     }).catch(err => rethrowPromoSessionError(err, promo))

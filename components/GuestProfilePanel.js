@@ -148,6 +148,7 @@ export function GuestProfilePanel({ profile, passTypeBorder, onClose, onSaveCode
   // not fetched for unlinked passes or partner check-ins (no guest profile).
   const showAgreement = !isUnlinked && source !== 'partner'
   const [waiver, setWaiver] = useState(undefined)
+  const [waiverGymName, setWaiverGymName] = useState(null)
   useEffect(() => {
     if (!showAgreement || !gymSlug || !profile.id) return
     setWaiver(undefined)
@@ -155,7 +156,11 @@ export function GuestProfilePanel({ profile, passTypeBorder, onClose, onSaveCode
     const token = localStorage.getItem('ik_token')
     fetch(`/api/${gymSlug}/guest-passes/profiles/${profile.id}`, { headers: { Authorization: `Bearer ${token}` } })
       .then(r => r.ok ? r.json() : null)
-      .then(data => { if (!cancelled) setWaiver(data ? data.waiver : undefined) })
+      .then(data => {
+        if (cancelled) return
+        setWaiver(data ? data.waiver : undefined)
+        setWaiverGymName(data?.gymName ?? null)
+      })
       .catch(err => console.error('[guest-panel] waiver fetch failed:', err.message))
     return () => { cancelled = true }
   }, [showAgreement, gymSlug, profile.id])
@@ -414,9 +419,13 @@ export function GuestProfilePanel({ profile, passTypeBorder, onClose, onSaveCode
         {showAgreement && waiver !== undefined && (
           <AgreementSection
             onFile={Boolean(waiver)}
+            gymName={waiverGymName}
+            personName={profile.name}
             signatureName={waiver?.signatureName ?? null}
             signedAt={waiver?.signedAt ?? null}
             signedByGuardian={isMinor}
+            text={waiver?.waiverText ?? null}
+            version={waiver?.waiverVersion ?? null}
           />
         )}
 

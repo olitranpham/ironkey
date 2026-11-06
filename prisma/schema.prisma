@@ -114,6 +114,9 @@ model Member {
   agreementSignatureName      String?
   agreementSignatureIp        String?
   agreementSignatureUserAgent String?
+  // Exact agreement text signed (lib/agreements) and its version
+  agreementText               String?
+  agreementVersion            String?
 
   // Seam / smart-lock access code
   accessCode       String?
@@ -330,6 +333,10 @@ model GuestWaiver {
   signatureName      String?
   signatureIp        String?
   signatureUserAgent String?
+  // Exact waiver text signed (lib/agreements) and its version. Null on rows
+  // from before snapshots.
+  waiverText         String?
+  waiverVersion      String?
 
   guestProfile   Guest @relation(fields: [guestProfileId], references: [id])
   gym            Gym   @relation(fields: [gymId], references: [id])

@@ -9,9 +9,9 @@ import { isPinInUse, PIN_IN_USE_ERROR } from '@/lib/pins'
 
 /**
  * GET /api/[gymSlug]/guest-passes/profiles/[profileId]
- * This guest's waiver at this gym (the gym from the URL slug): { waiver }
- * with signedAt and the typed signature (null on checkbox-era rows), or
- * { waiver: null } when nothing is on file here.
+ * This guest's waiver at this gym (the gym from the URL slug): { waiver, gymName }
+ * with signedAt, the typed signature and the signed text (null on older
+ * rows), or { waiver: null } when nothing is on file here.
  */
 export async function GET(request, { params }) {
   try {
@@ -19,14 +19,14 @@ export async function GET(request, { params }) {
     const { errorResponse } = await requirePermission(request, gymSlug, 'guestpasses.manage')
     if (errorResponse) return errorResponse
 
-    const gym = await prisma.gym.findUnique({ where: { slug: gymSlug }, select: { id: true } })
+    const gym = await prisma.gym.findUnique({ where: { slug: gymSlug }, select: { id: true, name: true } })
     if (!gym) return NextResponse.json({ error: 'Gym not found' }, { status: 404 })
 
     const waiver = await prisma.guestWaiver.findUnique({
       where:  { guestProfileId_gymId: { guestProfileId: profileId, gymId: gym.id } },
-      select: { signedAt: true, signatureName: true },
+      select: { signedAt: true, signatureName: true, waiverText: true, waiverVersion: true },
     })
-    return NextResponse.json({ waiver })
+    return NextResponse.json({ waiver, gymName: gym.name })
   } catch (error) {
     console.error('[guest-passes/profiles GET]', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

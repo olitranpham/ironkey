@@ -59,7 +59,9 @@ const DELIVERY_FAILED = () => NextResponse.json(
  *
  * Uses one pass from the guest's active pack at this gym. No active pack →
  * 402 { ok: false, needsPass: true } and nothing is created or changed (the
- * kiosk sends them to the guest checkout).
+ * kiosk sends them to the guest checkout). No waiver on file at this gym →
+ * 403 { ok: false, needsWaiver: true }, also before anything changes (the
+ * kiosk sends them to the signup form).
  *
  * Never returns the door code: it is emailed by the gym's guest Zapier webhook
  * to the email on the profile. If the gym has no webhook, or delivery fails
@@ -146,6 +148,19 @@ export async function POST(request, { params }) {
     // No active pass → nothing is created, issued or deleted; the kiosk sends them to checkout
     if (!existing) {
       return NextResponse.json({ ok: false, needsPass: true }, { status: 402 })
+    }
+
+    // No signed waiver at this gym → no check-in; the kiosk sends them to the signup form
+    const waiver = await prisma.guestWaiver.findFirst({
+      where:  { gymId: gym.id, guestProfile: { email } },
+      select: { id: true },
+    })
+    if (!waiver) {
+      console.log('[checkin] no waiver on file gym=%s — sent to signup', gymSlug)
+      return NextResponse.json(
+        { ok: false, needsWaiver: true, error: 'please sign the waiver before checking in' },
+        { status: 403 },
+      )
     }
 
     // ── Guest profile (global — keyed by email) ─────────────────────────────

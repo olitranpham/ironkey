@@ -15,6 +15,7 @@ import { preparePromotionCode, rethrowPromoSessionError, PromoCodeError, promoCo
  *   emergencyName, emergencyPhone, emergencyRelationship,
  *   isNewGuest,
  *   signatureName,   // typed signature — required unless the guest already has a waiver at this gym
+ *   agreementVersion, // lib/agreements version the page showed; the webhook snapshots its text
  *   promotionCode,   // optional — validated here (incl. once-per-customer) and applied via discounts
  * }
  */
@@ -30,7 +31,7 @@ export async function POST(request, { params }) {
       emergencyName, emergencyPhone, emergencyRelationship,
       isNewGuest, studentIdUploadId,
       isMinor, guardianName, guardianEmail, guardianPhone, guardianRelationship,
-      signatureName,
+      signatureName, agreementVersion,
     } = body
 
     const limited = await limitRequest(request, 'guest-checkout', email)
@@ -157,6 +158,7 @@ export async function POST(request, { params }) {
           signatureName:      metadataValue(signatureName.trim().replace(/\s+/g, ' ')),
           signatureIp:        metadataValue(clientIp(request)),
           signatureUserAgent: metadataValue(request.headers.get('user-agent')),
+          agreementVersion:   metadataValue(agreementVersion),
         } : {}),
         ...(promo?.metadata ?? {}),
       },

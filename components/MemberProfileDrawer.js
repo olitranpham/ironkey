@@ -477,6 +477,9 @@ function DrawerContent({ member, gymSlug, membershipBorder, onClose, onStatusCha
         setAgreement(data?.member ? {
           signatureName: data.member.agreementSignatureName ?? null,
           signedAt:      data.member.agreementSignedAt ?? null,
+          text:          data.member.agreementText ?? null,
+          version:       data.member.agreementVersion ?? null,
+          gymName:       data.gymName ?? null,
         } : undefined)
         setKisiStatus({
           kisiUserId:           data?.member?.kisiUserId ?? null,
@@ -1061,9 +1064,13 @@ function DrawerContent({ member, gymSlug, membershipBorder, onClose, onStatusCha
             <div className="px-3 py-3 bg-[#1c1c1c]">
               <AgreementSection
                 onFile={Boolean(agreement.signatureName)}
+                gymName={agreement.gymName}
+                personName={`${member.firstName ?? ''} ${member.lastName ?? ''}`.trim()}
                 signatureName={agreement.signatureName}
                 signedAt={agreement.signedAt}
                 signedByGuardian={Boolean(member.isMinor)}
+                text={agreement.text}
+                version={agreement.version}
               />
             </div>
           )}

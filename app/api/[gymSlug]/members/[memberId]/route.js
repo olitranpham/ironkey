@@ -24,7 +24,7 @@ const MEMBER_SELECT = {
   gradSemester: true, gradYear: true, studentCategory: true,
   studentIdImage: true, studentIdStatus: true, studentIdReviewedAt: true, studentIdReviewedBy: true,
   kisiUserId: true, kisiRoleAssignmentId: true,
-  agreementSignedAt: true, agreementSignatureName: true,
+  agreementSignedAt: true, agreementSignatureName: true, agreementText: true, agreementVersion: true,
 }
 
 /**
@@ -40,7 +40,7 @@ export async function GET(request, { params }) {
     const scope = await trainerMemberScope(ctx)
     if (scope && !scope.has(memberId)) return NextResponse.json({ error: 'Member not found' }, { status: 404 })
 
-    const gym = await prisma.gym.findUnique({ where: { slug: gymSlug }, select: { id: true } })
+    const gym = await prisma.gym.findUnique({ where: { slug: gymSlug }, select: { id: true, name: true } })
     if (!gym) return NextResponse.json({ error: 'Gym not found' }, { status: 404 })
 
     const gymId = gym.id
@@ -54,7 +54,7 @@ export async function GET(request, { params }) {
       return NextResponse.json({ error: 'Member not found' }, { status: 404 })
     }
 
-    return NextResponse.json({ member: scope ? trainerMemberView(member) : member })
+    return NextResponse.json({ member: scope ? trainerMemberView(member) : member, gymName: gym.name })
   } catch (error) {
     console.error('[members/get]', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
