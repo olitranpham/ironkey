@@ -5,6 +5,7 @@ import { X, KeyRound, Phone, User, ShieldAlert, UserCheck } from 'lucide-react'
 import { useParams } from 'next/navigation'
 import { formatPhone } from '@/lib/phone'
 import { fillSuggestedPin } from '@/lib/suggestPin'
+import { AgreementSection } from '@/components/AgreementSection'
 
 // ── Shared constants ──────────────────────────────────────────────────────────
 
@@ -142,6 +143,22 @@ export function GuestProfilePanel({ profile, passTypeBorder, onClose, onSaveCode
 
   const visits     = totalVisits(profile)
   const isUnlinked = profile._unlinked === true
+
+  // This guest's waiver at this gym (gym from the URL). undefined = loading;
+  // not fetched for unlinked passes or partner check-ins (no guest profile).
+  const showAgreement = !isUnlinked && source !== 'partner'
+  const [waiver, setWaiver] = useState(undefined)
+  useEffect(() => {
+    if (!showAgreement || !gymSlug || !profile.id) return
+    setWaiver(undefined)
+    let cancelled = false
+    const token = localStorage.getItem('ik_token')
+    fetch(`/api/${gymSlug}/guest-passes/profiles/${profile.id}`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (!cancelled) setWaiver(data ? data.waiver : undefined) })
+      .catch(err => console.error('[guest-panel] waiver fetch failed:', err.message))
+    return () => { cancelled = true }
+  }, [showAgreement, gymSlug, profile.id])
   const nameParts  = profile.name.trim().split(/\s+/)
   const initials   = (nameParts[0]?.[0] ?? '') + (nameParts[1]?.[0] ?? '')
 
@@ -392,6 +409,16 @@ export function GuestProfilePanel({ profile, passTypeBorder, onClose, onSaveCode
             </div>
           </div>
         </GSection>
+
+        {/* Signed waiver at this gym */}
+        {showAgreement && waiver !== undefined && (
+          <AgreementSection
+            onFile={Boolean(waiver)}
+            signatureName={waiver?.signatureName ?? null}
+            signedAt={waiver?.signedAt ?? null}
+            signedByGuardian={isMinor}
+          />
+        )}
 
         {/* Pass history — hidden for partner check-in source */}
         {source !== 'partner' && <div>

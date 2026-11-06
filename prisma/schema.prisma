@@ -107,6 +107,14 @@ model Member {
   guardianPhone        String?
   guardianRelationship String?
 
+  // Membership agreement typed signature (the guardian's for a minor),
+  // set by the join checkout. Null for members who joined before typed
+  // signatures, or were added by staff / imported.
+  agreementSignedAt           DateTime?
+  agreementSignatureName      String?
+  agreementSignatureIp        String?
+  agreementSignatureUserAgent String?
+
   // Seam / smart-lock access code
   accessCode       String?
   seamDeviceId     String?
@@ -316,6 +324,12 @@ model GuestWaiver {
   guestProfileId String
   gymId          String
   signedAt       DateTime @default(now())
+
+  // Typed signature (the guardian's for a minor) and where it was signed.
+  // Null on rows from before typed signatures (accepted by checkbox).
+  signatureName      String?
+  signatureIp        String?
+  signatureUserAgent String?
 
   guestProfile   Guest @relation(fields: [guestProfileId], references: [id])
   gym            Gym   @relation(fields: [gymId], references: [id])

@@ -24,6 +24,7 @@ const MEMBER_SELECT = {
   gradSemester: true, gradYear: true, studentCategory: true,
   studentIdImage: true, studentIdStatus: true, studentIdReviewedAt: true, studentIdReviewedBy: true,
   kisiUserId: true, kisiRoleAssignmentId: true,
+  agreementSignedAt: true, agreementSignatureName: true,
 }
 
 /**

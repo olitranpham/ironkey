@@ -8,6 +8,32 @@ import { writeAudit } from '@/lib/audit'
 import { isPinInUse, PIN_IN_USE_ERROR } from '@/lib/pins'
 
 /**
+ * GET /api/[gymSlug]/guest-passes/profiles/[profileId]
+ * This guest's waiver at this gym (the gym from the URL slug): { waiver }
+ * with signedAt and the typed signature (null on checkbox-era rows), or
+ * { waiver: null } when nothing is on file here.
+ */
+export async function GET(request, { params }) {
+  try {
+    const { gymSlug, profileId } = await params
+    const { errorResponse } = await requirePermission(request, gymSlug, 'guestpasses.manage')
+    if (errorResponse) return errorResponse
+
+    const gym = await prisma.gym.findUnique({ where: { slug: gymSlug }, select: { id: true } })
+    if (!gym) return NextResponse.json({ error: 'Gym not found' }, { status: 404 })
+
+    const waiver = await prisma.guestWaiver.findUnique({
+      where:  { guestProfileId_gymId: { guestProfileId: profileId, gymId: gym.id } },
+      select: { signedAt: true, signatureName: true },
+    })
+    return NextResponse.json({ waiver })
+  } catch (error) {
+    console.error('[guest-passes/profiles GET]', error)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  }
+}
+
+/**
  * PATCH /api/[gymSlug]/guest-passes/profiles/[profileId]
  * Updates a guest profile's name, phone, or accessCode (DB only — no Seam calls).
  * Seam codes for guests are managed exclusively by the checkin route.

@@ -6,6 +6,7 @@ import { X, Phone, KeyRound, History, User, ShieldAlert, DoorOpen, UserCheck, Ch
 import { formatPhone } from '@/lib/phone'
 import { fillSuggestedPin } from '@/lib/suggestPin'
 import { formatMembershipTypeDisplay } from '@/lib/membershipCategory'
+import { AgreementSection } from '@/components/AgreementSection'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -387,6 +388,8 @@ function DrawerContent({ member, gymSlug, membershipBorder, onClose, onStatusCha
   // (which does include it) whenever the drawer opens for someone new.
   const [studentIdImage,         setStudentIdImage]         = useState(null)
   const [studentIdLightboxOpen,  setStudentIdLightboxOpen]  = useState(false)
+  // Signed agreement, from the same single-member fetch (undefined = loading)
+  const [agreement, setAgreement] = useState(undefined)
 
   // Door-access provider — defaults to 'SEAM' so every existing gym renders
   // exactly as before while this resolves. Gym-level, not member-level, so
@@ -463,6 +466,7 @@ function DrawerContent({ member, gymSlug, membershipBorder, onClose, onStatusCha
     if (simplified || !gymSlug || !member.id) return
     setStudentIdImage(null)
     setKisiStatus(null)
+    setAgreement(undefined)
     const token = localStorage.getItem('ik_token')
     fetch(`/api/${gymSlug}/members/${member.id}`, {
       headers: { Authorization: `Bearer ${token}` },
@@ -470,6 +474,10 @@ function DrawerContent({ member, gymSlug, membershipBorder, onClose, onStatusCha
       .then(r => r.ok ? r.json() : null)
       .then(data => {
         setStudentIdImage(data?.member?.studentIdImage ?? null)
+        setAgreement(data?.member ? {
+          signatureName: data.member.agreementSignatureName ?? null,
+          signedAt:      data.member.agreementSignedAt ?? null,
+        } : undefined)
         setKisiStatus({
           kisiUserId:           data?.member?.kisiUserId ?? null,
           kisiRoleAssignmentId: data?.member?.kisiRoleAssignmentId ?? null,
@@ -1045,6 +1053,19 @@ function DrawerContent({ member, gymSlug, membershipBorder, onClose, onStatusCha
           )}
           {studentIdLightboxOpen && (
             <ImageLightbox src={studentIdImage} onClose={() => setStudentIdLightboxOpen(false)} />
+          )}
+
+          {/* Signed membership agreement — members have no checkbox-era
+              record, so anything without a typed signature is "not on file" */}
+          {agreement !== undefined && (
+            <div className="px-3 py-3 bg-[#1c1c1c]">
+              <AgreementSection
+                onFile={Boolean(agreement.signatureName)}
+                signatureName={agreement.signatureName}
+                signedAt={agreement.signedAt}
+                signedByGuardian={Boolean(member.isMinor)}
+              />
+            </div>
           )}
 
           {/* Access — Kisi gyms get an invite-status row instead of a PIN editor */}

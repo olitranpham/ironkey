@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import prisma from '@/lib/prisma'
-import { limitRequest } from '@/lib/rateLimit'
+import { limitRequest, clientIp } from '@/lib/rateLimit'
+import { signatureError, metadataValue } from '@/lib/signature'
 import { preparePromotionCode, rethrowPromoSessionError, PromoCodeError, promoCodeErrorResponse } from '@/lib/couponRedemption'
 
 /**
@@ -13,6 +14,7 @@ import { preparePromotionCode, rethrowPromoSessionError, PromoCodeError, promoCo
  *   firstName, lastName, email, phone, dob, address,
  *   emergencyName, emergencyPhone, emergencyRelationship,
  *   isNewGuest,
+ *   signatureName,   // typed signature — required unless the guest already has a waiver at this gym
  *   promotionCode,   // optional — validated here (incl. once-per-customer) and applied via discounts
  * }
  */
@@ -28,6 +30,7 @@ export async function POST(request, { params }) {
       emergencyName, emergencyPhone, emergencyRelationship,
       isNewGuest, studentIdUploadId,
       isMinor, guardianName, guardianEmail, guardianPhone, guardianRelationship,
+      signatureName,
     } = body
 
     const limited = await limitRequest(request, 'guest-checkout', email)
@@ -75,6 +78,21 @@ export async function POST(request, { params }) {
       ?? `https://${request.headers.get('host')}`
     // Accept pre-built name (returning guest) or construct from first/last
     const guestName = body.name?.trim() || [firstName, lastName].filter(Boolean).join(' ').trim() || email.trim()
+
+    // The waiver signature is required unless this guest already has a waiver
+    // on file here — checked against the DB, not the client's isNewGuest, so
+    // it can't be skipped by calling this directly.
+    const existingWaiver = await prisma.guestWaiver.findFirst({
+      where:  { gymId: gym.id, guestProfile: { email: email.trim().toLowerCase() } },
+      select: { id: true },
+    })
+    const signs = !existingWaiver
+    if (signs) {
+      const sigError = signatureError(signatureName, {
+        isMinor, guardianName, name: [firstName, lastName].filter(Boolean).join(' ') || body.name,
+      })
+      if (sigError) return NextResponse.json({ error: sigError }, { status: 400 })
+    }
 
     // Oasis's student pass is weekend-only. Checked server-side against the
     // Price's own product (never the client-supplied passType — "Student
@@ -135,6 +153,11 @@ export async function POST(request, { params }) {
         guardianEmail:         guardianEmail         ?? '',
         guardianPhone:         guardianPhone         ?? '',
         guardianRelationship:  guardianRelationship  ?? '',
+        ...(signs ? {
+          signatureName:      metadataValue(signatureName.trim().replace(/\s+/g, ' ')),
+          signatureIp:        metadataValue(clientIp(request)),
+          signatureUserAgent: metadataValue(request.headers.get('user-agent')),
+        } : {}),
         ...(promo?.metadata ?? {}),
       },
     }).catch(err => rethrowPromoSessionError(err, promo))

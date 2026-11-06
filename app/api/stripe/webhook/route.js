@@ -16,6 +16,23 @@ import { recordCouponRedemption } from '@/lib/couponRedemption'
 import { resolvePackSize } from '@/lib/gymPassTypes'
 import { withPhone, stripeSessionPhone } from '@/lib/zapierPayload'
 
+/**
+ * The typed waiver / agreement signature from checkout metadata, or null when
+ * the checkout didn't carry one (a returning guest already on file, or a
+ * session created before typed signatures). signedAt is when the session was
+ * created — when the signer submitted the form.
+ */
+function signatureFromSession(session) {
+  const meta = session.metadata ?? {}
+  if (!meta.signatureName?.trim()) return null
+  return {
+    signatureName:      meta.signatureName.trim(),
+    signatureIp:        meta.signatureIp        || null,
+    signatureUserAgent: meta.signatureUserAgent || null,
+    signedAt:           new Date(session.created * 1000),
+  }
+}
+
 /** Trimmed string, or null for null/undefined/blank. */
 function normalizePhone(value) {
   if (value == null) return null
@@ -234,7 +251,7 @@ export async function POST(request) {
         firstTime = !existingWaiver
         if (!existingWaiver) {
           await prisma.guestWaiver.create({
-            data: { guestProfileId: guestProfile.id, gymId: gym.id },
+            data: { guestProfileId: guestProfile.id, gymId: gym.id, ...(signatureFromSession(session) ?? {}) },
           }).catch(err => {
             // A concurrent delivery of this session created it first
             if (err.code !== 'P2002') throw err
@@ -512,6 +529,15 @@ export async function POST(request) {
       console.error('[platform/webhook] failed to retrieve session line items:', err.message)
     }
 
+    // Typed agreement signature from the join form (null for older sessions)
+    const joinSignature      = signatureFromSession(session)
+    const agreementSignature = joinSignature ? {
+      agreementSignedAt:           joinSignature.signedAt,
+      agreementSignatureName:      joinSignature.signatureName,
+      agreementSignatureIp:        joinSignature.signatureIp,
+      agreementSignatureUserAgent: joinSignature.signatureUserAgent,
+    } : {}
+
     let member = await prisma.member.findFirst({
       where: { gymId: gym.id, email: email.toLowerCase() },
     })
@@ -582,6 +608,7 @@ export async function POST(request) {
           guardianEmail:                isMinor ? (meta.guardianEmail        || null) : null,
           guardianPhone:                isMinor ? (meta.guardianPhone        || null) : null,
           guardianRelationship:         isMinor ? (meta.guardianRelationship || null) : null,
+          ...agreementSignature,
         },
       })
       console.log('[platform/webhook] created member from checkout:', member.id, email, '| hearAboutUs=%s', meta.hearAboutUs || '(none)', '| isMinor=%s', isMinor)
@@ -608,6 +635,8 @@ export async function POST(request) {
             guardianPhone:        meta.guardianPhone        || null,
             guardianRelationship: meta.guardianRelationship || null,
           } : {}),
+          // A re-join signs the agreement again
+          ...agreementSignature,
         },
       })
       console.log('[platform/webhook] updated existing member from checkout:', member.id, email)

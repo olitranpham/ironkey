@@ -5,6 +5,8 @@ import { useParams } from 'next/navigation'
 import { Loader2, X, ShoppingCart, LogIn, CheckCircle2, ChevronLeft, Dumbbell } from 'lucide-react'
 import PublicPageHeader from '@/components/PublicPageHeader'
 import { Field, SectionDivider, INPUT, SELECT, BUTTON_PRIMARY } from '@/components/PublicPageStyles'
+import { SignatureField } from '@/components/SignatureField'
+import { signatureError } from '@/lib/signature'
 function maskPhone(value) {
   const d = value.replace(/\D/g, '').slice(0, 10)
   if (d.length < 4) return d.length ? `(${d}` : ''
@@ -268,11 +270,16 @@ export default function GuestPage() {
     emergencyName: '', emergencyPhone: '', emergencyRelationship: '',
     guardianFirstName: '', guardianLastName: '',
     guardianEmail: '', guardianConfirmEmail: '', guardianPhone: '', guardianRelationship: '',
-    waiver: false,
+    signatureName: '',
   })
 
   const age     = form.dob ? calculateAge(form.dob) : null
   const isMinor = age !== null && age < 18
+  // Typed waiver signature: the guardian signs for a minor
+  const signerName = isMinor
+    ? `${form.guardianFirstName.trim()} ${form.guardianLastName.trim()}`.trim()
+    : `${form.firstName.trim()} ${form.lastName.trim()}`.trim()
+  const signatureMismatch = signatureError(form.signatureName, { isMinor, guardianName: signerName, name: signerName }) !== null
 
   // Shared
   const [selectedPriceId, setSelectedPriceId] = useState('')
@@ -405,7 +412,7 @@ export default function GuestPage() {
     if (!/^\d{5}$/.test(form.zip)) { setError('zip code must be 5 digits.'); return }
     if (!form.emergencyName.trim() || !form.emergencyPhone.trim()) { setError('emergency contact name and phone are required.'); return }
     if (!form.emergencyRelationship.trim() || form.emergencyRelationship.trim().length < 2) { setError('emergency contact relationship must be at least 2 characters.'); return }
-    if (!form.waiver)          { setError('you must agree to the liability waiver.'); return }
+    if (signatureMismatch)     { setError('signature must match your name'); return }
     if (!selectedPriceId)      { setError('please select a pass type.'); return }
     if (requiresStudentId && !studentIdFile) { setError('a student ID photo is required for this pass type.'); return }
     if (studentPassBlockedByDay) { setError('student pass is only available on weekends.'); return }
@@ -461,6 +468,7 @@ export default function GuestPage() {
           guardianEmail:         isMinor ? accountEmail : '',
           guardianPhone:         isMinor ? accountPhone : '',
           guardianRelationship:  isMinor ? form.guardianRelationship.trim() : '',
+          signatureName:         form.signatureName.trim(),
           studentIdUploadId,
           promotionCode:         promotionCode.trim(),
         }),
@@ -950,50 +958,37 @@ export default function GuestPage() {
 
             <SectionDivider label="terms" />
 
-            {/* Waiver */}
-            <label className="flex items-start gap-3 cursor-pointer group">
-              <div className="relative mt-0.5 shrink-0">
-                <input
-                  type="checkbox"
-                  checked={form.waiver}
-                  onChange={e => setField('waiver', e.target.checked)}
-                  className="sr-only"
-                />
-                <div className={`w-4 h-4 rounded border transition-colors ${form.waiver ? 'bg-white border-white' : 'border-neutral-600 bg-transparent group-hover:border-neutral-400'}`}>
-                  {form.waiver && (
-                    <svg viewBox="0 0 12 12" fill="none" className="w-4 h-4 -mt-px -ml-px">
-                      <path d="M2.5 6l2.5 2.5 4.5-5" stroke="#1c1c1c" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                  )}
-                </div>
-              </div>
-              <span className="text-xs text-neutral-400 leading-relaxed">
-                {isMinor ? (
-                  <>
-                    I, {form.guardianFirstName.trim() || 'the undersigned'} {form.guardianLastName.trim()}, as parent/legal guardian of {form.firstName.trim() || 'the guest'} {form.lastName.trim()}, agree to the{' '}
-                    <button
-                      type="button"
-                      onClick={e => { e.preventDefault(); setWaiverOpen(true) }}
-                      className="text-white underline underline-offset-2 hover:text-neutral-200 transition-colors"
-                    >
-                      liability waiver & terms
-                    </button>
-                    {' '}on their behalf.
-                  </>
-                ) : (
-                  <>
-                    I agree to the{' '}
-                    <button
-                      type="button"
-                      onClick={e => { e.preventDefault(); setWaiverOpen(true) }}
-                      className="text-white underline underline-offset-2 hover:text-neutral-200 transition-colors"
-                    >
-                      liability waiver & terms
-                    </button>
-                  </>
-                )}
-              </span>
-            </label>
+            {/* Waiver — typed signature */}
+            <SignatureField
+              value={form.signatureName}
+              onChange={v => setField('signatureName', v)}
+              expectedName={signerName}
+            >
+              {isMinor ? (
+                <>
+                  i, {form.guardianFirstName.trim() || 'the undersigned'} {form.guardianLastName.trim()}, as parent/legal guardian of {form.firstName.trim() || 'the guest'} {form.lastName.trim()}, agree to the{' '}
+                  <button
+                    type="button"
+                    onClick={() => setWaiverOpen(true)}
+                    className="text-white underline underline-offset-2 hover:text-neutral-200 transition-colors"
+                  >
+                    liability waiver & terms
+                  </button>
+                  {' '}on their behalf.
+                </>
+              ) : (
+                <>
+                  i agree to the{' '}
+                  <button
+                    type="button"
+                    onClick={() => setWaiverOpen(true)}
+                    className="text-white underline underline-offset-2 hover:text-neutral-200 transition-colors"
+                  >
+                    liability waiver & terms
+                  </button>
+                </>
+              )}
+            </SignatureField>
 
             <Field label="promo code (optional)">
               <input
@@ -1012,6 +1007,7 @@ export default function GuestPage() {
             <button
               type="submit"
               disabled={submitting || plans.length === 0
+                || signatureMismatch
                 || (!!form.confirmEmail && form.email.trim().toLowerCase() !== form.confirmEmail.trim().toLowerCase())
                 || (isMinor && !!form.guardianConfirmEmail && form.guardianEmail.trim().toLowerCase() !== form.guardianConfirmEmail.trim().toLowerCase())
                 || (requiresStudentId && !studentIdFile)

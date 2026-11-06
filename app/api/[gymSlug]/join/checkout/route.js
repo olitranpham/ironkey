@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import prisma from '@/lib/prisma'
 import { planRequiresStudentId } from '@/lib/studentIdPlans'
-import { limitRequest } from '@/lib/rateLimit'
+import { limitRequest, clientIp } from '@/lib/rateLimit'
+import { signatureError, metadataValue } from '@/lib/signature'
 import { preparePromotionCode, rethrowPromoSessionError, PromoCodeError, promoCodeErrorResponse } from '@/lib/couponRedemption'
 
 // Rutgers Powerlifting Club — one-off $5 non-recurring membership for
@@ -18,6 +19,7 @@ const HYDRA_RUTGERS_POWERLIFTING_PRICE_ID = 'price_1U84lzAHpnGUkbkC2kNFvTwD'
  *   firstName, lastName, email, phone, dob,
  *   emergencyName, emergencyPhone,
  *   priceId, membershipType,
+ *   signatureName,   // typed signature — must match the name (the guardian's for a minor)
  *   promotionCode,   // optional — validated here (incl. once-per-customer) and applied via discounts
  * }
  */
@@ -33,6 +35,7 @@ export async function POST(request, { params }) {
       priceId, membershipType, addonPriceId, groupTrainingPriceId,
       studentIdUploadId, gradSemester, gradYear, hearAboutUs,
       isMinor, guardianName, guardianEmail, guardianPhone, guardianRelationship,
+      signatureName,
     } = body
 
     const limited = await limitRequest(request, 'join-checkout', email)
@@ -59,6 +62,9 @@ export async function POST(request, { params }) {
     if (!/^\d{5}$/.test(zip ?? '')) {
       return NextResponse.json({ error: 'zip must be exactly 5 digits' }, { status: 400 })
     }
+    // Same rule as the form, so the signature can't be skipped by calling this directly
+    const sigError = signatureError(signatureName, { isMinor, guardianName, firstName, lastName })
+    if (sigError) return NextResponse.json({ error: sigError }, { status: 400 })
 
     const gym = await prisma.gym.findUnique({
       where:  { slug: gymSlug },
@@ -141,6 +147,9 @@ export async function POST(request, { params }) {
         guardianEmail:         guardianEmail         ?? '',
         guardianPhone:         guardianPhone         ?? '',
         guardianRelationship:  guardianRelationship  ?? '',
+        signatureName:         metadataValue(signatureName.trim().replace(/\s+/g, ' ')),
+        signatureIp:           metadataValue(clientIp(request)),
+        signatureUserAgent:    metadataValue(request.headers.get('user-agent')),
         ...(promo?.metadata ?? {}),
       },
     }).catch(err => rethrowPromoSessionError(err, promo))
