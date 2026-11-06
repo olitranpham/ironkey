@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams } from 'next/navigation'
 import { RefreshCw, Activity, Search, TrendingUp, Lock, Unlock, AlertTriangle } from 'lucide-react'
 import { getGymTheme } from '@/lib/gymThemes'
+import { buildRetentionData, retentionTick } from '@/lib/retentionChart'
 import MemberProfileDrawer from '@/components/MemberProfileDrawer'
 import {
   AreaChart,
@@ -63,65 +64,6 @@ function dateLabelFor(tab) {
   if (tab === 'frozen')   return 'frozen'
   if (tab === 'canceled') return 'canceled'
   return 'joined'
-}
-
-// Builds chart data from the loaded members array spanning from the earliest
-// membership createdAt to the current month.
-// Each member enters the cohort from their createdAt date. For each month we
-// then check whether they had been cancelled or frozen BY that month's end,
-// so a member who joined in Jan and cancelled in Apr shows as active in Jan–Mar
-// and cancelled from Apr onwards — rather than only appearing after cancellation.
-function buildChartData(members) {
-  const now = new Date()
-  if (!members.length) return []
-
-  const earliest = members.reduce((min, m) => {
-    const d = new Date(m.createdAt)
-    return d < min ? d : min
-  }, new Date(members[0].createdAt))
-
-  // Start at the 1st of the earliest member's month
-  const startYear  = earliest.getFullYear()
-  const startMonth = earliest.getMonth()
-  const nowYear    = now.getFullYear()
-  const nowMonth   = now.getMonth()
-  const totalMonths = (nowYear - startYear) * 12 + (nowMonth - startMonth) + 1
-
-  return Array.from({ length: totalMonths }, (_, i) => {
-    const d          = new Date(startYear, startMonth + i, 1)
-    const endOfMonth = new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59, 999)
-
-    let active = 0, frozen = 0, canceled = 0
-
-    for (const m of members) {
-      if (new Date(m.createdAt) > endOfMonth) continue  // hadn't joined yet
-
-      // For canceled members without a dateCanceled, fall back to createdAt so
-      // they still register in the canceled bucket rather than the active bucket.
-      const effectiveCancelDate = m.status === 'CANCELED'
-        ? new Date(m.dateCanceled ?? m.createdAt)
-        : null
-      const canceledByThen = effectiveCancelDate && effectiveCancelDate <= endOfMonth
-      // For frozen members without a dateFrozen, fall back to createdAt.
-      // Only treat as frozen-by-then if the member is still frozen today;
-      // if they've since re-activated we don't have an unfreeze date to go on.
-      const effectiveFreezeDate = m.status === 'FROZEN'
-        ? new Date(m.dateFrozen ?? m.createdAt)
-        : null
-      const frozenByThen = effectiveFreezeDate && effectiveFreezeDate <= endOfMonth
-
-      if (canceledByThen)    canceled++
-      else if (frozenByThen) frozen++
-      else                   active++
-    }
-
-    return {
-      month: d.toLocaleDateString('en-US', { month: 'short' }).toLowerCase(),
-      active,
-      frozen,
-      canceled,
-    }
-  })
 }
 
 // ── Page ──────────────────────────────────────────────────────────────────────
@@ -417,7 +359,7 @@ export default function DashboardPage() {
             </div>
 
             {/* Retention chart */}
-            <RetentionChart data={buildChartData(members)} />
+            <RetentionChart data={buildRetentionData(members)} />
           </>
         )}
 
@@ -654,7 +596,7 @@ const CUSTOM_TOOLTIP = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null
   return (
     <div className="bg-[#1c1c1c] border border-neutral-800 rounded-lg px-3 py-2 text-xs shadow-xl">
-      <p className="text-neutral-400 mb-1.5 font-medium">{label}</p>
+      <p className="text-neutral-400 mb-1.5 font-medium">{payload[0]?.payload?.label ?? label}</p>
       {payload.map((p) => (
         <p key={p.name} style={{ color: p.color }} className="leading-5">
           {p.name}: <span className="font-semibold text-white">{p.value}</span>
@@ -700,7 +642,8 @@ function RetentionChart({ data }) {
 
             <CartesianGrid strokeDasharray="3 3" stroke="#262626" vertical={false} />
             <XAxis
-              dataKey="month"
+              dataKey="key"
+              tickFormatter={retentionTick}
               tick={{ fill: '#737373', fontSize: 11 }}
               axisLine={false}
               tickLine={false}
