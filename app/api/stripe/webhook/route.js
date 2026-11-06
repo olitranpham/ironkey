@@ -10,7 +10,7 @@ import { intakeMember } from '@/lib/memberIntake'
 import { intakeGuestPass } from '@/lib/guestPassIntake'
 import { writeAudit } from '@/lib/audit'
 import { generateUniquePin } from '@/lib/pins'
-import { OASIS_GYM_SLUG, OASIS_GUEST_PASS_PRODUCTS, isOasisGuestPassProduct } from '@/lib/oasisGuestPasses'
+import { OASIS_GUEST_PASS_PRODUCTS } from '@/lib/oasisGuestPasses'
 import { recordCouponRedemption } from '@/lib/couponRedemption'
 import { resolvePackSize } from '@/lib/gymPassTypes'
 import { kickJob } from '@/lib/webhookJobs'
@@ -139,7 +139,7 @@ export async function POST(request) {
       const guestName  = meta.guestName ?? ''
       const email      = (session.customer_email ?? meta.email ?? '').toLowerCase()
       // Ironkey checkout form phone (session metadata): formatted, trimmed, blank → null.
-      // Same value is saved to the profile and sent in the Oasis payload.
+      // Same value is saved to the profile (the Zapier payload's phone source).
       const phone      = normalizePhone(formatPhone(meta.phone || null))
       const passesLeft = parseInt(meta.passesLeft, 10) || 1
 
@@ -169,12 +169,6 @@ export async function POST(request) {
       const passType = meta.passType
         || (lineItemProductId && OASIS_GUEST_PASS_PRODUCTS[lineItemProductId]?.passType)
         || 'SINGLE'
-
-      // Oasis guest passes send the buyer's phone to Zapier (below). Product-ID
-      // keyed (same rule as the kiosk listing); if the line items couldn't be
-      // loaded, a guest_pass checkout at Oasis is still a guest pass.
-      const isOasisGuestPass = gymSlug === OASIS_GYM_SLUG
-        && (!lineItemProductId || isOasisGuestPassProduct(lineItemProduct ?? lineItemProductId))
 
       console.log('[platform/webhook] guest pass — passType:', passType, '| source:', meta.passType ? 'metadata' : lineItemProductId ? 'product map' : 'default')
 
@@ -249,15 +243,6 @@ export async function POST(request) {
         console.log('[platform/webhook] reusing accessCode', maskPin(accessCode), 'for returning guest', email)
       }
 
-      // Oasis payload phone: checkout form phone → phone already on the profile → null
-      const oasisPayloadPhone = isOasisGuestPass
-        ? (phone ?? normalizePhone(guestProfile?.phone) ?? null)
-        : null
-      if (isOasisGuestPass) {
-        console.log('[platform/webhook] oasis guest pass phone source=%s',
-          phone ? 'checkout_form' : normalizePhone(guestProfile?.phone) ? 'profile' : 'none')
-      }
-
       // Zapier phone comes from the guest profile at send time; Stripe's phone
       // is the fallback when there's no profile phone (or no profile)
       const stripePhone = (phone || normalizePhone(guestProfile?.phone))
@@ -303,7 +288,6 @@ export async function POST(request) {
                   // send time — a Seam PIN collision can change the code)
                   zapier: {
                     name: guestName, email, passType, passesLeft: pass.passesLeft, firstTime, alreadyActive: false,
-                    ...(isOasisGuestPass ? { phone: oasisPayloadPhone } : {}),
                     isMinor:              guestIsMinor,
                     guardianName:         guestIsMinor ? (meta.guardianName         || null) : null,
                     guardianEmail:        guestIsMinor ? (meta.guardianEmail        || null) : null,
