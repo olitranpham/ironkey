@@ -69,7 +69,6 @@ model Gym {
   leads                Lead[]
   guestCheckIns        GuestCheckIn[]
   couponRedemptions    CouponRedemption[]
-  webhookJobs          WebhookJob[]
 }
 
 // ─── Member ───────────────────────────────────────────────────────────────────
@@ -161,7 +160,6 @@ model Member {
   membershipEvents MembershipEvent[]
   ptSessions       PTSessionMember[]
   couponRedemptions CouponRedemption[]
-  webhookJobs      WebhookJob[]
 
   @@unique([gymId, email])
 }
@@ -259,7 +257,6 @@ model GuestVisit {
   packSize        Int?
 
   checkIns   GuestCheckIn[]
-  webhookJobs WebhookJob[]
 
   createdAt DateTime @default(now())
 
@@ -627,39 +624,4 @@ model RateLimit {
   key         String   @id
   count       Int
   windowStart DateTime
-}
-
-// ─── WebhookJob ───────────────────────────────────────────────────────────────
-// Slow follow-up work for a Stripe webhook (Seam / Kisi provisioning, Zapier
-// delivery), enqueued in the same transaction as the rows it belongs to so
-// the webhook can answer Stripe immediately. Run right after the response,
-// then retried by the cron endpoint (/api/cron/webhook-jobs). Each step's
-// flag is set once it succeeds, so a retry never redoes a finished step.
-
-model WebhookJob {
-  id              String      @id @default(cuid())
-  kind            String      // 'guest_access' | 'member_access'
-  gymId           String
-  gym             Gym         @relation(fields: [gymId], references: [id], onDelete: Cascade)
-  guestPassId     String?
-  guestPass       GuestVisit? @relation(fields: [guestPassId], references: [id], onDelete: SetNull)
-  memberId        String?
-  member          Member?     @relation(fields: [memberId], references: [id], onDelete: SetNull)
-  stripeSessionId String?
-  payload         Json        // inputs for the steps, plus progress (e.g. Seam code IDs per device)
-  status          String      @default("pending") // pending | running | done | failed (gave up after max attempts)
-  kisiDone        Boolean     @default(false)
-  seamDone        Boolean     @default(false)
-  zapierDone      Boolean     @default(false)
-  failedStep      String?     // step of the most recent failure
-  lastError       String?
-  attempts        Int         @default(0)
-  nextRunAt       DateTime?   @default(now())
-  lockedAt        DateTime?   // set while running; a stale lock is reclaimed
-  createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
-
-  @@unique([kind, stripeSessionId])
-  @@index([status, nextRunAt])
-  @@index([gymId, status])
 }
