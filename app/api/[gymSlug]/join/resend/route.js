@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { limitRequest, hit, tooManyRequests, EMAIL_LIMIT } from '@/lib/rateLimit'
 import { maskEmail, postWebhook } from '@/lib/guestCodeDelivery'
+import { withPhone } from '@/lib/zapierPayload'
 import { verifyPaidCheckoutSession } from '@/lib/checkoutSession'
 
 const RESEND_EMAIL_LIMIT = 3
@@ -45,7 +46,7 @@ export async function POST(request, { params }) {
     const member = await prisma.member.findFirst({
       where:  { gymId: gym.id, email },
       select: {
-        firstName: true, lastName: true, email: true, accessCode: true, membershipType: true, status: true,
+        id: true, firstName: true, lastName: true, email: true, phone: true, accessCode: true, membershipType: true, status: true,
         isMinor: true, guardianName: true, guardianEmail: true, guardianPhone: true, guardianRelationship: true,
       },
     })
@@ -53,7 +54,7 @@ export async function POST(request, { params }) {
     if (!member?.accessCode || member.status === 'CANCELED' || member.status === 'FROZEN') return generic
 
     // Same shape as the purchase payload so the existing member Zap emails it
-    await postWebhook(gym.zapierMemberWebhookUrl || process.env.ZAPIER_MEMBER_WEBHOOK_URL, gymSlug, {
+    await postWebhook(gym.zapierMemberWebhookUrl || process.env.ZAPIER_MEMBER_WEBHOOK_URL, gymSlug, withPhone({
       firstName:            member.firstName,
       lastName:             member.lastName,
       email:                member.email,   // the member record's email
@@ -65,7 +66,7 @@ export async function POST(request, { params }) {
       guardianPhone:        member.isMinor ? member.guardianPhone        : null,
       guardianRelationship: member.isMinor ? member.guardianRelationship : null,
       resend:               true,
-    }, 'member')
+    }, member.phone, `member=${member.id}`), 'member')
 
     return generic
   } catch (error) {

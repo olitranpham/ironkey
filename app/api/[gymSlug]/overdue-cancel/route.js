@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import prisma from '@/lib/prisma'
 import { deleteSeamCodeByPin } from '@/lib/seam'
-import { formatPhone, toE164 } from '@/lib/phone'
+import { formatPhone } from '@/lib/phone'
+import { withPhone } from '@/lib/zapierPayload'
 
 /**
  * POST /api/[gymSlug]/overdue-cancel
@@ -163,15 +164,7 @@ export async function POST(request, { params }) {
       // Phone for the outbound Zapier payload — resolved only once we know
       // this sub is actually going to produce a warning or cancel event.
       const resolvedPhone = await resolvePhone({ stripe, member, sub, gymSlug, email, dryRun })
-      let phone = ''
-      if (resolvedPhone) {
-        const e164 = toE164(resolvedPhone)
-        if (e164) {
-          phone = e164
-        } else {
-          console.log('[overdue-cancel] phone could not be normalized to E.164 for %s gym=%s value=%s', email, gymSlug, resolvedPhone)
-        }
-      }
+      const phoneRecordId = member ? `member=${member.id}` : `sub=${sub.id}`
 
       if (daysOverdue >= 14) {
         // ── Cancel ─────────────────────────────────────────────────────────────
@@ -211,7 +204,7 @@ export async function POST(request, { params }) {
 
         // 4. Zapier cancel webhook (fire-and-forget) — or, in dryRun, just
         // record what would have been sent.
-        const cancelPayload = { name, email, status: 'overdue_canceled', daysOverdue, invoiceUrl, phone }
+        const cancelPayload = withPhone({ name, email, status: 'overdue_canceled', daysOverdue, invoiceUrl }, resolvedPhone, phoneRecordId)
         if (dryRun) {
           payloads.push({ type: 'overdue_canceled', payload: cancelPayload })
         } else if (zapierUrl) {
@@ -227,7 +220,7 @@ export async function POST(request, { params }) {
         // ── Warning (day 1, 7, or 13 only) ───────────────────────────────────────
 
         if ([1, 7, 13].includes(daysOverdue)) {
-          const warningPayload = { name, email, accessCode, status: 'overdue_warning', daysOverdue, invoiceUrl, phone }
+          const warningPayload = withPhone({ name, email, accessCode, status: 'overdue_warning', daysOverdue, invoiceUrl }, resolvedPhone, phoneRecordId)
           if (dryRun) {
             payloads.push({ type: 'overdue_warning', payload: warningPayload })
             warnings++

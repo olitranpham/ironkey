@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
+import { withPhone } from '@/lib/zapierPayload'
 
 /**
  * POST /api/[gymSlug]/join/pt-intake
@@ -56,17 +57,16 @@ export async function POST(request, { params }) {
       fetch(zapierUrl, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({
+        body:    JSON.stringify(withPhone({
           type: 'pt_intake',
           name,
           email,
-          phone,
           goals,
           experience,
           injuriesConditions,
           additionalInfo,
           consultationTime,
-        }),
+        }, intake.phone, `ptIntake=${intake.id}`)),
       }).catch(e => console.error('[pt-intake] Zapier webhook error:', e.message))
     }
 

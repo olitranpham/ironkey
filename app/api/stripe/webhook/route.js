@@ -14,6 +14,7 @@ import { OASIS_GYM_SLUG, OASIS_GUEST_PASS_PRODUCTS, isOasisGuestPassProduct } fr
 import { recordCouponRedemption } from '@/lib/couponRedemption'
 import { resolvePackSize } from '@/lib/gymPassTypes'
 import { kickJob } from '@/lib/webhookJobs'
+import { stripeSessionPhone } from '@/lib/zapierPayload'
 
 /** Trimmed string, or null for null/undefined/blank. */
 function normalizePhone(value) {
@@ -257,6 +258,12 @@ export async function POST(request) {
           phone ? 'checkout_form' : normalizePhone(guestProfile?.phone) ? 'profile' : 'none')
       }
 
+      // Zapier phone comes from the guest profile at send time; Stripe's phone
+      // is the fallback when there's no profile phone (or no profile)
+      const stripePhone = (phone || normalizePhone(guestProfile?.phone))
+        ? null
+        : await stripeSessionPhone(accountStripe, session, gym.stripeSecretKey ? {} : { stripeAccount: connectedAccountId })
+
       // Pass + check-in + follow-up job in one transaction. The Seam code and
       // the Zapier email run in the job after Stripe has its 200 (they used
       // to run here and could take long enough for Stripe to give up and
@@ -291,8 +298,9 @@ export async function POST(request) {
                   startsAt:  pass.createdAt.toISOString(),
                   endsAt:    pass.expiresAt.toISOString(),
                   seamCodes: {},
-                  // Zapier guest payload (accessCode is added at send time — a
-                  // Seam PIN collision can change it)
+                  stripePhone,
+                  // Zapier guest payload (accessCode and phone are added at
+                  // send time — a Seam PIN collision can change the code)
                   zapier: {
                     name: guestName, email, passType, passesLeft: pass.passesLeft, firstTime, alreadyActive: false,
                     ...(isOasisGuestPass ? { phone: oasisPayloadPhone } : {}),
@@ -482,6 +490,12 @@ export async function POST(request) {
     // needs the membershipType/assignment as they were, not after.
     const isNew = !memberBeforeUpdate
 
+    // Zapier phone comes from the member at send time; Stripe's phone is the
+    // fallback when neither the form nor the existing member has one
+    const stripePhone = (phone || memberBeforeUpdate?.phone)
+      ? null
+      : await stripeSessionPhone(accountStripe, session, gym.stripeSecretKey ? {} : { stripeAccount: connectedAccountId })
+
     // Build full address from individual metadata fields
     const addressParts = [
       meta.address1,
@@ -632,6 +646,7 @@ export async function POST(request) {
               accessCode: isKisi ? null : m.accessCode,
               seamName:   name,
               seamCodes:  {},
+              stripePhone,
               kisi: isKisi ? {
                 existingMember: memberBeforeUpdate ? {
                   kisiUserId:           memberBeforeUpdate.kisiUserId,
@@ -640,8 +655,8 @@ export async function POST(request) {
                 } : null,
                 email, name, membershipType: m.membershipType,
               } : null,
-              // Zapier member payload (accessCode is added at send time — a
-              // Seam PIN collision can change it)
+              // Zapier member payload (accessCode and phone are added at send
+              // time — a Seam PIN collision can change the code)
               zapier: zapierPayload,
             },
           },

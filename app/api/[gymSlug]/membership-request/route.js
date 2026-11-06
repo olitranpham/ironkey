@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
+import { withPhone } from '@/lib/zapierPayload'
 import { limitRequest } from '@/lib/rateLimit'
 
 /**
@@ -81,7 +82,7 @@ export async function POST(request, { params }) {
 
     const member = await prisma.member.findUnique({
       where:  { gymId_email: { gymId: gym.id, email } },
-      select: { firstName: true, lastName: true, email: true },
+      select: { id: true, firstName: true, lastName: true, email: true, phone: true },
     })
     if (!member) {
       return NextResponse.json({ error: "we couldn't find a membership associated with that email" }, { status: 404 })
@@ -105,14 +106,14 @@ export async function POST(request, { params }) {
       fetch(gym.zapierMembershipRequestWebhookUrl, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({
+        body:    JSON.stringify(withPhone({
           type:          'membership_request',
           requestType,
           name:          memberName,
           email:         member.email,
           reason:        reason ?? '',
           requestedDate: requestedDate ? requestedDate.toISOString() : '',
-        }),
+        }, member.phone, `member=${member.id}`)),
       })
         .then(r => console.log('[membership-request] Zapier webhook status:', r.status))
         .catch(e => console.error('[membership-request] Zapier webhook error:', e.message))

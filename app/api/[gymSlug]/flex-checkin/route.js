@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { maskPin, redactObject } from '@/lib/redact'
 import { limitRequest } from '@/lib/rateLimit'
+import { toE164 } from '@/lib/phone'
 
 const SEAM_API        = 'https://connect.getseam.com'
 const MAX_FLEX_CHECKINS = 5
@@ -234,6 +235,10 @@ export async function POST(request, { params }) {
 
     // ── Fire Zapier webhook (non-blocking) ────────────────────────────────────
     if (gym.zapierGuestWebhookUrl) {
+      const phone = toE164(member.phone) ?? ''
+      if (member.phone && !phone) {
+        console.log('[flex-checkin] phone could not be normalized to E.164 for member=%s', member.id)
+      }
       fetch(gym.zapierGuestWebhookUrl, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -241,6 +246,7 @@ export async function POST(request, { params }) {
           type:              'flex_checkin',
           name:              memberName,
           email:             member.email,
+          phone,
           accessCode:        member.accessCode ?? null,
           checkInsUsed:      newCount,
           checkInsRemaining,

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { limitRequest, hit, tooManyRequests, EMAIL_LIMIT } from '@/lib/rateLimit'
 import { maskEmail, findValidSeamCode, deliverGuestCode } from '@/lib/guestCodeDelivery'
+import { withPhone } from '@/lib/zapierPayload'
 import { verifyPaidCheckoutSession } from '@/lib/checkoutSession'
 
 const RESEND_EMAIL_LIMIT = 3
@@ -53,7 +54,7 @@ export async function POST(request, { params }) {
 
     const profile = await prisma.guest.findUnique({
       where:  { email },
-      select: { id: true, name: true, email: true, accessCode: true },
+      select: { id: true, name: true, email: true, phone: true, accessCode: true },
     })
     if (!profile?.accessCode) return generic
 
@@ -69,7 +70,7 @@ export async function POST(request, { params }) {
     })
 
     // Same payload as a check-in so the existing Zap emails it; resend: true for filtering
-    await deliverGuestCode(gym, gymSlug, {
+    await deliverGuestCode(gym, gymSlug, withPhone({
       name:       profile.name,
       email:      profile.email,   // the profile's email, never the request's
       accessCode: profile.accessCode,
@@ -77,7 +78,7 @@ export async function POST(request, { params }) {
       passesLeft: latestPass?.passesLeft ?? null,
       type:       'checkin',
       resend:     true,
-    })
+    }, profile.phone, `guest=${profile.id}`))
 
     return generic
   } catch (error) {

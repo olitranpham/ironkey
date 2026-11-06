@@ -3,6 +3,7 @@ import prisma from '@/lib/prisma'
 import { maskPin, redactObject } from '@/lib/redact'
 import { generateUniquePin, DEFAULT_PIN_LENGTH } from '@/lib/pins'
 import { maskEmail, findValidSeamCode, deliverGuestCode } from '@/lib/guestCodeDelivery'
+import { withPhone } from '@/lib/zapierPayload'
 import { limitRequest } from '@/lib/rateLimit'
 
 const SEAM_API = 'https://connect.getseam.com'
@@ -271,14 +272,14 @@ export async function POST(request, { params }) {
     }
 
     // ── Deliver the code (guest Zapier webhook → email on the profile) ────
-    const delivered = await deliverGuestCode(gym, gymSlug, {
+    const delivered = await deliverGuestCode(gym, gymSlug, withPhone({
       name:       profile.name,
       email:      profile.email,   // always the profile's email, never the request's
       accessCode: profile.accessCode ?? null,
       passType:   updated.passType,
       passesLeft: updated.passesLeft,
       type:       'checkin',
-    })
+    }, profile.phone, `guest=${profile.id}`))
     if (!delivered) {
       await rollback()
       return DELIVERY_FAILED()

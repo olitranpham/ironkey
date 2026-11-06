@@ -4,6 +4,7 @@ import { requirePermission } from '@/lib/permissions'
 import { findGymLeadProfile } from '@/lib/leads'
 import { createLeadInviteToken, leadJoinLink } from '@/lib/leadInvite'
 import { postWebhook } from '@/lib/guestCodeDelivery'
+import { withPhone } from '@/lib/zapierPayload'
 import { writeAudit } from '@/lib/audit'
 
 /**
@@ -33,13 +34,13 @@ export async function POST(request, { params }) {
 
     let delivered = 'clipboard'
     if (ctx.gym.leadWebhookUrl) {
-      const { ok, status } = await postWebhook(ctx.gym.leadWebhookUrl, gymSlug, {
+      // phone is informational only — email is the only channel
+      const { ok, status } = await postWebhook(ctx.gym.leadWebhookUrl, gymSlug, withPhone({
         name:     profile.name,
         email:    profile.email,
-        phone:    profile.phone ?? null,   // informational only — email is the only channel
         joinLink,
         gymName:  ctx.gym.name,
-      }, 'lead')
+      }, profile.phone, `guest=${profile.id}`), 'lead')
       if (!ok) {
         writeAudit(ctx, 'lead.invite_failed', 'Guest', guestProfileId, { status })
         return NextResponse.json({ error: "couldn't send the invite — check the gym's lead webhook" }, { status: 502 })
