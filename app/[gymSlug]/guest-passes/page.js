@@ -161,6 +161,16 @@ export default function GuestPassesPage() {
   const [monthFilter, setMonthFilter] = useState('')
   const [timeZone,    setTimeZone]    = useState(DEFAULT_GYM_TIME_ZONE)
 
+  // Archived guests (no activity here in 6 months) — loaded only when the
+  // archived view is opened or a search needs them
+  const [showArchived,     setShowArchived]     = useState(false)
+  const [archivedCount,    setArchivedCount]    = useState(null)
+  const [archivedProfiles, setArchivedProfiles] = useState([])
+  const [archivedUnlinked, setArchivedUnlinked] = useState([])
+  const [archivedLoaded,   setArchivedLoaded]   = useState(false)
+  const [archivedLoading,  setArchivedLoading]  = useState(false)
+  const [archivedErr,      setArchivedErr]      = useState(null)
+
   const [selectedProfile, setSelectedProfile] = useState(null)
   const [panelOpen,       setPanelOpen]       = useState(false)
   const [savingCode,      setSavingCode]      = useState(false)
@@ -189,6 +199,7 @@ export default function GuestPassesPage() {
       setTotalCount(data.totalCount ?? null)
       setCountByType(data.countByType ?? {})
       setTimeZone(data.timeZone ?? DEFAULT_GYM_TIME_ZONE)
+      setArchivedCount(data.archivedCount ?? null)
       setFetchErr(null)
       if (statsRes.ok) {
         const stats = await statsRes.json()
@@ -202,6 +213,37 @@ export default function GuestPassesPage() {
   }, [gymSlug])
 
   useEffect(() => { fetchPasses() }, [fetchPasses])
+
+  const fetchArchived = useCallback(async () => {
+    setArchivedLoading(true)
+    try {
+      const token = localStorage.getItem('ik_token')
+      const res   = await fetch(`/api/${gymSlug}/guest-passes?archived=true`, { headers: { Authorization: `Bearer ${token}` } })
+      if (!res.ok) throw new Error(`${res.status}`)
+      const data = await res.json()
+      setArchivedProfiles(data.profiles ?? [])
+      setArchivedUnlinked(data.unlinked ?? [])
+      setArchivedCount(data.archivedCount ?? null)
+      setArchivedLoaded(true)
+      setArchivedErr(null)
+    } catch {
+      setArchivedErr('could not load archived guests')
+    } finally {
+      setArchivedLoading(false)
+    }
+  }, [gymSlug])
+
+  // Search covers archived guests too — load them the first time it's needed
+  const needArchived = showArchived || search.trim() !== ''
+  useEffect(() => {
+    if (needArchived && !archivedLoaded && !archivedLoading && !archivedErr) fetchArchived()
+  }, [needArchived, archivedLoaded, archivedLoading, archivedErr, fetchArchived])
+
+  // A profile edit applies to whichever list the guest is in
+  function patchProfiles(fn) {
+    setProfiles(prev => prev.map(fn))
+    setArchivedProfiles(prev => prev.map(fn))
+  }
 
   function openPanel(profile) {
     console.log('[guest-passes] row clicked, opening panel for:', profile.name, profile.email)
@@ -228,7 +270,7 @@ export default function GuestPassesPage() {
         throw new Error(j.error || 'could not save the code')
       }
       const { profile: updated } = await res.json()
-      setProfiles(prev => prev.map(p => p.id === profileId ? { ...p, ...updated } : p))
+      patchProfiles(p => p.id === profileId ? { ...p, ...updated } : p)
       setSelectedProfile(prev => prev?.id === profileId ? { ...prev, ...updated } : prev)
     } catch (err) {
       alert(err.message)   // e.g. 409 "code already in use"
@@ -247,7 +289,7 @@ export default function GuestPassesPage() {
       })
       if (!res.ok) throw new Error('Failed')
       const { profile: updated } = await res.json()
-      setProfiles(prev => prev.map(p => p.id === profileId ? { ...p, ...updated } : p))
+      patchProfiles(p => p.id === profileId ? { ...p, ...updated } : p)
       setSelectedProfile(prev => prev?.id === profileId ? { ...prev, ...updated } : prev)
     } catch {
       // non-fatal
@@ -267,9 +309,7 @@ export default function GuestPassesPage() {
       // Update the specific pass inside the matching profile
       const patchPasses = passes =>
         passes.map(p => p.id === passId ? { ...p, passesLeft: updated.passesLeft } : p)
-      setProfiles(prev =>
-        prev.map(p => p.id === profileId ? { ...p, passes: patchPasses(p.passes) } : p)
-      )
+      patchProfiles(p => p.id === profileId ? { ...p, passes: patchPasses(p.passes) } : p)
       setSelectedProfile(prev =>
         prev?.id === profileId ? { ...prev, passes: patchPasses(prev.passes) } : prev
       )
@@ -294,6 +334,7 @@ export default function GuestPassesPage() {
       setConfirmRemove(null)
       closePanel()
       await fetchPasses()
+      if (archivedLoaded) await fetchArchived()
     } catch {
       setRemoveError('could not remove — please try again')
     } finally {
@@ -303,7 +344,14 @@ export default function GuestPassesPage() {
 
   // ── Derived ─────────────────────────────────────────────────────────────
 
-  const unified     = buildUnifiedGuests(profiles, unlinked)
+  const activeGuests   = buildUnifiedGuests(profiles, unlinked)
+  // Name-bucket ids (unlinked passes) could repeat across the two lists
+  const archivedGuests = buildUnifiedGuests(archivedProfiles, archivedUnlinked)
+    .map(g => ({ ...g, id: g._unlinked ? `${g.id}:archived` : g.id, _archived: true }))
+  // A search looks at both lists; otherwise show the selected one
+  const unified = search.trim()
+    ? [...activeGuests, ...archivedGuests]
+    : (showArchived ? archivedGuests : activeGuests)
   const allPasses   = unified.flatMap(g => g.passes)
   const typeFilter  = PASS_TAB_TYPE[activeTab]
 
@@ -418,11 +466,21 @@ export default function GuestPassesPage() {
                 {tab}
               </button>
             ))}
+            <button
+              onClick={() => setShowArchived(v => !v)}
+              className={`ml-auto py-2.5 px-2.5 text-xs font-medium border-b-2 transition-colors ${
+                showArchived
+                  ? 'border-white text-white'
+                  : 'border-transparent text-neutral-500 hover:text-neutral-300'
+              }`}
+            >
+              archived{archivedCount != null && <span className="ml-1 tabular-nums opacity-60">{archivedCount}</span>}
+            </button>
           </div>
 
           {/* Body */}
           <div className="md:flex-1 md:overflow-y-auto overflow-x-auto">
-            {loading ? (
+            {loading || (showArchived && !search.trim() && archivedLoading && !archivedLoaded) ? (
               <div className="flex items-center justify-center h-48 gap-2">
                 <RefreshCw size={16} className="text-neutral-600 animate-spin" />
                 <span className="text-sm text-neutral-600">loading…</span>
@@ -431,6 +489,13 @@ export default function GuestPassesPage() {
               <div className="flex flex-col items-center justify-center h-48 gap-3">
                 <p className="text-sm text-red-400">{fetchErr}</p>
                 <button onClick={fetchPasses} className="text-xs text-neutral-400 border border-neutral-700 rounded-lg px-3 py-1.5 hover:text-white transition-colors">
+                  retry
+                </button>
+              </div>
+            ) : showArchived && archivedErr ? (
+              <div className="flex flex-col items-center justify-center h-48 gap-3">
+                <p className="text-sm text-red-400">{archivedErr}</p>
+                <button onClick={() => setArchivedErr(null)} className="text-xs text-neutral-400 border border-neutral-700 rounded-lg px-3 py-1.5 hover:text-white transition-colors">
                   retry
                 </button>
               </div>
@@ -459,6 +524,9 @@ export default function GuestPassesPage() {
                               </span>
                             </div>
                             <p className="text-white text-sm leading-tight">{g.name}</p>
+                            {g._archived && !showArchived && (
+                              <span className="text-[10px] text-neutral-500 border border-neutral-700 rounded px-1.5 py-0.5">archived</span>
+                            )}
                           </div>
                         </td>
 

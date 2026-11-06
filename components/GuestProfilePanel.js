@@ -102,6 +102,22 @@ export function GuestProfilePanel({ profile, passTypeBorder, onClose, onSaveCode
   const [passEdits,    setPassEdits]    = useState({})
   const [savingPassId, setSavingPassId] = useState(null)
   const [lightboxSrc,  setLightboxSrc]  = useState(null)
+  const [loadingIdFor, setLoadingIdFor] = useState(null)   // pass id whose student ID is loading
+
+  async function openStudentId(passId) {
+    setLoadingIdFor(passId)
+    try {
+      const token = localStorage.getItem('ik_token')
+      const res   = await fetch(`/api/${gymSlug}/guest-passes/${passId}`, { headers: { Authorization: `Bearer ${token}` } })
+      if (!res.ok) throw new Error(`${res.status}`)
+      const { studentIdImage } = await res.json()
+      if (studentIdImage) setLightboxSrc(studentIdImage)
+    } catch (err) {
+      console.error('[guest-panel] student id load failed:', err.message)
+    } finally {
+      setLoadingIdFor(null)
+    }
+  }
 
   // Contact
   const [nameInput,  setNameInput]  = useState(profile.name  ?? '')
@@ -439,6 +455,16 @@ export function GuestProfilePanel({ profile, passTypeBorder, onClose, onSaveCode
                               alt="student id"
                               className="w-8 h-8 rounded object-cover border border-neutral-700 hover:border-neutral-500 transition-colors"
                             />
+                          </button>
+                        ) : p.hasStudentId ? (
+                          // The list doesn't carry images — fetch this one on click
+                          <button
+                            type="button"
+                            onClick={() => openStudentId(p.id)}
+                            disabled={loadingIdFor === p.id}
+                            className="text-[10px] text-neutral-400 underline underline-offset-2 hover:text-white disabled:opacity-40"
+                          >
+                            {loadingIdFor === p.id ? 'loading…' : 'view id'}
                           </button>
                         ) : (
                           <span className="text-neutral-700">—</span>

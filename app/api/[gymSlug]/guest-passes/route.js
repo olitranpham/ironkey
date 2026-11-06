@@ -31,16 +31,39 @@ export async function POST(request, { params }) {
   }
 }
 
+// A guest (or unlinked pass) is archived for a gym when its most recent
+// activity there is older than this. Computed per request — never stored —
+// so a returning guest is back in the active list on their next purchase or
+// check-in.
+const ARCHIVE_AFTER_MONTHS = 6
+
+/** Latest of the given dates (Date | null), or null. */
+function latest(...dates) {
+  let max = null
+  for (const d of dates) if (d && (!max || d > max)) max = d
+  return max
+}
+
 /**
- * GET /api/[gymSlug]/guest-passes
- * Returns guest profiles with their full pass history, sorted by most recent
- * activity, plus purchase metrics per month (see lib/guestPassMetrics).
+ * GET /api/[gymSlug]/guest-passes[?archived=true]
+ * Returns guest profiles with their full pass history, plus purchase metrics
+ * per month (see lib/guestPassMetrics). Active guests by default; archived=true
+ * returns the archived ones instead. archivedCount is always included.
+ *
+ * Most recent activity at this gym = latest of each pass's createdAt
+ * (purchase) and usedAt (last check-in), and GuestCheckIn.createdAt.
+ *
+ * Student ID images are not included (they made this response hundreds of
+ * MB) — passes carry hasStudentId, and GET /guest-passes/[passId] returns
+ * the image.
  */
 export async function GET(request, { params }) {
   try {
     const { gymSlug } = await params
     const { errorResponse } = await requirePermission(request, gymSlug, 'guestpasses.manage')
     if (errorResponse) return errorResponse
+
+    const archived = new URL(request.url).searchParams.get('archived') === 'true'
 
     const gym = await prisma.gym.findUnique({
       where:  { slug: gymSlug },
@@ -52,44 +75,68 @@ export async function GET(request, { params }) {
     const gymId    = gym.id
     const timeZone = gym.timezone || DEFAULT_GYM_TIME_ZONE
 
+    const cutoff = new Date()
+    cutoff.setMonth(cutoff.getMonth() - ARCHIVE_AFTER_MONTHS)
+    const isArchived = lastActivity => !lastActivity || lastActivity < cutoff
+
     // ── Fetch all pass records for this gym upfront ─────────────────────────────
     // We deliberately avoid using the nested `passes` relation on Guest, because
     // Guest is a global (cross-gym) model and the nested where: { gymId } filter
     // can return records from other gyms in some Prisma versions. Instead we query
     // GuestVisit directly with an explicit gymId filter, then attach manually.
 
-    const allLinkedPasses = await prisma.guestVisit.findMany({
-      where:   { gymId, guestProfileId: { not: null } },
-      orderBy: { usedAt: { sort: 'desc', nulls: 'last' } },
-      select: {
-        id:             true,
-        guestProfileId: true,
-        passType:       true,
-        passesLeft:     true,
-        usedAt:         true,
-        expiresAt:      true,
-        createdAt:      true,
-        studentIdImage: true,
-      },
-    })
+    const [allLinkedPasses, studentIdPasses, checkIns] = await Promise.all([
+      prisma.guestVisit.findMany({
+        where:   { gymId, guestProfileId: { not: null } },
+        orderBy: { usedAt: { sort: 'desc', nulls: 'last' } },
+        select: {
+          id:             true,
+          guestProfileId: true,
+          passType:       true,
+          passesLeft:     true,
+          usedAt:         true,
+          expiresAt:      true,
+          createdAt:      true,
+        },
+      }),
+      // IS NOT NULL only — the image itself is never read here
+      prisma.guestVisit.findMany({
+        where:  { gymId, studentIdImage: { not: null } },
+        select: { id: true },
+      }),
+      prisma.guestCheckIn.findMany({
+        where:  { gymId },
+        select: { createdAt: true, guestProfileId: true },
+      }),
+    ])
+    const hasStudentId = new Set(studentIdPasses.map(p => p.id))
 
-    // Build a map of profileId → passes (already gym-scoped)
+    // Build a map of profileId → passes (already gym-scoped), and each
+    // profile's most recent activity here
     const passesByProfileId = new Map()
+    const lastActivityById  = new Map()
     for (const pass of allLinkedPasses) {
       const pid = pass.guestProfileId
       if (!passesByProfileId.has(pid)) passesByProfileId.set(pid, [])
       passesByProfileId.get(pid).push({
-        id:             pass.id,
-        passType:       pass.passType,
-        passesLeft:     pass.passesLeft,
-        usedAt:         pass.usedAt,
-        expiresAt:      pass.expiresAt,
-        createdAt:      pass.createdAt,
-        studentIdImage: pass.studentIdImage,
+        id:           pass.id,
+        passType:     pass.passType,
+        passesLeft:   pass.passesLeft,
+        usedAt:       pass.usedAt,
+        expiresAt:    pass.expiresAt,
+        createdAt:    pass.createdAt,
+        hasStudentId: hasStudentId.has(pass.id),
       })
+      lastActivityById.set(pid, latest(lastActivityById.get(pid), pass.createdAt, pass.usedAt))
+    }
+    for (const checkIn of checkIns) {
+      if (checkIn.guestProfileId && lastActivityById.has(checkIn.guestProfileId)) {
+        lastActivityById.set(checkIn.guestProfileId, latest(lastActivityById.get(checkIn.guestProfileId), checkIn.createdAt))
+      }
     }
 
-    const profileIds = [...passesByProfileId.keys()]
+    const allProfileIds = [...passesByProfileId.keys()]
+    const profileIds    = allProfileIds.filter(id => isArchived(lastActivityById.get(id)) === archived)
 
     const profileRecords = await prisma.guest.findMany({
       where:   { id: { in: profileIds } },
@@ -119,7 +166,7 @@ export async function GET(request, { params }) {
     }))
 
     // Also fetch unlinked passes (no profile / no email)
-    const unlinked = await prisma.guestVisit.findMany({
+    const allUnlinked = await prisma.guestVisit.findMany({
       where: {
         gymId,
         guestProfileId: null,
@@ -141,8 +188,16 @@ export async function GET(request, { params }) {
       },
     })
 
-    // Authoritative counts — single DB query, not derived from in-memory arrays
-    const [totalCount, typeRows, metricPasses, checkIns] = await Promise.all([
+    // An unlinked pass has no profile, so its own dates are its activity
+    const unlinkedArchived = p => isArchived(latest(p.createdAt, p.usedAt))
+    const unlinked         = allUnlinked.filter(p => unlinkedArchived(p) === archived)
+
+    const archivedCount = allProfileIds.filter(id => isArchived(lastActivityById.get(id))).length
+      + allUnlinked.filter(unlinkedArchived).length
+
+    // Authoritative counts (all passes, archived included) — single DB query,
+    // not derived from in-memory arrays
+    const [totalCount, typeRows, metricPasses] = await Promise.all([
       prisma.guestVisit.count({ where: { gymId } }),
       prisma.guestVisit.groupBy({
         by:    ['passType'],
@@ -153,10 +208,6 @@ export async function GET(request, { params }) {
         where:  { gymId },
         select: { createdAt: true, passType: true, packSize: true, amountPaid: true },
       }),
-      prisma.guestCheckIn.findMany({
-        where:  { gymId },
-        select: { createdAt: true },
-      }),
     ])
     // Per purchase month (gym timezone) and `all`
     const metrics = guestPassMetrics(metricPasses, checkIns, timeZone)
@@ -165,8 +216,8 @@ export async function GET(request, { params }) {
       typeRows.map(r => [r.passType, r._count.passType])
     )
 
-    console.log(`[guest-passes GET] ${profiles.length} profile(s), ${unlinked.length} unlinked, ${totalCount} total passes for gym ${gymId}`)
-    return NextResponse.json({ profiles, unlinked, totalCount, countByType, timeZone, metrics })
+    console.log(`[guest-passes GET] ${archived ? 'archived' : 'active'}: ${profiles.length} profile(s), ${unlinked.length} unlinked; ${archivedCount} archived, ${totalCount} total passes for gym ${gymId}`)
+    return NextResponse.json({ profiles, unlinked, archivedCount, totalCount, countByType, timeZone, metrics })
   } catch (error) {
     console.error('[guest-passes GET]', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

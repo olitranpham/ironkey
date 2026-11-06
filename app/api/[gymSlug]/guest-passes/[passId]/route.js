@@ -3,6 +3,33 @@ import prisma from '@/lib/prisma'
 import { requirePermission } from '@/lib/permissions'
 
 /**
+ * GET /api/[gymSlug]/guest-passes/[passId]
+ * The pass's student ID image (a data URL, or null). Loaded on demand by the
+ * guest panel — the list endpoint only says whether one exists.
+ */
+export async function GET(request, { params }) {
+  try {
+    const { gymSlug, passId } = await params
+    const { errorResponse } = await requirePermission(request, gymSlug, 'guestpasses.manage')
+    if (errorResponse) return errorResponse
+
+    const gym = await prisma.gym.findUnique({ where: { slug: gymSlug }, select: { id: true } })
+    if (!gym) return NextResponse.json({ error: 'Gym not found' }, { status: 404 })
+
+    const pass = await prisma.guestVisit.findFirst({
+      where:  { id: passId, gymId: gym.id },
+      select: { studentIdImage: true },
+    })
+    if (!pass) return NextResponse.json({ error: 'Pass not found' }, { status: 404 })
+
+    return NextResponse.json({ studentIdImage: pass.studentIdImage })
+  } catch (error) {
+    console.error('[guest-passes/passId GET]', error)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  }
+}
+
+/**
  * PATCH /api/[gymSlug]/guest-passes/[passId]
  * Body: { passesLeft: number }
  * Lets staff manually adjust the remaining check-ins on a multi-pass.
