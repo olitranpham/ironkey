@@ -126,6 +126,9 @@ export default function GuestPage() {
   const [submitting, setSubmitting] = useState(false)
   const [promotionCode, setPromotionCode] = useState('')
   const [error,      setError]      = useState(null)
+  // Sign-only waiver (kiosk check-in without a waiver on file at this gym)
+  const [waiverSignature, setWaiverSignature] = useState('')
+  const [waiverSignedNote, setWaiverSignedNote] = useState(false)
   const [waiverOpen, setWaiverOpen] = useState(false)
 
   // New guest form fields
@@ -208,6 +211,7 @@ export default function GuestPage() {
       else { setStep('email-input') }
     }
     else if (step === 'checkin-confirm')   { setStep('email-input') }
+    else if (step === 'waiver-sign')       { setStep('checkin-confirm') }
     else if (step === 'flex-confirm')      { setStep('email-input') }
     else { setStep('intent'); setMode(null) }
   }
@@ -234,6 +238,7 @@ export default function GuestPage() {
           return
         }
         setLookupResult(json)
+        setWaiverSignedNote(false)
         setStep('checkin-confirm')
       } else {
         // purchase — hasSignedWaiver determines which form to show
@@ -396,6 +401,31 @@ export default function GuestPage() {
   }
 
   // ── Check in ──────────────────────────────────────────────────────────────
+  async function handleSignWaiver() {
+    clearError()
+    setSubmitting(true)
+    try {
+      const res = await fetch(`/api/${gymSlug}/guest/waiver`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({
+          email:            lookupEmail.trim(),
+          signatureName:    waiverSignature.trim(),
+          agreementVersion: await agreementVersion(gymSlug, 'guest'),
+        }),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error ?? 'could not save the waiver')
+      // Back to check-in
+      setWaiverSignedNote(true)
+      setStep('checkin-confirm')
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
   async function handleCheckin() {
     clearError()
     setSubmitting(true)
@@ -416,12 +446,10 @@ export default function GuestPage() {
         setStep('checkin-confirm')
         return
       }
-      // No waiver signed at this gym → the signup form, email pre-filled
+      // No waiver signed at this gym → sign it here (no purchase), then back to check-in
       if (res.status === 403 && json.needsWaiver) {
-        setMode('purchase')
-        setField('email', lookupEmail.trim())
-        setStep('new-form')
-        setError('please sign the waiver before checking in.')
+        setWaiverSignature('')
+        setStep('waiver-sign')
         return
       }
       if (!res.ok) throw new Error(json.error ?? 'check-in failed')
@@ -1039,6 +1067,11 @@ export default function GuestPage() {
 
             {lookupResult.passesLeft > 0 ? (
               <>
+                {waiverSignedNote && (
+                  <p className="text-xs text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-lg px-3 py-2">
+                    waiver signed — tap check in to continue.
+                  </p>
+                )}
                 <div className="flex flex-col gap-2">
                   {(lookupResult.packs ?? []).map((pack, i) => {
                     const LABEL = { SINGLE: 'day pass', THREE_PACK: '3-pack', FIVE_PACK: '5-pack', TEN_PACK: '10-pack', VALUE: 'value pack', DELUXE: 'deluxe pack' }
@@ -1092,6 +1125,40 @@ export default function GuestPage() {
                 </button>
               </>
             )}
+          </div>
+        )}
+
+        {/* ── Step: waiver-sign (sign-only, no purchase) ──────────────────── */}
+        {step === 'waiver-sign' && (
+          <div className="bg-[#1c1c1c] border border-white/10 rounded-2xl p-6 flex flex-col gap-5 shadow-2xl">
+            <div className="flex flex-col gap-1">
+              <p className="text-sm font-semibold text-white">sign the waiver</p>
+              <p className="text-xs text-neutral-500">we need a signed waiver on file before you check in. this doesn&apos;t buy anything.</p>
+            </div>
+
+            <SignatureField value={waiverSignature} onChange={setWaiverSignature}>
+              sign with your full name (parent/guardian signs for minors) to agree to the{' '}
+              <button
+                type="button"
+                onClick={() => setWaiverOpen(true)}
+                className="text-white underline underline-offset-2 hover:text-neutral-200 transition-colors"
+              >
+                liability waiver & terms
+              </button>
+              .
+            </SignatureField>
+
+            {error && (
+              <p className="text-xs text-rose-400 bg-rose-500/10 border border-rose-500/20 rounded-lg px-3 py-2">{error}</p>
+            )}
+
+            <button
+              onClick={handleSignWaiver}
+              disabled={submitting || !waiverSignature.trim()}
+              className={BUTTON_PRIMARY}
+            >
+              {submitting ? <><Loader2 size={15} className="animate-spin" /> saving…</> : 'sign and continue'}
+            </button>
           </div>
         )}
 

@@ -7,13 +7,15 @@ import { normalizeSignature, SIGNATURE_MISMATCH } from '@/lib/signature'
  * Typed signature for a waiver / agreement: the statement (children), a
  * "type your full name to sign" input and a cursive preview. Shows the
  * mismatch error once something has been typed; the form disables submit
- * via signatureError() from lib/signature.
+ * via signatureError() from lib/signature. Without expectedName (the kiosk
+ * sign-only waiver, where the name on file isn't revealed) there's no live
+ * check — the server validates.
  *
- * @param {{ value: string, onChange: (v: string) => void, expectedName: string, children: React.ReactNode }} props
+ * @param {{ value: string, onChange: (v: string) => void, expectedName?: string|null, children: React.ReactNode }} props
  */
 export function SignatureField({ value, onChange, expectedName, children }) {
   const typed    = normalizeSignature(value)
-  const mismatch = typed !== '' && typed !== normalizeSignature(expectedName)
+  const mismatch = expectedName != null && typed !== '' && typed !== normalizeSignature(expectedName)
 
   return (
     <div className="flex flex-col gap-2">
