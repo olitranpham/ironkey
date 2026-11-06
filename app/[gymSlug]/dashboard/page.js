@@ -618,7 +618,7 @@ function RetentionChart({ data }) {
           <span className="flex items-center gap-1.5"><span className="w-2.5 h-0.5 rounded bg-emerald-500 inline-block" />active</span>
           <span className="flex items-center gap-1.5"><span className="w-2.5 h-0.5 rounded bg-sky-500 inline-block" />frozen</span>
           <span className="flex items-center gap-1.5"><span className="w-2.5 h-0.5 rounded bg-neutral-600 inline-block" />canceled</span>
-          <span className="text-neutral-700">last 7 months</span>
+          <span className="text-neutral-700">all time</span>
         </div>
       </div>
 
