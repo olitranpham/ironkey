@@ -15,7 +15,7 @@ function nextFirst() {
 }
 
 /**
- * "outside trainer billing" on the personal training page — OWNER / ADMIN
+ * "pt billing" on the personal training page — OWNER / ADMIN
  * only (renders nothing for anyone else). Per trainer: link a promotion code
  * and a Stripe customer (a member's email or cus_…), see the card on file
  * (or a "no payment method" flag + card setup link), start billing, and
@@ -95,8 +95,7 @@ export function TrainerBillingSection({ gymSlug }) {
   return (
     <div className="bg-white/[0.03] rounded-xl border border-white/5 overflow-hidden shrink-0">
       <div className="px-5 py-3 border-b border-neutral-800 flex items-center gap-3">
-        <p className="text-xs font-semibold text-neutral-500 tracking-widest">outside trainer billing</p>
-        <span className="text-[11px] text-neutral-600">$20 / visit, $500 / month cap — billed on the 1st</span>
+        <p className="text-xs font-semibold text-neutral-500 tracking-widest">pt billing</p>
         <input type="month" value={month} onChange={e => setMonth(e.target.value)} className={`${INPUT} ml-auto`} aria-label="month" />
       </div>
 

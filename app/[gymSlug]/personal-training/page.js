@@ -833,7 +833,7 @@ export default function PersonalTrainingPage() {
             {/* PT memberships — follows the trainer filter */}
             <PtMembershipsSection gymSlug={gymSlug} filterTrainerId={filterTrainerId} onAssigned={refreshTrainers} />
 
-            {/* Outside trainer billing — OWNER / ADMIN only (renders nothing otherwise) */}
+            {/* PT billing (outside trainers) — OWNER / ADMIN only (renders nothing otherwise) */}
             <TrainerBillingSection gymSlug={gymSlug} />
 
             {/* Past sessions */}
