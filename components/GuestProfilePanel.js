@@ -61,40 +61,6 @@ export function GSection({ icon: Icon, title, children }) {
   )
 }
 
-// Full-screen image preview — replaces opening the data: URL in a new tab,
-// which Chrome blocks (renders a blank tab) for data: URIs.
-function ImageLightbox({ src, onClose }) {
-  useEffect(() => {
-    function onKeyDown(e) {
-      if (e.key === 'Escape') onClose()
-    }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [onClose])
-
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center"
-      style={{ backgroundColor: 'rgba(0,0,0,.85)' }}
-      onClick={onClose}
-    >
-      <button
-        onClick={onClose}
-        aria-label="close"
-        className="absolute top-4 right-4 text-white/70 hover:text-white transition-colors"
-      >
-        <X size={24} />
-      </button>
-      <img
-        src={src}
-        alt="student id"
-        style={{ maxWidth: '90vw', maxHeight: '90vh', objectFit: 'contain' }}
-        onClick={e => e.stopPropagation()}
-      />
-    </div>
-  )
-}
-
 // ── GuestProfilePanel ─────────────────────────────────────────────────────────
 
 export function GuestProfilePanel({ profile, passTypeBorder, onClose, onSaveCode, saving, onSavePassesLeft, onSaveProfile, source, onDelete, onRemoveGuest, removingGuest }) {
@@ -102,23 +68,6 @@ export function GuestProfilePanel({ profile, passTypeBorder, onClose, onSaveCode
   const { gymSlug } = useParams()
   const [passEdits,    setPassEdits]    = useState({})
   const [savingPassId, setSavingPassId] = useState(null)
-  const [lightboxSrc,  setLightboxSrc]  = useState(null)
-  const [loadingIdFor, setLoadingIdFor] = useState(null)   // pass id whose student ID is loading
-
-  async function openStudentId(passId) {
-    setLoadingIdFor(passId)
-    try {
-      const token = localStorage.getItem('ik_token')
-      const res   = await fetch(`/api/${gymSlug}/guest-passes/${passId}`, { headers: { Authorization: `Bearer ${token}` } })
-      if (!res.ok) throw new Error(`${res.status}`)
-      const { studentIdImage } = await res.json()
-      if (studentIdImage) setLightboxSrc(studentIdImage)
-    } catch (err) {
-      console.error('[guest-panel] student id load failed:', err.message)
-    } finally {
-      setLoadingIdFor(null)
-    }
-  }
 
   // Contact
   const [nameInput,  setNameInput]  = useState(profile.name  ?? '')
@@ -445,7 +394,6 @@ export function GuestProfilePanel({ profile, passTypeBorder, onClose, onSaveCode
                     <th className="px-3 py-2 text-[10px] font-semibold text-neutral-500 tracking-wider">type</th>
                     <th className="px-3 py-2 text-[10px] font-semibold text-neutral-500 tracking-wider">left</th>
                     <th className="px-3 py-2 text-[10px] font-semibold text-neutral-500 tracking-wider">purchased</th>
-                    <th className="px-3 py-2 text-[10px] font-semibold text-neutral-500 tracking-wider">student id</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-neutral-800">
@@ -484,29 +432,6 @@ export function GuestProfilePanel({ profile, passTypeBorder, onClose, onSaveCode
                         )}
                       </td>
                       <td className="px-3 py-2.5 text-neutral-500 whitespace-nowrap">{fmtDate(p.usedAt)}</td>
-                      <td className="px-3 py-2.5">
-                        {p.studentIdImage ? (
-                          <button type="button" onClick={() => setLightboxSrc(p.studentIdImage)}>
-                            <img
-                              src={p.studentIdImage}
-                              alt="student id"
-                              className="w-8 h-8 rounded object-cover border border-neutral-700 hover:border-neutral-500 transition-colors"
-                            />
-                          </button>
-                        ) : p.hasStudentId ? (
-                          // The list doesn't carry images — fetch this one on click
-                          <button
-                            type="button"
-                            onClick={() => openStudentId(p.id)}
-                            disabled={loadingIdFor === p.id}
-                            className="text-[10px] text-neutral-400 underline underline-offset-2 hover:text-white disabled:opacity-40"
-                          >
-                            {loadingIdFor === p.id ? 'loading…' : 'view id'}
-                          </button>
-                        ) : (
-                          <span className="text-neutral-700">—</span>
-                        )}
-                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -540,9 +465,6 @@ export function GuestProfilePanel({ profile, passTypeBorder, onClose, onSaveCode
         </div>
       )}
 
-      {lightboxSrc && (
-        <ImageLightbox src={lightboxSrc} onClose={() => setLightboxSrc(null)} />
-      )}
     </div>
   )
 }
