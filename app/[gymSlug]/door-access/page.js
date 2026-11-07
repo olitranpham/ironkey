@@ -323,7 +323,6 @@ export default function DoorAccessPage() {
     if (a.type === 'unknown') return String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? ''))
     return a.name.localeCompare(b.name)
   })
-  const unknownCount = codes.filter(c => c.type === 'unknown').length
 
   async function handleChangeCode() {
     if (!changeModal?.memberId) return
@@ -402,16 +401,6 @@ export default function DoorAccessPage() {
 
         {/* Table card */}
         <div className="md:flex-1 flex flex-col bg-white/[0.03] rounded-xl border border-white/5 md:overflow-hidden md:min-h-0">
-
-          {/* Section header — unknown codes need staff review */}
-          {!loading && !fetchErr && !noDevice && accessProvider !== 'KISI' && (
-            <div className="shrink-0 flex items-center justify-between px-5 py-3 border-b border-white/5">
-              <p className="text-xs font-semibold text-white">access codes <span className="text-neutral-500 font-normal">· {codes.length}</span></p>
-              {unknownCount > 0 && (
-                <p className="text-[11px] text-neutral-400">{unknownCount} unknown code{unknownCount === 1 ? '' : 's'} to review</p>
-              )}
-            </div>
-          )}
 
           {/* Body */}
           <div className="md:flex-1 md:overflow-y-auto overflow-x-auto">
