@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import prisma from '@/lib/prisma'
 import { requirePermission } from '@/lib/permissions'
+import { setPriceActive, stripeErrorCopy } from '@/lib/stripePriceToggle'
 
 /**
  * PATCH /api/[gymSlug]/stripe/products/[productId]
@@ -20,19 +21,19 @@ import { requirePermission } from '@/lib/permissions'
  *   },
  * }
  *
- * - priceId + active: toggles just that ONE price active/inactive. A product
- *   can have several prices (e.g. Oasis's "Personal Training" product has 6 —
- *   three "$X/4 weeks" tiers plus three "X session(s)/week" tiers), so this
- *   must never touch the shared product — doing so would flip every sibling
- *   price's visibility at once. Tags the price's own metadata
- *   (ironkey_toggle_disabled) so the GET route can tell "staff toggled this
- *   off" (stays visible in the list, grayed out, re-enable available) apart
- *   from a price that was superseded by the edit-price flow below (archived
- *   for good, never shown again).
+ * - priceId + active: toggles just that ONE price — see setPriceActive
+ *   (lib/stripePriceToggle): a non-default price is archived; the default
+ *   price hands default_price to the newest other active price first; a
+ *   product's only active price archives the product instead. Re-enable
+ *   reverses it. Tagged (ironkey_toggle_disabled) so the GET route can tell
+ *   "staff toggled this off" (stays visible, grayed out, re-enable
+ *   available) apart from a price superseded by the edit-price flow below
+ *   (archived for good, never shown again).
  * - passes: updates the number of guest passes stored in metadata.
  * - name: renames the product.
- * - archivePriceId: also archives the given price (active: false on the
- *   Price object itself) with no replacement — the delete/trash action.
+ * - archivePriceId: the delete/trash action — archived the same way as a
+ *   disable (default_price moved first; a sole price archives the product),
+ *   but untagged, so it's gone for good.
  *   The products GET route treats any archived price with no toggle-disabled
  *   tag as gone for good, since a price with existing subscriptions/checkout
  *   history can't be truly deleted from Stripe.
@@ -57,32 +58,11 @@ export async function PATCH(request, { params }) {
 
     const stripe = new Stripe(gym.stripeSecretKey, { apiVersion: '2024-06-20' })
 
-    // A price can't be archived while it's still its product's default_price
-    // — Stripe rejects that outright. Products with a single price (guest
-    // passes, always 1:1) always hit this, since their one price is always
-    // the default. Products with several prices (e.g. membership PT tiers)
-    // don't have this problem in the common case, so their existing
-    // price-level archive/toggle behavior is left untouched — archiving the
-    // whole product there would wrongly take out every sibling price too.
-    async function hasSingleActivePrice() {
-      const activePrices = await stripe.prices.list({ product: productId, active: true, limit: 2 })
-      return activePrices.data.length <= 1
-    }
-
     // ── Price-level active toggle ─────────────────────────────────────────
     if (typeof body.active === 'boolean' && body.priceId) {
-      if (await hasSingleActivePrice()) {
-        const singlePriceProduct = await stripe.products.update(productId, {
-          active:   body.active,
-          metadata: { ironkey_toggle_disabled: body.active ? '' : 'true' },
-        })
-        return NextResponse.json({ product: { id: singlePriceProduct.id, priceId: body.priceId, active: singlePriceProduct.active } })
-      }
-      const price = await stripe.prices.update(body.priceId, {
-        active:   body.active,
-        metadata: { ironkey_toggle_disabled: body.active ? '' : 'true' },
-      })
-      return NextResponse.json({ product: { id: productId, priceId: price.id, active: price.active } })
+      const result = await setPriceActive(stripe, productId, body.priceId, body.active)
+      console.log('[stripe/products PATCH] %s product=%s price=%s active=%s archived=%s', gymSlug, productId, body.priceId, body.active, result.archived)
+      return NextResponse.json({ product: { id: productId, priceId: body.priceId, active: result.active } })
     }
 
     const update = {}
@@ -125,14 +105,9 @@ export async function PATCH(request, { params }) {
       await stripe.prices.update(body.priceUpdate.oldPriceId, { active: false, metadata: { ironkey_toggle_disabled: '' } })
     }
     if (body.archivePriceId) {
-      if (await hasSingleActivePrice()) {
-        // No toggle-disabled tag — the GET route treats an inactive product
-        // with no tag as gone for good, same convention as an archived price
-        // with no tag today.
-        await stripe.products.update(productId, { active: false, metadata: { ironkey_toggle_disabled: '' } })
-      } else {
-        await stripe.prices.update(body.archivePriceId, { active: false, metadata: { ironkey_toggle_disabled: '' } })
-      }
+      // Untagged — the GET route treats an archived price / product with no
+      // toggle-disabled tag as gone for good
+      await setPriceActive(stripe, productId, body.archivePriceId, false, { permanent: true })
     }
 
     return NextResponse.json({
@@ -146,7 +121,8 @@ export async function PATCH(request, { params }) {
       },
     })
   } catch (error) {
-    console.error('[stripe/products/[productId] PATCH]', error)
-    return NextResponse.json({ error: error.message ?? 'Internal server error' }, { status: 500 })
+    console.error('[stripe/products/[productId] PATCH]', error.type ?? '', error.code ?? '', error.message)
+    const isStripe = Boolean(error.type?.startsWith?.('Stripe')) || error.code === 'price_product_mismatch'
+    return NextResponse.json({ error: stripeErrorCopy(error) }, { status: isStripe ? 502 : 500 })
   }
 }

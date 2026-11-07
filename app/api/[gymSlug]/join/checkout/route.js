@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { findUnavailablePrice } from '@/lib/stripePriceToggle'
 import Stripe from 'stripe'
 import prisma from '@/lib/prisma'
 import { planRequiresStudentId } from '@/lib/studentIdPlans'
@@ -75,6 +76,11 @@ export async function POST(request, { params }) {
     if (!gym.stripeSecretKey) return NextResponse.json({ error: 'Stripe not configured' }, { status: 400 })
 
     const stripe = new Stripe(gym.stripeSecretKey, { apiVersion: '2024-06-20' })
+
+    // A plan disabled on the products page can't be bought from a stale page
+    if (await findUnavailablePrice(stripe, [priceId, addonPriceId, groupTrainingPriceId])) {
+      return NextResponse.json({ error: 'that plan is no longer available — refresh the page and choose another' }, { status: 400 })
+    }
 
     // Re-check the student-ID requirement server-side rather than trusting
     // whatever the client claims — the client only decides whether to show
