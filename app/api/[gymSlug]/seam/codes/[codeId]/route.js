@@ -57,8 +57,10 @@ export async function DELETE(request, { params }) {
           where: { gymId: gym.id, accessCode: pin },
           data:  { accessCode: null },
         }),
+        // Guests are global (by email) — only clear one tied to THIS gym by a
+        // pass or waiver, never the same PIN on a guest of another gym
         prisma.guest.updateMany({
-          where: { accessCode: pin },
+          where: { accessCode: pin, OR: [{ passes: { some: { gymId: gym.id } } }, { waivers: { some: { gymId: gym.id } } }] },
           data:  { accessCode: null },
         }),
       ])
