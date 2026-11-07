@@ -31,7 +31,13 @@ async function signatureImage(name) {
   }
 }
 
-async function downloadPdf({ gymName, personName, text, version, signatureName, signedAt, signedByGuardian }) {
+/** "accepted via checkbox on <date>, backfilled" — a checkbox-era record added later, never a signature. */
+function backfilledLine(signedAt) {
+  const day = signedAt ? new Date(signedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).toLowerCase() : 'an unknown date'
+  return `accepted via checkbox on ${day}, backfilled`
+}
+
+async function downloadPdf({ gymName, personName, text, version, signatureName, signedAt, signedByGuardian, source }) {
   const { jsPDF } = await import('jspdf')
   const doc    = new jsPDF({ unit: 'pt', format: 'letter' })
   const margin = 54
@@ -54,6 +60,16 @@ async function downloadPdf({ gymName, personName, text, version, signatureName, 
 
   y += 24
   ensure(110)
+  if (!signatureName && source === 'checkbox_backfill') {
+    // No signature exists — say how the record was made instead of drawing a signature line
+    doc.setFontSize(10).text(backfilledLine(signedAt), margin, y); y += 14
+    doc.setFontSize(9).text('recorded from the join checkout and the agreement text live on that date; no signature was collected', margin, y); y += 12
+    if (version) { doc.text(`agreement version: ${version}`, margin, y); y += 12 }
+    const day  = signedAt ? new Date(signedAt).toISOString().slice(0, 10) : 'undated'
+    const slug = String(personName || 'agreement').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+    doc.save(`agreement-${slug}-${day}.pdf`)
+    return
+  }
   doc.setFontSize(10).text(signedByGuardian ? 'signature (parent/guardian)' : 'signature', margin, y); y += 8
   const img = signatureName ? await signatureImage(signatureName) : null
   if (img) {
@@ -79,6 +95,10 @@ async function downloadPdf({ gymName, personName, text, version, signatureName, 
  *
  * - typed signature on file → the signature in the cursive font + signed date
  * - a record from before typed signatures → "accepted (checkbox)" + date
+ * - source "checkbox_backfill" → "accepted via checkbox on <date>, backfilled"
+ *   (recorded later; never shown as a signature)
+ * - source "payment_link_pending" → "agreement pending" (bought through a
+ *   payment link, nothing signed)
  * - no record → "no agreement on file"
  * - "view" / "download pdf" only when the signed text was snapshotted
  *
@@ -91,16 +111,17 @@ async function downloadPdf({ gymName, personName, text, version, signatureName, 
  *   signedByGuardian?: boolean,  // a minor — the guardian signed
  *   text?: string|null,          // snapshotted agreement text (null on older records)
  *   version?: string|null,
+ *   source?: string|null,        // Member.agreementSource / GuestWaiver.waiverSource
  * }} props
  */
-export function AgreementSection({ onFile, gymName, personName, signatureName, signedAt, signedByGuardian, text, version }) {
+export function AgreementSection({ onFile, gymName, personName, signatureName, signedAt, signedByGuardian, text, version, source }) {
   const [viewing,     setViewing]     = useState(false)
   const [downloading, setDownloading] = useState(false)
 
   async function handleDownload() {
     setDownloading(true)
     try {
-      await downloadPdf({ gymName, personName, text, version, signatureName, signedAt, signedByGuardian })
+      await downloadPdf({ gymName, personName, text, version, signatureName, signedAt, signedByGuardian, source })
     } catch (err) {
       console.error('[agreement] pdf failed:', err.message)
     } finally {
@@ -113,7 +134,9 @@ export function AgreementSection({ onFile, gymName, personName, signatureName, s
       <p className="text-[11px] font-semibold tracking-widest text-neutral-500">agreement</p>
       <div className="rounded-lg border border-neutral-800 bg-[#1c1c1c] px-3 py-3 flex flex-col gap-1.5">
         {gymName && <p className="text-[11px] text-neutral-500">{gymName.toLowerCase()}</p>}
-        {!onFile ? (
+        {!onFile && source === 'payment_link_pending' ? (
+          <p className="text-xs text-amber-400">agreement pending — bought through a payment link, not signed yet</p>
+        ) : !onFile ? (
           <p className="text-xs text-neutral-500">no agreement on file</p>
         ) : signatureName ? (
           <>
@@ -123,6 +146,8 @@ export function AgreementSection({ onFile, gymName, personName, signatureName, s
               {signedAt && <> · {fmtSigned(signedAt)}</>}
             </p>
           </>
+        ) : source === 'checkbox_backfill' ? (
+          <p className="text-xs text-neutral-400">{backfilledLine(signedAt)}</p>
         ) : (
           <p className="text-xs text-neutral-400">
             accepted (checkbox)
@@ -153,8 +178,9 @@ export function AgreementSection({ onFile, gymName, personName, signatureName, s
               <div className="mt-6 border-t border-neutral-800 pt-4 flex flex-col gap-1">
                 {signatureName && <SignatureText className="text-3xl text-white">{signatureName}</SignatureText>}
                 <p className="text-[11px] text-neutral-500">
-                  {signedByGuardian ? 'signed by parent/guardian' : 'signed'}
-                  {signedAt && <> · {fmtSigned(signedAt)}</>}
+                  {!signatureName && source === 'checkbox_backfill'
+                    ? backfilledLine(signedAt)
+                    : <>{signedByGuardian ? 'signed by parent/guardian' : 'signed'}{signedAt && <> · {fmtSigned(signedAt)}</>}</>}
                   {version && <> · version {version}</>}
                 </p>
               </div>

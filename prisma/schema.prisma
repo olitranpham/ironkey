@@ -117,6 +117,11 @@ model Member {
   // Exact agreement text signed (lib/agreements) and its version
   agreementText               String?
   agreementVersion            String?
+  // null = typed signature at the join checkout; "checkbox_backfill" =
+  // accepted by the join form's checkbox, recorded later from Stripe + git
+  // history (no signature); "payment_link_pending" = bought through a
+  // Stripe payment link, nothing signed yet
+  agreementSource             String?
 
   // Personal trainer assigned to this member (PT page). Their trainer's
   // client list = assigned members + members in their PT sessions.
@@ -344,6 +349,9 @@ model GuestWaiver {
   // from before snapshots.
   waiverText         String?
   waiverVersion      String?
+  // null = recorded at signup; "checkbox_backfill" = text added later from
+  // git history for a checkbox-era row
+  waiverSource       String?
 
   guestProfile   Guest @relation(fields: [guestProfileId], references: [id])
   gym            Gym   @relation(fields: [gymId], references: [id])

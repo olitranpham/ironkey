@@ -320,6 +320,7 @@ export default function MembersPage() {
   }
 
   function matchesTab(m, tab) {
+    if (tab === 'agreement pending') return m.agreementSource === 'payment_link_pending' && m.status !== 'CANCELED'
     if (tab === 'active')   return (m.status === 'ACTIVE' || m.status === 'OVERDUE') && !isFlex(m) && !m.cancelScheduled
     if (tab === 'flex')     return isFlex(m) && !m.cancelScheduled
     if (tab === 'frozen')   return m.status === 'FROZEN'
@@ -328,6 +329,9 @@ export default function MembersPage() {
   }
 
   const tabCount = members.filter(m => matchesTab(m, activeTab)).length
+  // Bought through a payment link — nothing signed yet; staff follow up
+  const pendingCount = members.filter(m => matchesTab(m, 'agreement pending')).length
+  const shownTabs    = pendingCount > 0 ? [...tabs, 'agreement pending'] : tabs
 
   // Membership types actually present for this gym, so the filter never shows
   // options that don't apply here — pulled from the gym's real member records.
@@ -425,7 +429,7 @@ export default function MembersPage() {
 
           {/* Tabs */}
           <div className="flex border-b border-neutral-800 px-4 shrink-0">
-            {tabs.map(tab => (
+            {shownTabs.map(tab => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
@@ -436,6 +440,7 @@ export default function MembersPage() {
                 }`}
               >
                 {tab}
+                {tab === 'agreement pending' && <span className="ml-1 tabular-nums text-amber-400">{pendingCount}</span>}
               </button>
             ))}
           </div>

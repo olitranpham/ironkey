@@ -426,6 +426,7 @@ export function GuestProfilePanel({ profile, passTypeBorder, onClose, onSaveCode
             signedByGuardian={isMinor}
             text={waiver?.waiverText ?? null}
             version={waiver?.waiverVersion ?? null}
+            source={waiver?.waiverSource ?? null}
           />
         )}
 

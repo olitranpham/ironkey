@@ -26,6 +26,7 @@ const MEMBER_SELECT = {
   kisiUserId: true, kisiRoleAssignmentId: true,
   assignedTrainer: { select: { id: true, name: true } },
   agreementSignedAt: true, agreementSignatureName: true, agreementText: true, agreementVersion: true,
+  agreementSource: true,
 }
 
 /**

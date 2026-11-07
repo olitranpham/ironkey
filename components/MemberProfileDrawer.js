@@ -483,6 +483,7 @@ function DrawerContent({ member, gymSlug, membershipBorder, onClose, onStatusCha
           signedAt:      data.member.agreementSignedAt ?? null,
           text:          data.member.agreementText ?? null,
           version:       data.member.agreementVersion ?? null,
+          source:        data.member.agreementSource ?? null,
           gymName:       data.gymName ?? null,
         } : undefined)
         setKisiStatus({
@@ -1066,12 +1067,12 @@ function DrawerContent({ member, gymSlug, membershipBorder, onClose, onStatusCha
             <DrawerField label="trainer" value={assignedTrainer?.name ?? 'none assigned'} />
           )}
 
-          {/* Signed membership agreement — members have no checkbox-era
-              record, so anything without a typed signature is "not on file" */}
+          {/* Signed membership agreement — a typed signature, or a
+              checkbox-era acceptance backfilled from Stripe + git history */}
           {agreement !== undefined && (
             <div className="px-3 py-3 bg-[#1c1c1c]">
               <AgreementSection
-                onFile={Boolean(agreement.signatureName)}
+                onFile={Boolean(agreement.signatureName) || agreement.source === 'checkbox_backfill'}
                 gymName={agreement.gymName}
                 personName={`${member.firstName ?? ''} ${member.lastName ?? ''}`.trim()}
                 signatureName={agreement.signatureName}
@@ -1079,6 +1080,7 @@ function DrawerContent({ member, gymSlug, membershipBorder, onClose, onStatusCha
                 signedByGuardian={Boolean(member.isMinor)}
                 text={agreement.text}
                 version={agreement.version}
+                source={agreement.source}
               />
             </div>
           )}

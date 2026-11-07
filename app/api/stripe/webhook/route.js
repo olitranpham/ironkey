@@ -617,7 +617,10 @@ export async function POST(request) {
       agreementSignatureUserAgent: joinSignature.signatureUserAgent,
       agreementText:               joinSnapshot.text,
       agreementVersion:            joinSnapshot.version,
+      agreementSource:             null,   // signed — clears "payment_link_pending"
     } : {}
+    // Oasis PT payment link: nothing signed — staff follow up from the members page
+    const agreementPending = ptPaymentLinkCustomerId ? { agreementSource: 'payment_link_pending' } : {}
 
     let member = await prisma.member.findFirst({
       where: { gymId: gym.id, email: email.toLowerCase() },
@@ -674,6 +677,7 @@ export async function POST(request) {
           membershipType:      resolvedMembershipType,
           stripeSubscriptionId: subId,
           ...(ptPaymentLinkCustomerId ? { stripeCustomerId: ptPaymentLinkCustomerId } : {}),
+          ...agreementPending,
           priceId,
           dateAccessed:        new Date(),
           dateOfBirth:           meta.dob               || null,
@@ -720,6 +724,8 @@ export async function POST(request) {
           } : {}),
           // A re-join signs the agreement again
           ...agreementSignature,
+          // Never mark someone pending who already has an agreement on file
+          ...(member.agreementSignedAt ? {} : agreementPending),
         },
       })
       console.log('[platform/webhook] updated existing member from checkout:', member.id, email)

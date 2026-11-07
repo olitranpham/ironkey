@@ -24,7 +24,7 @@ export async function GET(request, { params }) {
 
     const waiver = await prisma.guestWaiver.findUnique({
       where:  { guestProfileId_gymId: { guestProfileId: profileId, gymId: gym.id } },
-      select: { signedAt: true, signatureName: true, waiverText: true, waiverVersion: true },
+      select: { signedAt: true, signatureName: true, waiverText: true, waiverVersion: true, waiverSource: true },
     })
     return NextResponse.json({ waiver, gymName: gym.name })
   } catch (error) {
