@@ -16,6 +16,7 @@ import { recordCouponRedemption } from '@/lib/couponRedemption'
 import { resolvePackSize } from '@/lib/gymPassTypes'
 import { withPhone, stripeSessionPhone } from '@/lib/zapierPayload'
 import { resolveAgreement } from '@/lib/agreements'
+import { isPtProduct, oasisPtMembershipType, splitFullName } from '@/lib/ptProducts'
 
 /**
  * The typed waiver / agreement signature from checkout metadata, or null when
@@ -502,12 +503,15 @@ export async function POST(request) {
     }
 
     // ── Member signup via join form ─────────────────────────────────────────
-    const firstName      = meta.firstName      ?? ''
-    const lastName       = meta.lastName       ?? ''
-    const email          = (session.customer_email ?? meta.email ?? '').toLowerCase()
-    const phone          = formatPhone(meta.phone ?? null)
-    const membershipType = (meta.membershipType ?? '').toLowerCase()
+    // let: an Oasis PT payment link (below) fills these from Stripe instead
+    let firstName      = meta.firstName      ?? ''
+    let lastName       = meta.lastName       ?? ''
+    let email          = (session.customer_email ?? meta.email ?? '').toLowerCase()
+    let phone          = formatPhone(meta.phone ?? null)
+    let membershipType = (meta.membershipType ?? '').toLowerCase()
     const subId          = session.subscription ?? null
+    // Set for an Oasis PT subscription bought through a Stripe payment link
+    let ptPaymentLinkCustomerId = null
 
     const TRIUMPH_PT_PRODUCT_ID          = 'prod_UrUgF0FkeB0IJx'
     const TRIUMPH_PROGRAMMING_PRODUCT_ID = 'prod_UrtfMuPRgjfdsd'
@@ -555,6 +559,31 @@ export async function POST(request) {
         if (hasCoaching) {
           resolvedMembershipType = membershipType ? `${membershipType} + pt` : 'pt'
           console.log('[platform/webhook] hydra-athletic-co membership type with coaching:', resolvedMembershipType)
+        }
+      }
+
+      // Oasis PT / group training bought through a Stripe payment link — no
+      // join-form metadata, so name / email / phone come from the checkout.
+      if (gymSlug === 'oasis-boston' && !meta.email && !meta.firstName) {
+        const ptItem = lineItems.find(li => {
+          const prod = li.price?.product
+          return isPtProduct(gymSlug, typeof prod === 'string' ? prod : prod?.id)
+        })
+        const details = session.customer_details ?? {}
+        if (ptItem && !subId) {
+          // A one-time pack has no subscription to end, so its door code would never be removed
+          console.warn('[platform/webhook] oasis PT one-time purchase without join form — no member created, session:', session.id)
+          return NextResponse.json({ received: true })
+        }
+        if (ptItem && details.email) {
+          const prod = ptItem.price.product
+          ;({ firstName, lastName } = splitFullName(details.name ?? ''))
+          email                   = details.email.toLowerCase()
+          phone                   = formatPhone(details.phone ?? null)
+          membershipType          = oasisPtMembershipType(ptItem.price.id, typeof prod === 'string' ? prod : prod?.id)
+          resolvedMembershipType  = membershipType
+          ptPaymentLinkCustomerId = typeof session.customer === 'string' ? session.customer : session.customer?.id ?? null
+          console.log('[platform/webhook] oasis PT payment link — membershipType=%s session=%s', membershipType, session.id)
         }
       }
     } catch (err) {
@@ -627,6 +656,7 @@ export async function POST(request) {
           status:              'ACTIVE',
           membershipType:      resolvedMembershipType,
           stripeSubscriptionId: subId,
+          ...(ptPaymentLinkCustomerId ? { stripeCustomerId: ptPaymentLinkCustomerId } : {}),
           priceId,
           dateAccessed:        new Date(),
           dateOfBirth:           meta.dob               || null,
@@ -654,6 +684,7 @@ export async function POST(request) {
           status:              'ACTIVE',
           membershipType:      resolvedMembershipType || undefined,
           stripeSubscriptionId: subId ?? member.stripeSubscriptionId,
+          ...(ptPaymentLinkCustomerId ? { stripeCustomerId: ptPaymentLinkCustomerId } : {}),
           priceId:             priceId ?? member.priceId,
           dateAccessed:        new Date(),
           // Only set when the form actually submitted a phone this time —
@@ -814,6 +845,7 @@ export async function POST(request) {
       emergencyRelationship: meta.emergencyRelationship || null,
       membershipType:        membershipType.toLowerCase(),
       subId,
+      ...(ptPaymentLinkCustomerId ? { customerId: ptPaymentLinkCustomerId } : {}),
       accessCode,
     }, { reactivate: Boolean(subId), via: 'stripe_checkout' })
       .then(({ status, json }) => { if (status >= 400) console.error('[platform/webhook] members notify failed:', status, json.error) })
