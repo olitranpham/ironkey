@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { isTrainerBillingSubscription } from '@/lib/trainerBilling'
 import Stripe from 'stripe'
 import prisma from '@/lib/prisma'
 import { deleteSeamCodeByPin } from '@/lib/seam'
@@ -57,6 +58,11 @@ export async function POST(request, { params }) {
 
   // ── checkout.session.completed is handled exclusively by the platform webhook
   // ── (/api/stripe/webhook) to avoid double processing. Do not handle it here.
+
+  // Outside-trainer billing subscriptions are never a membership (lib/trainerBilling)
+  if (event.type.startsWith('customer.subscription.') && isTrainerBillingSubscription(event.data.object)) {
+    return NextResponse.json({ received: true })
+  }
 
   if (event.type === 'customer.subscription.deleted') {
     const sub = event.data.object

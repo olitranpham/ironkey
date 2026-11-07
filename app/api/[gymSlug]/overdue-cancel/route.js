@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { isTrainerBillingSubscription } from '@/lib/trainerBilling'
 import Stripe from 'stripe'
 import prisma from '@/lib/prisma'
 import { deleteSeamCodeByPin } from '@/lib/seam'
@@ -91,7 +92,9 @@ export async function POST(request, { params }) {
       stripe.subscriptions.list({ status: 'past_due', limit: 100, expand: ['data.customer', 'data.latest_invoice'] }),
       stripe.subscriptions.list({ status: 'unpaid',   limit: 100, expand: ['data.customer', 'data.latest_invoice'] }),
     ])
-    const subs = [...r1.data, ...r2.data]
+    // A trainer billing subscription is not a membership — never cancel the
+    // member (or their door code) because of it (lib/trainerBilling)
+    const subs = [...r1.data, ...r2.data].filter(s => !isTrainerBillingSubscription(s))
 
     if (subs.length === 0) {
       return NextResponse.json({

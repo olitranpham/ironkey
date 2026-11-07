@@ -17,7 +17,7 @@ import { resolvePackSize } from '@/lib/gymPassTypes'
 import { withPhone, stripeSessionPhone } from '@/lib/zapierPayload'
 import { resolveAgreement } from '@/lib/agreements'
 import { isPtProduct, oasisPtMembershipType, splitFullName } from '@/lib/ptProducts'
-import { recordPassPromotion, handleCardSetupCompleted } from '@/lib/trainerBilling'
+import { recordPassPromotion, handleCardSetupCompleted, isTrainerBillingSubscription } from '@/lib/trainerBilling'
 
 /**
  * The typed waiver / agreement signature from checkout metadata, or null when
@@ -889,6 +889,13 @@ export async function POST(request) {
   }
 
   // ── customer.subscription.updated ────────────────────────────────────────
+  // Outside-trainer billing subscriptions are never a membership — the
+  // trainer may be a member on the same customer, so skip all member logic
+  if (event.type.startsWith('customer.subscription.') && isTrainerBillingSubscription(event.data.object)) {
+    console.log('[platform/webhook] %s for trainer billing sub %s — no member changes', event.type, event.data.object.id)
+    return NextResponse.json({ received: true })
+  }
+
   if (event.type === 'customer.subscription.updated') {
     const sub   = event.data.object
     const subId = sub.id

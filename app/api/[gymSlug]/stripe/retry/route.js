@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { isTrainerBillingInvoice } from '@/lib/trainerBilling'
 import Stripe from 'stripe'
 import prisma from '@/lib/prisma'
 import { requirePermission } from '@/lib/permissions'
@@ -43,10 +44,14 @@ export async function POST(request, { params }) {
       return NextResponse.json({ error: 'Invoice does not belong to a member in this gym' }, { status: 403 })
     }
 
+    // A trainer billing invoice can share the member's customer — paying it
+    // says nothing about their membership (lib/trainerBilling)
+    const trainerInvoice = await isTrainerBillingInvoice(stripeClient, invoice)
+
     const paid = await stripeClient.invoices.pay(invoiceId)
 
     // If payment succeeded, mark member active
-    if (paid.status === 'paid') {
+    if (paid.status === 'paid' && !trainerInvoice) {
       await prisma.member.update({
         where: { id: member.id },
         data:  { status: 'ACTIVE' },

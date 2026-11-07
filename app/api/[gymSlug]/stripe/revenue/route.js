@@ -5,6 +5,7 @@ import { requirePermission } from '@/lib/permissions'
 import { monthStart, DEFAULT_GYM_TIME_ZONE } from '@/lib/etMonth'
 import { isPtProduct } from '@/lib/ptProducts'
 import { cachedLookup } from '@/lib/stripeLookupCache'
+import { trainerBillingProductId } from '@/lib/trainerBilling'
 
 // ── Server-side cache ─────────────────────────────────────────────────────────
 
@@ -108,6 +109,11 @@ export async function GET(request, { params }) {
     // Product IDs that identify a one-time payment as a concessions purchase
     const concessionsProductIds = new Set(inventoryItems.map(i => i.stripeProductId))
 
+    // PT = the gym's PT products (lib/ptProducts) plus the outside-trainer
+    // billing product (lib/trainerBilling), looked up per account (10 min cache)
+    const trainerProductId = await cachedLookup(`trainer-product:${gym.id}`, () => trainerBillingProductId(stripe), 10 * 60 * 1000)
+    const isPt = productId => isPtProduct(gymSlug, productId) || Boolean(trainerProductId && productId === trainerProductId)
+
     // ── MRR ───────────────────────────────────────────────────────────────────
     let mrrCents = 0
     for (const sub of activeSubs) {
@@ -210,7 +216,7 @@ export async function GET(request, { params }) {
       // Otherwise inspect the session's line item product(s)
       try {
         const lines = await sessionLineItems(session)
-        if (lines.some(l => isPtProduct(gymSlug, l.productId))) return 'pt'
+        if (lines.some(l => isPt(l.productId))) return 'pt'
         for (const l of lines) {
           if (l.productId && concessionsProductIds.has(l.productId)) return 'concessions'
           if (isGuestPassName(l.name) || isGuestPassName(l.description)) return 'guestPasses'
@@ -243,7 +249,7 @@ export async function GET(request, { params }) {
       try {
         const lines = await invoiceLines(charge.invoice)
         const total = lines.reduce((sum, l) => sum + Math.max(0, l.amount), 0)
-        const pt    = lines.filter(l => isPtProduct(gymSlug, l.productId)).reduce((sum, l) => sum + Math.max(0, l.amount), 0)
+        const pt    = lines.filter(l => isPt(l.productId)).reduce((sum, l) => sum + Math.max(0, l.amount), 0)
         if (pt === 0)      return 0
         if (total <= 0)    return charge.amount
         return Math.round(charge.amount * (pt / total))

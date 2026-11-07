@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { isTrainerBillingSubscription } from '@/lib/trainerBilling'
 import Stripe from 'stripe'
 import prisma from '@/lib/prisma'
 import { requirePermission } from '@/lib/permissions'
@@ -28,7 +29,8 @@ export async function GET(request, { params }) {
           stripeClient.subscriptions.list({ status: 'unpaid',   limit: 50, expand }),
         ])
 
-        const overdue = [...r1.data, ...r2.data]
+        // Trainer billing subscriptions aren't memberships (lib/trainerBilling)
+        const overdue = [...r1.data, ...r2.data].filter(s => !isTrainerBillingSubscription(s))
 
         // Match to DB members for names, membership type, and internal ID
         const emails = overdue
