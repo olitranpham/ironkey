@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { findUnavailablePrice } from '@/lib/stripePriceToggle'
 import Stripe from 'stripe'
 import prisma from '@/lib/prisma'
 import { limitRequest, clientIp } from '@/lib/rateLimit'
@@ -74,6 +75,11 @@ export async function POST(request, { params }) {
     if (!gym.stripeSecretKey) return NextResponse.json({ error: 'Stripe not configured' }, { status: 400 })
 
     const stripe    = new Stripe(gym.stripeSecretKey, { apiVersion: '2024-06-20' })
+
+    // A pass disabled on the products page can't be bought from a stale page
+    if (await findUnavailablePrice(stripe, [priceId])) {
+      return NextResponse.json({ error: 'that pass is no longer available — refresh the page and choose another' }, { status: 400 })
+    }
     const origin    = process.env.NEXT_PUBLIC_APP_URL
       ?? request.headers.get('origin')
       ?? `https://${request.headers.get('host')}`
