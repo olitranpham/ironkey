@@ -203,7 +203,11 @@ export function TrainerBillingSection({ gymSlug }) {
                             {v.sameDayRepeat && <span className="ml-2 text-[10px] text-amber-400">same-day repeat</span>}
                           </td>
                           <td className="py-1.5 text-neutral-500 font-mono">{v.sessionId ? `${v.sessionId.slice(0, 18)}…` : '—'}</td>
-                          <td className="py-1.5">{v.metered ? <span className="text-emerald-400">yes</span> : <span className="text-neutral-600">no</span>}</td>
+                          <td className="py-1.5">
+                            {v.billed === 'yes' ? <span className="text-emerald-400">yes</span>
+                              : v.billed === 'pre-billing' ? <span className="text-sky-400">pre-billing</span>
+                              : <span className="text-neutral-600">no</span>}
+                          </td>
                         </tr>
                       ))}
                     </tbody>

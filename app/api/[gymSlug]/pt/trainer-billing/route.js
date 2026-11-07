@@ -40,7 +40,6 @@ export async function GET(request, { params }) {
 
     const rows = await Promise.all(trainers.map(async t => {
       const visits = await trainerVisits(gym.id, t.promotionCodeId, range.start, range.end)
-      const billed = visits.filter(v => v.metered).length
       let customerLabel = null, paymentMethod = null, subscription = null, invoices = []
       if (t.stripeCustomerId) {
         const member = await prisma.member.findFirst({ where: { gymId: gym.id, stripeCustomerId: t.stripeCustomerId }, select: { firstName: true, lastName: true, email: true } })
@@ -51,18 +50,46 @@ export async function GET(request, { params }) {
         const sub = await stripe.subscriptions.retrieve(t.billingSubscriptionId).catch(() => null)
         subscription = sub && { id: sub.id, status: sub.status, startedAt: new Date(sub.start_date * 1000).toISOString(), nextInvoiceAt: new Date(sub.current_period_end * 1000).toISOString() }
         const inv = await stripe.invoices.list({ subscription: t.billingSubscriptionId, limit: 24 }).catch(() => ({ data: [] }))
-        invoices = inv.data.map(i => ({
+        // $0.00 invoices (e.g. the one Stripe makes when billing starts) aren't worth listing
+        invoices = inv.data.filter(i => i.total !== 0).map(i => ({
           id: i.id, number: i.number, status: i.status, total: i.total, amountPaid: i.amount_paid,
           periodStart: new Date(i.period_start * 1000).toISOString(), periodEnd: new Date(i.period_end * 1000).toISOString(),
           url: i.hosted_invoice_url,
         }))
       }
+      // Pre-billing invoice items (addTrainerInvoiceItem) cover visits from
+      // before metering started — matched to a visit by its date (metadata
+      // ironkey_visit_date, else the "pt visit YYYY-MM-DD" description).
+      // Pending or already invoiced, the visit is billed either way.
+      const preBilling = new Map()   // 'YYYY-MM-DD' → [amount cents, …]
+      if (t.stripeCustomerId && t.billingSubscriptionId) {
+        const items = await stripe.invoiceItems.list({ customer: t.stripeCustomerId, limit: 100 }).catch(() => ({ data: [] }))
+        for (const ii of items.data) {
+          const sub = typeof ii.subscription === 'string' ? ii.subscription : ii.subscription?.id
+          if (ii.metadata?.ironkey_kind !== 'trainer_billing' || sub !== t.billingSubscriptionId) continue
+          const day = ii.metadata?.ironkey_visit_date ?? /pt visit (\d{4}-\d{2}-\d{2})/.exec(ii.description ?? '')?.[1]
+          if (day) (preBilling.get(day) ?? preBilling.set(day, []).get(day)).push(ii.amount)
+        }
+      }
+      let metered = 0, preBilled = 0, preBillingCents = 0
+      for (const v of visits) {
+        if (v.metered) { v.billed = 'yes'; metered++; continue }
+        const amount = preBilling.get(v.day)?.shift()
+        if (amount != null) { v.billed = 'pre-billing'; preBilled++; preBillingCents += amount }
+        else v.billed = 'no'
+      }
+
       return {
         id: t.id, name: t.name,
         promotionCodeId: t.promotionCodeId, promotionCode: t.promotionCodeId ? (codeById.get(t.promotionCodeId) ?? t.promotionCodeId) : null,
         stripeCustomerId: t.stripeCustomerId, customerLabel,
         paymentMethod, billing: subscription,
-        month: { visits: visits.length, billedVisits: billed, amountCents: amountForVisits(billed), capReached: billed >= VISIT_CAP },
+        month: {
+          visits:       visits.length,
+          billedVisits: metered + preBilled,
+          amountCents:  amountForVisits(metered) + preBillingCents,
+          capReached:   metered >= VISIT_CAP,
+        },
         visits, invoices,
       }
     }))
