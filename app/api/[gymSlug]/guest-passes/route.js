@@ -5,6 +5,7 @@ import { authorizeIntake } from '@/lib/webhookAuth'
 import { intakeGuestPass } from '@/lib/guestPassIntake'
 import { DEFAULT_GYM_TIME_ZONE } from '@/lib/etMonth'
 import { guestPassMetrics } from '@/lib/guestPassMetrics'
+import { latest, archivePredicate } from '@/lib/guestPassArchive'
 
 /**
  * POST /api/[gymSlug]/guest-passes
@@ -29,19 +30,6 @@ export async function POST(request, { params }) {
     console.error('[guest-passes POST]', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
-}
-
-// A guest (or unlinked pass) is archived for a gym when its most recent
-// activity there is older than this. Computed per request — never stored —
-// so a returning guest is back in the active list on their next purchase or
-// check-in.
-const ARCHIVE_AFTER_MONTHS = 6
-
-/** Latest of the given dates (Date | null), or null. */
-function latest(...dates) {
-  let max = null
-  for (const d of dates) if (d && (!max || d > max)) max = d
-  return max
 }
 
 /**
@@ -75,9 +63,8 @@ export async function GET(request, { params }) {
     const gymId    = gym.id
     const timeZone = gym.timezone || DEFAULT_GYM_TIME_ZONE
 
-    const cutoff = new Date()
-    cutoff.setMonth(cutoff.getMonth() - ARCHIVE_AFTER_MONTHS)
-    const isArchived = lastActivity => !lastActivity || lastActivity < cutoff
+    // Archive rule: lib/guestPassArchive (6 months without activity here)
+    const isArchived = archivePredicate()
 
     // ── Fetch all pass records for this gym upfront ─────────────────────────────
     // We deliberately avoid using the nested `passes` relation on Guest, because
