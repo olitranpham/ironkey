@@ -599,6 +599,14 @@ export async function POST(request) {
       return NextResponse.json({ received: true })
     }
 
+    // Never match (or create) a Member on an empty email — every blank
+    // checkout would land on the same row
+    email = email.trim()
+    if (!email) {
+      console.warn('[platform/webhook] skipped checkout with no email %s %s', session.id, productIds.join(',') || '(no products)')
+      return NextResponse.json({ received: true })
+    }
+
     // Typed agreement signature from the join form (null for older sessions)
     const joinSignature      = signatureFromSession(session)
     const joinSnapshot       = joinSignature ? await agreementSnapshot(gymSlug, 'member', session) : null
