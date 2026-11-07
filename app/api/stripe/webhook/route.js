@@ -519,6 +519,7 @@ export async function POST(request) {
 
     let priceId = meta.priceId ?? null
     let resolvedMembershipType = membershipType
+    let productIds = []
     try {
       const expandOptions = gym.stripeSecretKey
         ? {}
@@ -536,7 +537,7 @@ export async function POST(request) {
         console.warn('[platform/webhook] no line item price found, falling back to metadata priceId:', priceId)
       }
 
-      const productIds = lineItems.map(li => {
+      productIds = lineItems.map(li => {
         const prod = li.price?.product
         return typeof prod === 'string' ? prod : prod?.id
       }).filter(Boolean)
@@ -588,6 +589,14 @@ export async function POST(request) {
       }
     } catch (err) {
       console.error('[platform/webhook] failed to retrieve session line items:', err.message)
+    }
+
+    // No join-form data and not an Oasis PT payment link (handled above) —
+    // a payment link, meet entry or other non-membership payment. Never a
+    // Member, door code or Zapier.
+    if (!meta.firstName && !meta.email && !ptPaymentLinkCustomerId) {
+      console.warn('[platform/webhook] skipped blank checkout %s %s', session.id, productIds.join(',') || '(no products)')
+      return NextResponse.json({ received: true })
     }
 
     // Typed agreement signature from the join form (null for older sessions)
