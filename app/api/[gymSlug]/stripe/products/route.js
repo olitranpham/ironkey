@@ -158,6 +158,8 @@ export async function GET(request, { params }) {
         // "deleted for good" — exclude it entirely, same convention as the
         // guest-pass branch below.
         if (!product.active && product.metadata?.ironkey_toggle_disabled !== 'true') continue
+        // Outside-trainer billing price (lib/trainerBilling) — managed on the PT page
+        if (product.metadata?.ironkey_kind === 'trainer_billing') continue
 
         membershipPlans.push({
           id:          product.id,

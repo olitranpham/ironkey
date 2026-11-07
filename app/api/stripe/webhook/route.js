@@ -17,6 +17,7 @@ import { resolvePackSize } from '@/lib/gymPassTypes'
 import { withPhone, stripeSessionPhone } from '@/lib/zapierPayload'
 import { resolveAgreement } from '@/lib/agreements'
 import { isPtProduct, oasisPtMembershipType, splitFullName } from '@/lib/ptProducts'
+import { recordPassPromotion, handleCardSetupCompleted } from '@/lib/trainerBilling'
 
 /**
  * The typed waiver / agreement signature from checkout metadata, or null when
@@ -173,6 +174,13 @@ export async function POST(request) {
   if (event.type === 'checkout.session.completed') {
     const session = event.data.object
     const meta    = session.metadata ?? {}
+
+    // ── Outside trainer saved a card (PT page "send card setup link") ──────
+    if (session.mode === 'setup' && meta.ironkey_kind === 'trainer_card_setup') {
+      await handleCardSetupCompleted(accountStripe, gym, session)
+        .catch(err => console.error('[platform/webhook] trainer card setup failed:', err.message))
+      return NextResponse.json({ received: true })
+    }
 
     // ── Guest pass purchase ─────────────────────────────────────────────────
     if (meta.source === 'guest_pass') {
@@ -406,6 +414,9 @@ export async function POST(request) {
         } else {
           savedPassesLeft = zapJson.pass?.passesLeft ?? savedPassesLeft
           console.log('[platform/webhook] guest-passes notified for', email, '| passType:', passType, '| savedPassesLeft:', savedPassesLeft)
+
+          // Promotion code on the pass; a billing trainer's code → one metered visit
+          if (zapJson.pass?.id) await recordPassPromotion(accountStripe, gym, session, zapJson.pass.id)
 
           // Student ID photo — mirrors the Member resolution logic above:
           // look up the temp staging row by ID, copy its file data onto the

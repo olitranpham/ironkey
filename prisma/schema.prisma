@@ -274,6 +274,11 @@ model GuestVisit {
   // Checkout session that created this pass — unique, so a repeated webhook
   // delivery can't create a second row. Null for Zapier/imported passes.
   stripeSessionId String? @unique
+  // Promotion code applied at checkout (session.discounts) — id + code text
+  promotionCodeId String?
+  promotionCode   String?
+  // When this pass was sent to the trainer's pt_visits meter (idempotency)
+  meterEventSentAt DateTime?
   stripePriceId   String?
   // Passes in the purchased pack (1 for a single), resolved from the price
   // ID at purchase. Null for older passes — see packSizeForPass().
@@ -283,6 +288,7 @@ model GuestVisit {
 
   createdAt DateTime @default(now())
 
+  @@index([gymId, promotionCodeId])
   @@map("GuestPass")
 }
 
@@ -610,6 +616,13 @@ model PersonalTrainer {
   sessions        PTSession[]
   gymUser         GymUser?
   assignedMembers Member[]  @relation("AssignedTrainer")
+
+  // Outside-trainer billing (lib/trainerBilling): each guest pass bought
+  // with this promotion code is one metered visit billed to this Stripe
+  // customer (on the gym's connected account) via billingSubscriptionId
+  promotionCodeId       String?
+  stripeCustomerId      String?
+  billingSubscriptionId String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

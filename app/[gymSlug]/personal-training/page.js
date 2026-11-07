@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams } from 'next/navigation'
 import { PtMembershipsSection } from '@/components/PtMembershipsSection'
+import { TrainerBillingSection } from '@/components/TrainerBillingSection'
 import { ChevronLeft, ChevronRight, ChevronDown, X, Plus, Trash2, RefreshCw, Search } from 'lucide-react'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -831,6 +832,9 @@ export default function PersonalTrainingPage() {
 
             {/* PT memberships — follows the trainer filter */}
             <PtMembershipsSection gymSlug={gymSlug} filterTrainerId={filterTrainerId} onAssigned={refreshTrainers} />
+
+            {/* Outside trainer billing — OWNER / ADMIN only (renders nothing otherwise) */}
+            <TrainerBillingSection gymSlug={gymSlug} />
 
             {/* Past sessions */}
             {pastSessions.length > 0 && (
