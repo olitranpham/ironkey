@@ -118,6 +118,11 @@ model Member {
   agreementText               String?
   agreementVersion            String?
 
+  // Personal trainer assigned to this member (PT page). Their trainer's
+  // client list = assigned members + members in their PT sessions.
+  assignedTrainerId String?
+  assignedTrainer   PersonalTrainer? @relation("AssignedTrainer", fields: [assignedTrainerId], references: [id], onDelete: SetNull)
+
   // Seam / smart-lock access code
   accessCode       String?
   seamDeviceId     String?
@@ -173,6 +178,8 @@ model Member {
   couponRedemptions CouponRedemption[]
 
   @@unique([gymId, email])
+
+  @@index([assignedTrainerId])
 }
 
 enum AccessProvider {
@@ -592,8 +599,9 @@ model PersonalTrainer {
   bio   String?
   color String?   // hex color for calendar coding
 
-  sessions  PTSession[]
-  gymUser   GymUser?
+  sessions        PTSession[]
+  gymUser         GymUser?
+  assignedMembers Member[]  @relation("AssignedTrainer")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

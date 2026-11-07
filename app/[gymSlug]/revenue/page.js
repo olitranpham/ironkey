@@ -16,6 +16,7 @@ const EXPENSE_CATEGORIES = ['rent', 'equipment', 'supplies', 'marketing', 'other
 
 const CATEGORY_COLORS = {
   memberships: '#4A87C7',  // muted blue
+  pt:          '#9A7BC4',  // muted violet
   guestPasses: '#CC7A42',  // muted orange
   concessions: '#3DAB80',  // muted green
 }
@@ -271,6 +272,7 @@ export default function RevenuePage() {
     const mapped = monthly.map(m => ({
       name:        shortMonth(m.month, showYear),
       memberships: m.memberships ?? 0,
+      pt:          m.pt ?? 0,
       guestPasses: m.guestPasses ?? 0,
       concessions: m.concessions ?? 0,
       income:      entryMap[m.month]?.income   ?? 0,
@@ -330,6 +332,7 @@ export default function RevenuePage() {
                 <p className="text-xs font-semibold text-neutral-400">monthly revenue</p>
                 <div className="flex items-center gap-4 text-[11px] text-neutral-500 flex-wrap">
                   <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ background: CATEGORY_COLORS.memberships }} />memberships</span>
+                  <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ background: CATEGORY_COLORS.pt }} />pt</span>
                   <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ background: CATEGORY_COLORS.guestPasses }} />guest passes</span>
                   <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ background: CATEGORY_COLORS.concessions }} />concessions</span>
                   {hasExpenses && <span className="flex items-center gap-1.5"><span className="w-2.5 h-0.5 rounded inline-block" style={{ background: '#1e1e1e' }} />expenses</span>}
@@ -350,6 +353,7 @@ export default function RevenuePage() {
                     <ReferenceLine y={0} stroke="#404040" />
                     <Tooltip content={<ChartTooltip />} cursor={{ fill: 'rgba(255,255,255,0.04)' }} />
                     <Bar dataKey="memberships" name="memberships" stackId="pos" fill={CATEGORY_COLORS.memberships} stroke="#1c1c1c" strokeWidth={2} radius={[0, 0, 0, 0]} />
+                    <Bar dataKey="pt"          name="pt"          stackId="pos" fill={CATEGORY_COLORS.pt}          stroke="#1c1c1c" strokeWidth={2} radius={[0, 0, 0, 0]} />
                     <Bar dataKey="guestPasses" name="guest passes" stackId="pos" fill={CATEGORY_COLORS.guestPasses} stroke="#1c1c1c" strokeWidth={2} radius={[0, 0, 0, 0]} />
                     <Bar dataKey="concessions" name="concessions" stackId="pos" fill={CATEGORY_COLORS.concessions} stroke="#1c1c1c" strokeWidth={2} radius={[0, 0, 0, 0]} />
                     <Bar dataKey="income"   name="income"  stackId="pos" fill="#2a2a2a" stroke="#1c1c1c" strokeWidth={2} radius={[4, 4, 0, 0]} />

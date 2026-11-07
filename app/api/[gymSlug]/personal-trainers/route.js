@@ -10,11 +10,28 @@ export async function GET(request, { params }) {
     const gym = await prisma.gym.findUnique({ where: { slug: gymSlug }, select: { id: true } })
     if (!gym) return NextResponse.json({ error: 'Gym not found' }, { status: 404 })
 
-    const trainers = await prisma.personalTrainer.findMany({
-      where:   { gymId: gym.id },
-      orderBy: { createdAt: 'asc' },
-      include: { _count: { select: { sessions: true } } },
-    })
+    const [rows, assigned, sessionMembers] = await Promise.all([
+      prisma.personalTrainer.findMany({
+        where:   { gymId: gym.id },
+        orderBy: { createdAt: 'asc' },
+        include: { _count: { select: { sessions: true } } },
+      }),
+      prisma.member.findMany({
+        where:  { gymId: gym.id, assignedTrainerId: { not: null } },
+        select: { id: true, assignedTrainerId: true },
+      }),
+      prisma.pTSessionMember.findMany({
+        where:  { session: { gymId: gym.id } },
+        select: { memberId: true, session: { select: { trainerId: true } } },
+      }),
+    ])
+
+    // clientCount = distinct members assigned to the trainer or in any of
+    // their sessions (same set as a TRAINER login's client list)
+    const clients = new Map(rows.map(t => [t.id, new Set()]))
+    for (const m of assigned)       clients.get(m.assignedTrainerId)?.add(m.id)
+    for (const sm of sessionMembers) clients.get(sm.session.trainerId)?.add(sm.memberId)
+    const trainers = rows.map(t => ({ ...t, clientCount: clients.get(t.id)?.size ?? 0 }))
 
     return NextResponse.json({ trainers })
   } catch (error) {

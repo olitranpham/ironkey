@@ -388,6 +388,8 @@ function DrawerContent({ member, gymSlug, membershipBorder, onClose, onStatusCha
   // (which does include it) whenever the drawer opens for someone new.
   const [studentIdImage,         setStudentIdImage]         = useState(null)
   const [studentIdLightboxOpen,  setStudentIdLightboxOpen]  = useState(false)
+  // Assigned personal trainer, from the same single-member fetch (undefined = loading)
+  const [assignedTrainer, setAssignedTrainer] = useState(undefined)
   // Signed agreement, from the same single-member fetch (undefined = loading)
   const [agreement, setAgreement] = useState(undefined)
 
@@ -466,6 +468,7 @@ function DrawerContent({ member, gymSlug, membershipBorder, onClose, onStatusCha
     if (simplified || !gymSlug || !member.id) return
     setStudentIdImage(null)
     setKisiStatus(null)
+    setAssignedTrainer(undefined)
     setAgreement(undefined)
     const token = localStorage.getItem('ik_token')
     fetch(`/api/${gymSlug}/members/${member.id}`, {
@@ -474,6 +477,7 @@ function DrawerContent({ member, gymSlug, membershipBorder, onClose, onStatusCha
       .then(r => r.ok ? r.json() : null)
       .then(data => {
         setStudentIdImage(data?.member?.studentIdImage ?? null)
+        setAssignedTrainer(data?.member ? (data.member.assignedTrainer ?? null) : undefined)
         setAgreement(data?.member ? {
           signatureName: data.member.agreementSignatureName ?? null,
           signedAt:      data.member.agreementSignedAt ?? null,
@@ -1056,6 +1060,10 @@ function DrawerContent({ member, gymSlug, membershipBorder, onClose, onStatusCha
           )}
           {studentIdLightboxOpen && (
             <ImageLightbox src={studentIdImage} onClose={() => setStudentIdLightboxOpen(false)} />
+          )}
+
+          {assignedTrainer !== undefined && (
+            <DrawerField label="trainer" value={assignedTrainer?.name ?? 'none assigned'} />
           )}
 
           {/* Signed membership agreement — members have no checkbox-era

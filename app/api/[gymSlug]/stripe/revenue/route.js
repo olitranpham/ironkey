@@ -3,6 +3,8 @@ import Stripe from 'stripe'
 import prisma from '@/lib/prisma'
 import { requirePermission } from '@/lib/permissions'
 import { monthStart, DEFAULT_GYM_TIME_ZONE } from '@/lib/etMonth'
+import { isPtProduct } from '@/lib/ptProducts'
+import { cachedLookup } from '@/lib/stripeLookupCache'
 
 // ── Server-side cache ─────────────────────────────────────────────────────────
 
@@ -178,28 +180,40 @@ export async function GET(request, { params }) {
     const monthResults = await Promise.all(
       monthRanges.map(({ start, end }) =>
         Promise.all([
-          stripeListAll(p => stripe.charges.list(p), { created: { gte: start, lt: end } }),
+          // invoice expanded: its lines (product per line) split PT from memberships
+          stripeListAll(p => stripe.charges.list(p), { created: { gte: start, lt: end }, expand: ['data.invoice'] }),
           stripeListAll(p => stripe.checkout.sessions.list(p), { created: { gte: start, lt: end } }),
         ])
       )
     )
+
+    // A completed session's line items never change — cached (lib/stripeLookupCache)
+    const sessionLineItems = session => cachedLookup(`session-lines:${gym.id}:${session.id}`, async () => {
+      const lineItems = await stripeWithRetry(() =>
+        stripe.checkout.sessions.listLineItems(session.id, { expand: ['data.price.product'] })
+      )
+      return (lineItems.data ?? []).map(li => {
+        const prod = li.price?.product
+        return {
+          productId:   typeof prod === 'string' ? prod : prod?.id ?? null,
+          name:        typeof prod === 'string' ? '' : (prod?.name ?? ''),
+          description: li.description ?? '',
+        }
+      })
+    })
 
     async function categorizeOneTimeSession(session) {
       const source = session.metadata?.source
       if (source === 'concessions') return 'concessions'
       if (source === 'guest_pass')  return 'guestPasses'
 
-      // Fallback — inspect the session's line item product(s) directly
+      // Otherwise inspect the session's line item product(s)
       try {
-        const lineItems = await stripeWithRetry(() =>
-          stripe.checkout.sessions.listLineItems(session.id, { expand: ['data.price.product'] })
-        )
-        for (const li of lineItems.data ?? []) {
-          const prod   = li.price?.product
-          const prodId = typeof prod === 'string' ? prod : prod?.id
-          const name   = typeof prod === 'string' ? '' : (prod?.name ?? '')
-          if (prodId && concessionsProductIds.has(prodId)) return 'concessions'
-          if (isGuestPassName(name) || isGuestPassName(li.description ?? '')) return 'guestPasses'
+        const lines = await sessionLineItems(session)
+        if (lines.some(l => isPtProduct(gymSlug, l.productId))) return 'pt'
+        for (const l of lines) {
+          if (l.productId && concessionsProductIds.has(l.productId)) return 'concessions'
+          if (isGuestPassName(l.name) || isGuestPassName(l.description)) return 'guestPasses'
         }
       } catch (err) {
         console.error('[stripe/revenue] failed to classify session', session.id, err.message)
@@ -207,13 +221,47 @@ export async function GET(request, { params }) {
       return 'guestPasses'  // default for legacy one-time payments
     }
 
+    // { productId, amount } per invoice line. The expanded invoice carries its
+    // first page of lines; only an invoice with more is fetched (and cached —
+    // a paid invoice's lines never change).
+    async function invoiceLines(invoice) {
+      const id = typeof invoice === 'string' ? invoice : invoice?.id
+      if (!id) return []
+      const toLine = l => ({ productId: l.price?.product ?? null, amount: l.amount ?? 0 })
+      if (typeof invoice === 'object' && invoice.lines && !invoice.lines.has_more) {
+        return invoice.lines.data.map(toLine)
+      }
+      return cachedLookup(`invoice-lines:${gym.id}:${id}`, async () =>
+        (await stripeListAll(p => stripe.invoices.listLineItems(id, p), {})).map(toLine)
+      )
+    }
+
+    // PT share of a subscription/invoice charge: the PT lines' share of the
+    // invoice, applied to what was actually charged (so discounts/tax split
+    // the same way). Bundled PT products count in full.
+    async function ptCentsOfCharge(charge) {
+      try {
+        const lines = await invoiceLines(charge.invoice)
+        const total = lines.reduce((sum, l) => sum + Math.max(0, l.amount), 0)
+        const pt    = lines.filter(l => isPtProduct(gymSlug, l.productId)).reduce((sum, l) => sum + Math.max(0, l.amount), 0)
+        if (pt === 0)      return 0
+        if (total <= 0)    return charge.amount
+        return Math.round(charge.amount * (pt / total))
+      } catch (err) {
+        console.error('[stripe/revenue] failed to classify charge', charge.id, err.message)
+        return 0
+      }
+    }
+
     const monthly = await Promise.all(monthRanges.map(async ({ key }, i) => {
       const [charges, sessions] = monthResults[i]
 
-      // Memberships — recurring subscription charges (tied to an invoice)
-      const membershipCents = charges
-        .filter(c => c.status === 'succeeded' && !c.refunded && c.invoice)
-        .reduce((sum, c) => sum + c.amount, 0)
+      // Memberships — recurring subscription charges (tied to an invoice),
+      // minus the PT lines on them
+      const invoiceCharges = charges.filter(c => c.status === 'succeeded' && !c.refunded && c.invoice)
+      const ptShares       = await Promise.all(invoiceCharges.map(ptCentsOfCharge))
+      let ptCents          = ptShares.reduce((sum, n) => sum + n, 0)
+      const membershipCents = invoiceCharges.reduce((sum, c) => sum + c.amount, 0) - ptCents
 
       // One-time payments — paid Checkout Sessions in payment mode
       const oneTimeSessions = sessions.filter(s => s.mode === 'payment' && s.payment_status === 'paid')
@@ -224,16 +272,18 @@ export async function GET(request, { params }) {
       oneTimeSessions.forEach((session, idx) => {
         const amt = session.amount_total ?? 0
         if (categories[idx] === 'concessions') concessionsCents += amt
+        else if (categories[idx] === 'pt')     ptCents         += amt
         else                                   guestPassCents  += amt
       })
 
       const memberships = membershipCents  / 100
       const guestPasses  = guestPassCents   / 100
       const concessions  = concessionsCents / 100
+      const pt           = ptCents          / 100
 
       console.log(
-        '[stripe/revenue] %s %s — memberships=%s guestPasses=%s concessions=%s',
-        gymSlug, key, memberships.toFixed(2), guestPasses.toFixed(2), concessions.toFixed(2),
+        '[stripe/revenue] %s %s — memberships=%s pt=%s guestPasses=%s concessions=%s',
+        gymSlug, key, memberships.toFixed(2), pt.toFixed(2), guestPasses.toFixed(2), concessions.toFixed(2),
       )
 
       return {
@@ -241,7 +291,8 @@ export async function GET(request, { params }) {
         memberships,
         guestPasses,
         concessions,
-        amount: memberships + guestPasses + concessions,
+        pt,
+        amount: memberships + pt + guestPasses + concessions,
       }
     }))
 

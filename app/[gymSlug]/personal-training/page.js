@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams } from 'next/navigation'
+import { PtMembershipsSection } from '@/components/PtMembershipsSection'
 import { ChevronLeft, ChevronRight, ChevronDown, X, Plus, Trash2, RefreshCw, Search } from 'lucide-react'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -586,6 +587,15 @@ export default function PersonalTrainingPage() {
 
   // ── Trainer actions ──
 
+  // Re-read trainers (client counts change with sessions and assignments)
+  async function refreshTrainers() {
+    try {
+      const trRes  = await fetch(`/api/${gymSlug}/personal-trainers`, { headers: { Authorization: `Bearer ${token()}` } })
+      const trData = await trRes.json()
+      setTrainers(trData.trainers ?? [])
+    } catch { /* non-fatal */ }
+  }
+
   async function addTrainer(data) {
     setSavingTrainer(true)
     try {
@@ -629,9 +639,7 @@ export default function PersonalTrainingPage() {
       const { session } = await res.json()
       setSessions(prev => isEdit ? prev.map(s => s.id === session.id ? session : s) : [session, ...prev])
       setSessionModal(null)
-      const trRes = await fetch(`/api/${gymSlug}/personal-trainers`, { headers: { Authorization: `Bearer ${token()}` } })
-      const trData = await trRes.json()
-      setTrainers(trData.trainers ?? [])
+      await refreshTrainers()
     } catch { /* non-fatal */ }
     finally { setSavingSession(false) }
   }
@@ -645,9 +653,7 @@ export default function PersonalTrainingPage() {
       })
       setSessions(prev => prev.filter(s => s.id !== sessionModal.session.id))
       setSessionModal(null)
-      const trRes = await fetch(`/api/${gymSlug}/personal-trainers`, { headers: { Authorization: `Bearer ${token()}` } })
-      const trData = await trRes.json()
-      setTrainers(trData.trainers ?? [])
+      await refreshTrainers()
     } catch { /* non-fatal */ }
     finally { setSavingSession(false) }
   }
@@ -716,13 +722,18 @@ export default function PersonalTrainingPage() {
               <div className="space-y-1">
                 {trainers.length === 0 && !addingTrainer && <p className="text-xs text-neutral-600">no trainers yet</p>}
                 {trainers.map(t => (
-                  <div key={t.id} className="flex items-center justify-between gap-2 group py-1">
-                    <div className="flex items-center gap-2 min-w-0">
+                  <div key={t.id} className={`flex items-center justify-between gap-2 group py-1 px-1.5 -mx-1.5 rounded-md ${filterTrainerId === t.id ? 'bg-white/10' : ''}`}>
+                    {/* Click to filter the calendar and pt memberships to this trainer (again to clear) */}
+                    <button
+                      type="button"
+                      onClick={() => setFilterTrainerId(filterTrainerId === t.id ? null : t.id)}
+                      className="flex items-center gap-2 min-w-0 text-left"
+                    >
                       <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: t.color ?? '#6366f1' }} />
                       <span className="text-xs text-white truncate">{t.name}</span>
-                    </div>
+                    </button>
                     <div className="flex items-center gap-1.5 shrink-0">
-                      <span className="text-[10px] text-neutral-600">{t._count?.sessions ?? 0}</span>
+                      <span className="text-[10px] text-neutral-600" title="clients: assigned + in sessions">{t.clientCount ?? 0}</span>
                       <button onClick={() => removeTrainer(t.id)} className="opacity-0 group-hover:opacity-100 text-neutral-600 hover:text-red-400 transition-all">
                         <X size={11} />
                       </button>
@@ -817,6 +828,9 @@ export default function PersonalTrainingPage() {
                 />
               )}
             </div>
+
+            {/* PT memberships — follows the trainer filter */}
+            <PtMembershipsSection gymSlug={gymSlug} filterTrainerId={filterTrainerId} onAssigned={refreshTrainers} />
 
             {/* Past sessions */}
             {pastSessions.length > 0 && (
