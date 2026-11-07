@@ -53,6 +53,8 @@ export default function DoorAccessPage() {
   const [resendingId,    setResendingId]    = useState(null)
   const [changeModal,   setChangeModal]   = useState(null)
   const [removeModal,   setRemoveModal]   = useState(null)
+  // Unknown codes can only be removed by OWNER / ADMIN (enforced server-side too)
+  const [canRemoveUnknown, setCanRemoveUnknown] = useState(false)
   const [actionLoading, setActionLoading] = useState(false)
   const [actionError,   setActionError]   = useState(null)
   const [newCode,       setNewCode]       = useState('')
@@ -284,6 +286,14 @@ export default function DoorAccessPage() {
 
   useEffect(() => { fetchCodes() }, [fetchCodes])
 
+  useEffect(() => {
+    const token = localStorage.getItem('ik_token')
+    fetch(`/api/${gymSlug}/me`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => (r.ok ? r.json() : null))
+      .then(me => setCanRemoveUnknown(['OWNER', 'ADMIN'].includes(me?.role)))
+      .catch(() => setCanRemoveUnknown(false))
+  }, [gymSlug])
+
   async function handleResendInviteRow(memberId) {
     setResendingId(memberId)
     try {
@@ -490,7 +500,7 @@ export default function DoorAccessPage() {
                             >
                               {resendingId === c.memberId ? '…' : 'resend invite'}
                             </button>
-                          ) : (c.type === 'guest' || unknown) && (
+                          ) : (c.type === 'guest' || (unknown && canRemoveUnknown)) && (
                             <button
                               onClick={() => { setRemoveModal(c); setActionError(null) }}
                               className="opacity-0 group-hover:opacity-100 transition-opacity text-xs text-red-400/60 hover:text-red-400 transition-colors"

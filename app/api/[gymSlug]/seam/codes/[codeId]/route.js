@@ -4,10 +4,16 @@ import { deleteSeamCodeById } from '@/lib/seam'
 import { requirePermission } from '@/lib/permissions'
 import { writeAudit } from '@/lib/audit'
 
+// Roles that may remove a code matching no member or guest at the gym
+const UNKNOWN_CODE_ROLES = new Set(['OWNER', 'ADMIN'])
+
 /**
  * DELETE /api/[gymSlug]/seam/codes/[codeId]
  * Removes an access code from Seam and clears it from the member/guest record.
  * ?code=<pin> — PIN used to clear the accessCode field in the DB.
+ *
+ * A code whose PIN matches no member or guest at this gym (an "unknown
+ * code" on the door access page) can only be removed by OWNER / ADMIN.
  */
 export async function DELETE(request, { params }) {
   try {
@@ -24,6 +30,19 @@ export async function DELETE(request, { params }) {
 
     const apiKey = gym.seamApiKey ?? process.env.SEAM_API_KEY
     if (!apiKey) return NextResponse.json({ error: 'Seam not configured' }, { status: 422 })
+
+    if (!UNKNOWN_CODE_ROLES.has(ctx.user.role)) {
+      const [memberHolder, guestHolder] = pin ? await Promise.all([
+        prisma.member.findFirst({ where: { gymId: gym.id, accessCode: pin }, select: { id: true } }),
+        prisma.guest.findFirst({
+          where:  { accessCode: pin, OR: [{ waivers: { some: { gymId: gym.id } } }, { passes: { some: { gymId: gym.id } } }] },
+          select: { id: true },
+        }),
+      ]) : [null, null]
+      if (!memberHolder && !guestHolder) {
+        return NextResponse.json({ error: 'only an owner or admin can remove an unknown code' }, { status: 403 })
+      }
+    }
 
     const { ok } = await deleteSeamCodeById(apiKey, codeId, '[seam/codes DELETE]')
     if (!ok) {
