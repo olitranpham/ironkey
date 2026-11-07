@@ -29,6 +29,15 @@ function timeLeft(endsAt) {
   return `${m}m left`
 }
 
+/** Created date of a lock code, YYYY-MM-DD in the gym's timezone (America/New_York). */
+function createdDay(iso) {
+  if (!iso) return null
+  return new Date(iso).toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
+}
+
+// guests first, then members, unknown codes last
+const TYPE_ORDER = { guest: 0, member: 1, unknown: 2 }
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function DoorAccessPage() {
@@ -299,10 +308,12 @@ export default function DoorAccessPage() {
     if (q) return `${c.name} ${c.code}`.toLowerCase().includes(q)
     return true
   }).sort((a, b) => {
-    // guests first, then members; alphabetical within each group
-    if (a.type !== b.type) return a.type === 'guest' ? -1 : 1
+    // guests, then members (alphabetical), then unknown codes (newest first)
+    if (a.type !== b.type) return (TYPE_ORDER[a.type] ?? 1) - (TYPE_ORDER[b.type] ?? 1)
+    if (a.type === 'unknown') return String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? ''))
     return a.name.localeCompare(b.name)
   })
+  const unknownCount = codes.filter(c => c.type === 'unknown').length
 
   async function handleChangeCode() {
     if (!changeModal?.memberId) return
@@ -382,6 +393,16 @@ export default function DoorAccessPage() {
         {/* Table card */}
         <div className="md:flex-1 flex flex-col bg-white/[0.03] rounded-xl border border-white/5 md:overflow-hidden md:min-h-0">
 
+          {/* Section header — unknown codes need staff review */}
+          {!loading && !fetchErr && !noDevice && accessProvider !== 'KISI' && (
+            <div className="shrink-0 flex items-center justify-between px-5 py-3 border-b border-white/5">
+              <p className="text-xs font-semibold text-white">access codes <span className="text-neutral-500 font-normal">· {codes.length}</span></p>
+              {unknownCount > 0 && (
+                <p className="text-[11px] text-neutral-400">{unknownCount} unknown code{unknownCount === 1 ? '' : 's'} to review</p>
+              )}
+            </div>
+          )}
+
           {/* Body */}
           <div className="md:flex-1 md:overflow-y-auto overflow-x-auto">
             {loading ? (
@@ -411,9 +432,7 @@ export default function DoorAccessPage() {
                 <tbody>
                   {visible.map((c, i) => {
                     const tl = c.codeType === 'time_bound' ? timeLeft(c.endsAt) : null
-                    if (c.type === 'guest') {
-                      console.log('[door-access] guest code:', { name: c.name, code: c.code, codeType: c.codeType, endsAt: c.endsAt, type: c.type })
-                    }
+                    const unknown = c.type === 'unknown'
                     return (
                       <tr
                         key={c.id}
@@ -423,13 +442,21 @@ export default function DoorAccessPage() {
                         {/* Name + type + time left */}
                         <td className="px-5 py-3">
                           <div className="flex items-center gap-3">
-                            <div className="w-7 h-7 rounded-full bg-white flex items-center justify-center shrink-0">
-                              <span className="text-black font-medium text-[10px] select-none">
-                                {c.name.split(' ').map(w => w[0] ?? '').slice(0, 2).join('').toUpperCase()}
+                            <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 ${unknown ? 'bg-neutral-800' : 'bg-white'}`}>
+                              <span className={`font-medium text-[10px] select-none ${unknown ? 'text-neutral-500' : 'text-black'}`}>
+                                {unknown ? '?' : c.name.split(' ').map(w => w[0] ?? '').slice(0, 2).join('').toUpperCase()}
                               </span>
                             </div>
                             <div>
-                              <p className="text-white text-sm leading-tight">{c.name}</p>
+                              <p className={`text-sm leading-tight ${unknown ? 'text-neutral-500' : 'text-white'}`}>{c.name}</p>
+                              {unknown && (
+                                <p className="text-[11px] text-neutral-600 mt-0.5">
+                                  unknown code
+                                  {c.pinLast2 && <> · pin ··{c.pinLast2}</>}
+                                  {createdDay(c.createdAt) && <> · created {createdDay(c.createdAt)}</>}
+                                  {tl && <> · {tl}</>}
+                                </p>
+                              )}
                               {c.type === 'guest' && (
                                 <div className="flex items-center gap-1.5 mt-0.5">
                                   <span className="text-[11px] text-amber-400">guest</span>
@@ -453,8 +480,8 @@ export default function DoorAccessPage() {
                           </div>
                         </td>
 
-                        {/* Action — remove for guests only (Seam); resend invite (Kisi) */}
-                        <td className="px-4 py-3 text-right" onClick={e => (accessProvider === 'KISI' || c.type === 'guest') && e.stopPropagation()}>
+                        {/* Action — remove for guest / unknown codes (Seam); resend invite (Kisi) */}
+                        <td className="px-4 py-3 text-right" onClick={e => (accessProvider === 'KISI' || c.type === 'guest' || unknown) && e.stopPropagation()}>
                           {accessProvider === 'KISI' ? (
                             <button
                               onClick={() => handleResendInviteRow(c.memberId)}
@@ -463,7 +490,7 @@ export default function DoorAccessPage() {
                             >
                               {resendingId === c.memberId ? '…' : 'resend invite'}
                             </button>
-                          ) : c.type === 'guest' && (
+                          ) : (c.type === 'guest' || unknown) && (
                             <button
                               onClick={() => { setRemoveModal(c); setActionError(null) }}
                               className="opacity-0 group-hover:opacity-100 transition-opacity text-xs text-red-400/60 hover:text-red-400 transition-colors"
@@ -551,7 +578,10 @@ export default function DoorAccessPage() {
               </div>
               <div>
                 <p className="text-sm font-semibold text-white">remove access code?</p>
-                <p className="text-xs text-neutral-500">{removeModal.name}</p>
+                <p className="text-xs text-neutral-500">
+                  {removeModal.name}
+                  {removeModal.type === 'unknown' && removeModal.pinLast2 && <> · pin ··{removeModal.pinLast2}</>}
+                </p>
               </div>
             </div>
             <ul className="space-y-1.5 mb-5">

@@ -12,7 +12,10 @@ const SEAM_API = 'https://connect.getseam.com'
  * GET /api/[gymSlug]/seam/codes
  * Lists all access codes across all Seam devices for the gym.
  * Strategy: list devices first (required by Seam API), then fetch codes per device.
- * Cross-references with DB members to add type (member vs guest) and memberId.
+ * Cross-references with DB members to add type and memberId:
+ *   member  — PIN or name matches a member at this gym
+ *   guest   — PIN matches a guest profile with a waiver or a pass at this gym
+ *   unknown — matches nothing (code name if any, PIN last 2, created date)
  */
 export async function GET(request, { params }) {
   try {
@@ -111,13 +114,16 @@ export async function GET(request, { params }) {
         select: { id: true, firstName: true, lastName: true, accessCode: true, status: true },
       }),
       prisma.guest.findMany({
-        where: { accessCode: { not: null }, waivers: { some: { gymId } } },
-        select: { id: true, accessCode: true },
+        where: {
+          accessCode: { not: null },
+          OR: [{ waivers: { some: { gymId } } }, { passes: { some: { gymId } } }],
+        },
+        select: { id: true, name: true, accessCode: true },
       }),
     ])
 
     // Build guest code lookup — PIN takes priority over member name matching
-    const guestCodeSet = new Set(guestProfiles.map(g => String(g.accessCode).trim()))
+    const guestByCode = new Map(guestProfiles.map(g => [String(g.accessCode).trim(), g]))
 
     // Normalize a name: lowercase, collapse whitespace, drop middle initials
     function normalizeName(name) {
@@ -172,11 +178,11 @@ export async function GET(request, { params }) {
 
     const codes = access_codes.map(c => {
       // 0. If PIN matches a guest profile — always classify as guest
-      const isGuest = c.code && guestCodeSet.has(String(c.code).trim())
-      if (isGuest) {
+      const guest = c.code ? guestByCode.get(String(c.code).trim()) : undefined
+      if (guest) {
         return {
           id:           c.access_code_id,
-          name:         c.name ?? '—',
+          name:         guest.name || c.name || '—',
           code:         c.code,
           status:       c.status,
           type:         'guest',
@@ -229,13 +235,31 @@ export async function GET(request, { params }) {
         )
       }
 
+      // Matches no member or guest — staff review it, never assume a guest
+      if (!member && !isOverride) {
+        return {
+          id:           c.access_code_id,
+          name:         c.name?.trim() || 'unknown code',
+          codeName:     c.name?.trim() || null,
+          code:         c.code,
+          pinLast2:     c.code ? String(c.code).slice(-2) : null,
+          createdAt:    c.created_at ?? null,
+          status:       c.status,
+          type:         'unknown',
+          codeType:     c.type,
+          endsAt:       c.ends_at ?? null,
+          memberStatus: null,
+          memberId:     null,
+        }
+      }
+
       const dbName = member ? `${member.firstName} ${member.lastName}`.trim() : null
       return {
         id:           c.access_code_id,
         name:         dbName || c.name || '—',
         code:         c.code,
         status:       c.status,       // 'set' | 'unset' | 'unknown'
-        type:         (member || isOverride) ? 'member' : 'guest',
+        type:         'member',
         codeType:     c.type,         // 'ongoing' | 'time_bound'
         endsAt:       c.ends_at ?? null,
         memberStatus: member?.status ?? null,
@@ -245,7 +269,8 @@ export async function GET(request, { params }) {
 
     const memberCodeCount = codes.filter(c => c.type === 'member').length
     const guestCodeCount  = codes.filter(c => c.type === 'guest').length
-    console.log(`[seam/codes GET] ${devices.length} device(s), ${codes.length} total code(s) — ${memberCodeCount} member, ${guestCodeCount} guest (${members.length} members with codes in DB)`)
+    const unknownCount    = codes.filter(c => c.type === 'unknown').length
+    console.log(`[seam/codes GET] ${devices.length} device(s), ${codes.length} total code(s) — ${memberCodeCount} member, ${guestCodeCount} guest, ${unknownCount} unknown (${members.length} members with codes in DB)`)
 
     // ── Background sync: write Seam codes back to Member.accessCode ───────────
     // Collect updates for member codes whose DB accessCode is missing or stale.
