@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { X } from 'lucide-react'
+import { X, Check } from 'lucide-react'
 import { SignatureText, signatureFontFamily } from '@/components/SignatureText'
 
 function fmtSigned(iso) {
@@ -31,10 +31,28 @@ async function signatureImage(name) {
   }
 }
 
-/** "accepted via checkbox on <date>, backfilled" — a checkbox-era record added later, never a signature. */
-function backfilledLine(signedAt) {
-  const day = signedAt ? new Date(signedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).toLowerCase() : 'an unknown date'
-  return `accepted via checkbox on ${day}, backfilled`
+function fmtDay(iso) {
+  return iso ? new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).toLowerCase() : 'an unknown date'
+}
+
+/** A checkbox-era acceptance recorded later — "accepted by <name> on <date>, via checkbox at signup". */
+function checkboxLine(personName, signedAt, signedByGuardian) {
+  const who = signedByGuardian ? `${personName || 'the member'}'s parent/guardian` : (personName || 'the member')
+  return `accepted by ${who} on ${fmtDay(signedAt)}, via checkbox at signup`
+}
+
+/** Checkmark badge + the checkbox line, in the regular font (never the signature font). */
+function CheckboxAccepted({ personName, signedAt, signedByGuardian, size = 'sm' }) {
+  return (
+    <div className="flex items-center gap-2">
+      <span className="w-5 h-5 rounded-full bg-emerald-500/15 border border-emerald-500/40 flex items-center justify-center shrink-0">
+        <Check size={12} className="text-emerald-400" strokeWidth={3} />
+      </span>
+      <p className={`${size === 'lg' ? 'text-base' : 'text-sm'} text-white leading-tight`}>
+        {checkboxLine(personName, signedAt, signedByGuardian)}
+      </p>
+    </div>
+  )
 }
 
 async function downloadPdf({ gymName, personName, text, version, signatureName, signedAt, signedByGuardian, source }) {
@@ -61,10 +79,16 @@ async function downloadPdf({ gymName, personName, text, version, signatureName, 
   y += 24
   ensure(110)
   if (!signatureName && source === 'checkbox_backfill') {
-    // No signature exists — say how the record was made instead of drawing a signature line
-    doc.setFontSize(10).text(backfilledLine(signedAt), margin, y); y += 14
-    doc.setFontSize(9).text('recorded from the join checkout and the agreement text live on that date; no signature was collected', margin, y); y += 12
-    if (version) { doc.text(`agreement version: ${version}`, margin, y); y += 12 }
+    // No signature exists — a checkmark and the checkbox line, never a signature
+    doc.setDrawColor(16, 150, 100).setLineWidth(1.6)
+    doc.circle(margin + 7, y - 3, 7)
+    doc.lines([[2.5, 3], [5, -6]], margin + 3.5, y - 3)
+    doc.setLineWidth(0.2).setDrawColor(0)
+    doc.setFont('helvetica', 'normal').setFontSize(11)
+    for (const line of doc.splitTextToSize(checkboxLine(personName, signedAt, signedByGuardian), width - 22)) {
+      doc.text(line, margin + 20, y); y += 14
+    }
+    if (version) { doc.setFontSize(9).text(`agreement version: ${version}`, margin, y + 4); y += 16 }
     const day  = signedAt ? new Date(signedAt).toISOString().slice(0, 10) : 'undated'
     const slug = String(personName || 'agreement').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
     doc.save(`agreement-${slug}-${day}.pdf`)
@@ -95,8 +119,9 @@ async function downloadPdf({ gymName, personName, text, version, signatureName, 
  *
  * - typed signature on file → the signature in the cursive font + signed date
  * - a record from before typed signatures → "accepted (checkbox)" + date
- * - source "checkbox_backfill" → "accepted via checkbox on <date>, backfilled"
- *   (recorded later; never shown as a signature)
+ * - source "checkbox_backfill" → "✓ accepted by <name> on <date>, via checkbox
+ *   at signup" (regular font, checkmark badge — never the signature font)
+ * - source "import" → "imported record (<date>), no agreement copy on file"
  * - source "payment_link_pending" → "agreement pending" (bought through a
  *   payment link, nothing signed)
  * - no record → "no agreement on file"
@@ -147,7 +172,9 @@ export function AgreementSection({ onFile, gymName, personName, signatureName, s
             </p>
           </>
         ) : source === 'checkbox_backfill' ? (
-          <p className="text-xs text-neutral-400">{backfilledLine(signedAt)}</p>
+          <CheckboxAccepted personName={personName} signedAt={signedAt} signedByGuardian={signedByGuardian} />
+        ) : source === 'import' ? (
+          <p className="text-xs text-neutral-400">imported record ({fmtDay(signedAt)}), no agreement copy on file</p>
         ) : (
           <p className="text-xs text-neutral-400">
             accepted (checkbox)
@@ -177,12 +204,17 @@ export function AgreementSection({ onFile, gymName, personName, signatureName, s
               <p className="text-xs text-neutral-300 leading-relaxed whitespace-pre-wrap">{text}</p>
               <div className="mt-6 border-t border-neutral-800 pt-4 flex flex-col gap-1">
                 {signatureName && <SignatureText className="text-3xl text-white">{signatureName}</SignatureText>}
-                <p className="text-[11px] text-neutral-500">
-                  {!signatureName && source === 'checkbox_backfill'
-                    ? backfilledLine(signedAt)
-                    : <>{signedByGuardian ? 'signed by parent/guardian' : 'signed'}{signedAt && <> · {fmtSigned(signedAt)}</>}</>}
-                  {version && <> · version {version}</>}
-                </p>
+                {!signatureName && source === 'checkbox_backfill' ? (
+                  <>
+                    <CheckboxAccepted personName={personName} signedAt={signedAt} signedByGuardian={signedByGuardian} size="lg" />
+                    {version && <p className="text-[11px] text-neutral-500">version {version}</p>}
+                  </>
+                ) : (
+                  <p className="text-[11px] text-neutral-500">
+                    {signedByGuardian ? 'signed by parent/guardian' : 'signed'}{signedAt && <> · {fmtSigned(signedAt)}</>}
+                    {version && <> · version {version}</>}
+                  </p>
+                )}
               </div>
             </div>
           </div>
