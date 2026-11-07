@@ -52,19 +52,23 @@ export async function DELETE(request, { params }) {
 
     // ── Clear accessCode from DB ──────────────────────────────────────────────
     if (pin) {
-      const [memberResult, guestResult] = await Promise.all([
+      // Guests are global (by email) with one PIN across gyms. Only a guest
+      // tied to THIS gym alone loses the PIN; one who also has a pass or
+      // waiver at another gym keeps it (only this gym's lock code is gone).
+      const atThisGym    = { OR: [{ passes: { some: { gymId: gym.id } } }, { waivers: { some: { gymId: gym.id } } }] }
+      const atOtherGym   = { OR: [{ passes: { some: { gymId: { not: gym.id } } } }, { waivers: { some: { gymId: { not: gym.id } } } }] }
+      const [memberResult, guestResult, guestsKept] = await Promise.all([
         prisma.member.updateMany({
           where: { gymId: gym.id, accessCode: pin },
           data:  { accessCode: null },
         }),
-        // Guests are global (by email) — only clear one tied to THIS gym by a
-        // pass or waiver, never the same PIN on a guest of another gym
         prisma.guest.updateMany({
-          where: { accessCode: pin, OR: [{ passes: { some: { gymId: gym.id } } }, { waivers: { some: { gymId: gym.id } } }] },
+          where: { accessCode: pin, AND: [atThisGym, { NOT: atOtherGym }] },
           data:  { accessCode: null },
         }),
+        prisma.guest.count({ where: { accessCode: pin, AND: [atThisGym, atOtherGym] } }),
       ])
-      console.log('[seam/codes DELETE] DB cleared — members=%d guests=%d codeId=%s', memberResult.count, guestResult.count, codeId)
+      console.log('[seam/codes DELETE] DB cleared — members=%d guests=%d (kept on %d guest(s) with another gym) codeId=%s', memberResult.count, guestResult.count, guestsKept, codeId)
     }
 
     writeAudit(ctx, 'door.code.delete', 'SeamAccessCode', codeId)
