@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams } from 'next/navigation'
-import { Search, RefreshCw, TrendingUp, AlertTriangle } from 'lucide-react'
+import { Search, RefreshCw, TrendingUp, AlertTriangle, Download } from 'lucide-react'
 import { getGymTheme } from '@/lib/gymThemes'
 import { GuestProfilePanel, fmtDate } from '@/components/GuestProfilePanel'
 import { monthKey, DEFAULT_GYM_TIME_ZONE } from '@/lib/etMonth'
@@ -177,6 +177,8 @@ export default function GuestPassesPage() {
   const [confirmRemove,   setConfirmRemove]   = useState(null)
   const [removing,        setRemoving]        = useState(false)
   const [removeError,     setRemoveError]     = useState(null)
+  const [exporting,       setExporting]       = useState(false)
+  const [exportError,     setExportError]     = useState(null)
   const closeTimer = useRef(null)
 
   useEffect(() => {
@@ -342,6 +344,33 @@ export default function GuestPassesPage() {
     }
   }
 
+  // CSV of the current view — built server-side from the same toggle,
+  // search, pass-type tab and month filter as the list
+  async function handleExport() {
+    setExporting(true)
+    setExportError(null)
+    try {
+      const qs = new URLSearchParams({ archived: String(showArchived) })
+      if (search.trim())          qs.set('search', search.trim())
+      if (PASS_TAB_TYPE[activeTab]) qs.set('type', PASS_TAB_TYPE[activeTab])
+      if (monthFilter)            qs.set('month', monthFilter)
+      const token = localStorage.getItem('ik_token')
+      const res   = await fetch(`/api/${gymSlug}/guest-passes/export?${qs}`, { headers: { Authorization: `Bearer ${token}` } })
+      if (!res.ok) throw new Error(`${res.status}`)
+      const filename = /filename="([^"]+)"/.exec(res.headers.get('Content-Disposition') ?? '')?.[1] ?? `${gymSlug}-guest-passes.csv`
+      const url = URL.createObjectURL(await res.blob())
+      const a   = document.createElement('a')
+      a.href = url
+      a.download = filename
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch {
+      setExportError('export failed — please try again')
+    } finally {
+      setExporting(false)
+    }
+  }
+
   // ── Derived ─────────────────────────────────────────────────────────────
 
   const activeGuests   = buildUnifiedGuests(profiles, unlinked)
@@ -413,6 +442,17 @@ export default function GuestPassesPage() {
               : visiblePassCount}
           </span>
           )}
+        </div>
+        <div className="ml-auto flex items-center gap-3">
+          {exportError && <span className="text-[11px] text-red-400">{exportError}</span>}
+          <button
+            onClick={handleExport}
+            disabled={exporting || loading}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-white text-black hover:bg-neutral-200 disabled:opacity-40 transition-colors"
+          >
+            <Download size={12} />
+            {exporting ? 'exporting…' : 'csv export'}
+          </button>
         </div>
       </header>
 
