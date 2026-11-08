@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import prisma from '@/lib/prisma'
-import { deleteSeamCodeByPin, generateUniqueAccessCode } from '@/lib/seam'
+import { deleteSeamCodeByPin, generateUniqueAccessCode, createLockCode } from '@/lib/seam'
 import { ensureKisiMembership, revokeAccess as revokeKisiAccess } from '@/lib/kisi'
 import { formatPhone } from '@/lib/phone'
 import { normalizeGradSemester } from '@/lib/gradSemester'
@@ -805,10 +805,37 @@ export async function POST(request) {
 
     let accessCode = null
     if (!isRutgersPowerliftingOneOff) {
-      accessCode = await generateUniqueAccessCode({
-        prisma, gymId: gym.id, apiKey: memberSeamApiKey, deviceId: memberSeamDeviceId,
-        logPrefix: '[platform/webhook]',
-      })
+      accessCode = await generateUniqueAccessCode({ gymId: gym.id })
+
+      // Program the lock before saving/delivering the code: a PIN that's
+      // already on the lock is retried with a fresh one, and the member must
+      // be sent the PIN that's actually live
+      if (memberSeamApiKey) {
+        try {
+          let deviceIds = memberSeamDeviceId ? [memberSeamDeviceId] : []
+          if (!memberSeamDeviceId) {
+            const devRes = await fetch(`${SEAM_API}/devices/list`, {
+              method:  'POST',
+              headers: { Authorization: `Bearer ${memberSeamApiKey}`, 'Content-Type': 'application/json' },
+              body:    JSON.stringify({}),
+            })
+            if (devRes.ok) {
+              const { devices: devList = [] } = await devRes.json()
+              deviceIds = devList.map(d => d.device_id)
+            }
+          }
+          const result = await createLockCode({
+            apiKey: memberSeamApiKey, deviceIds, gymId: gym.id, pin: accessCode,
+            name: `${firstName} ${lastName}`, logPrefix: '[platform/webhook]',
+          })
+          accessCode = result.pin
+          if (result.ok) console.log('[platform/webhook] Seam code programmed for member:', member.id)
+          else           console.error('[platform/webhook] Seam code NOT programmed for member:', member.id)
+        } catch (seamErr) {
+          console.error('[platform/webhook] Seam error:', seamErr.message)
+        }
+      }
+
       member = await prisma.member.update({
         where: { id: member.id },
         data:  { accessCode },
@@ -832,38 +859,6 @@ export async function POST(request) {
       guardianPhone:        isMinor ? (meta.guardianPhone        || null) : null,
       guardianRelationship: isMinor ? (meta.guardianRelationship || null) : null,
     }, memberPhone, `member=${member.id}`), 'member', 'Member', member.id)
-
-    if (memberSeamApiKey && !isRutgersPowerliftingOneOff) {
-      const deviceId    = memberSeamDeviceId
-      const seamHeaders = {
-        Authorization:  `Bearer ${memberSeamApiKey}`,
-        'Content-Type': 'application/json',
-      }
-      try {
-        let devices = deviceId ? [{ device_id: deviceId }] : []
-        if (!deviceId) {
-          const devRes = await fetch(`${SEAM_API}/devices/list`, {
-            method: 'POST', headers: seamHeaders, body: JSON.stringify({}),
-          })
-          if (devRes.ok) {
-            const { devices: devList = [] } = await devRes.json()
-            devices = devList
-          }
-        }
-        await Promise.all(
-          devices.map(dev =>
-            fetch(`${SEAM_API}/access_codes/create`, {
-              method:  'POST',
-              headers: seamHeaders,
-              body:    JSON.stringify({ device_id: dev.device_id, name: `${firstName} ${lastName}`, code: accessCode }),
-            }).catch(e => console.error('[platform/webhook] Seam create error:', e.message))
-          )
-        )
-        console.log('[platform/webhook] Seam code programmed for member:', member.id)
-      } catch (seamErr) {
-        console.error('[platform/webhook] Seam error:', seamErr.message)
-      }
-    }
 
     // Direct call — previously a fire-and-forget HTTP POST to /api/[gymSlug]/members.
     // reactivate only when this checkout created a new (active) subscription.

@@ -5,7 +5,7 @@ import { deleteSeamCodeByPin } from '@/lib/seam'
 import { requirePermission, can, forbidden } from '@/lib/permissions'
 import { maskPin } from '@/lib/redact'
 import { writeAudit } from '@/lib/audit'
-import { isPinInUse, PIN_IN_USE_ERROR } from '@/lib/pins'
+import { isPinTaken, PIN_IN_USE_ERROR } from '@/lib/pins'
 
 /**
  * GET /api/[gymSlug]/guest-passes/profiles/[profileId]
@@ -67,10 +67,11 @@ export async function PATCH(request, { params }) {
     }
 
     // A manually entered guest code must not collide with any member, guest or
-    // partner code at this gym or any other gym this guest has passes at
-    // (guest codes are global). The guest's own current code is ignored.
+    // partner code — or any code on the lock — at this gym or any other gym
+    // this guest has passes at (guest codes are global). The guest's own
+    // current code is ignored.
     if (body.accessCode && String(body.accessCode).trim() !== profile.accessCode
-        && await isPinInUse(gym.id, body.accessCode, { guestId: profileId })) {
+        && await isPinTaken(gym.id, body.accessCode, { guestId: profileId })) {
       return NextResponse.json({ error: PIN_IN_USE_ERROR }, { status: 409 })
     }
 

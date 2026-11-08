@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
-import { generateUniqueAccessCode } from '@/lib/seam'
-import { isPinInUse, PIN_IN_USE_ERROR } from '@/lib/pins'
+import { generateUniqueAccessCode, createLockCode } from '@/lib/seam'
+import { isPinTaken, PIN_IN_USE_ERROR } from '@/lib/pins'
 import { requirePermission } from '@/lib/permissions'
 import { maskPin, redactJsonText } from '@/lib/redact'
 import { writeAudit } from '@/lib/audit'
@@ -274,13 +274,23 @@ export async function GET(request, { params }) {
 
     // ── Background sync: write Seam codes back to Member.accessCode ───────────
     // Collect updates for member codes whose DB accessCode is missing or stale.
+    // These are always name matches (a PIN match already equals the DB code),
+    // so a PIN that belongs to another member or a guest at this gym is never
+    // written — logged as a conflict for staff instead.
     // Fire-and-forget so the response is never delayed.
     const syncUpdates = codes
       .filter(c => c.memberId && c.code)
       .map(c => {
         const m = members.find(m => m.id === c.memberId)
-        if (!m || m.accessCode === String(c.code)) return null
-        return { id: c.memberId, code: String(c.code), name: c.name }
+        const pin = String(c.code).trim()
+        if (!m || m.accessCode === pin) return null
+        const pinOwner = memberByCode[pin]
+        if ((pinOwner && pinOwner.id !== m.id) || guestByCode.has(pin)) {
+          console.warn('[seam/codes sync] conflict — lock code "%s" %s matched member %s by name, but that PIN belongs to %s %s; not written',
+            c.name, maskPin(pin), m.id, pinOwner ? 'member' : 'guest', pinOwner ? pinOwner.id : guestByCode.get(pin).id)
+          return null
+        }
+        return { id: c.memberId, code: pin, name: c.name }
       })
       .filter(Boolean)
 
@@ -341,15 +351,16 @@ export async function POST(request, { params }) {
     }
 
     // A code explicitly supplied by the caller must not collide with any
-    // member, guest or partner code at this gym (this member's own is fine).
-    if (code && String(code).trim() !== member.accessCode && await isPinInUse(gym.id, code, { memberId })) {
+    // member, guest or partner code, or any code on the lock, at this gym
+    // (this member's own is fine).
+    if (code && String(code).trim() !== member.accessCode && await isPinTaken(gym.id, code, { memberId })) {
       return NextResponse.json({ error: PIN_IN_USE_ERROR }, { status: 409 })
     }
 
     // Generate a 4-digit code if none provided — checked for collisions
     // against this gym's member/guest/partner codes and whatever's currently
     // active on Seam.
-    const accessCode = code || await generateUniqueAccessCode({
+    let accessCode = code || await generateUniqueAccessCode({
       prisma, gymId: gym.id, apiKey, deviceId, logPrefix: '[seam/codes POST]',
     })
 
@@ -392,19 +403,15 @@ export async function POST(request, { params }) {
         }
       }
 
-      await Promise.all(
-        devices.map(device =>
-          fetch(`${SEAM_API}/access_codes/create`, {
-            method:  'POST',
-            headers: seamHeaders,
-            body:    JSON.stringify({
-              device_id: device.device_id,
-              name:      `${member.firstName} ${member.lastName}`,
-              code:      accessCode,
-            }),
-          }).catch(() => null)
-        )
-      )
+      // A generated PIN that turns out to be on the lock already is retried
+      // with a fresh one; a PIN staff typed in is never swapped — rejected.
+      const result = await createLockCode({
+        apiKey, deviceIds: devices.map(d => d.device_id), gymId: gym.id,
+        pin: accessCode, name: `${member.firstName} ${member.lastName}`,
+        allowNewPin: !code, logPrefix: '[seam/codes POST]',
+      })
+      if (result.duplicate) return NextResponse.json({ error: PIN_IN_USE_ERROR }, { status: 409 })
+      accessCode = result.pin
     }
 
     const updated = await prisma.member.update({

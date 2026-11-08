@@ -1,13 +1,11 @@
 import { NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import prisma from '@/lib/prisma'
-import { generateUniqueAccessCode, isAccessCodeLiveOnSeam } from '@/lib/seam'
+import { generateUniqueAccessCode, isAccessCodeLiveOnSeam, createLockCode } from '@/lib/seam'
 import { ensureKisiMembership } from '@/lib/kisi'
 import { requirePermission } from '@/lib/permissions'
-import { maskPin, redactJsonText } from '@/lib/redact'
+import { maskPin } from '@/lib/redact'
 import { writeAudit } from '@/lib/audit'
-
-const SEAM_API = 'https://connect.getseam.com'
 
 /**
  * POST /api/[gymSlug]/reverse-cancel
@@ -129,26 +127,20 @@ export async function POST(request, { params }) {
           : false
 
         if (!stillLive) {
-          accessCode = await generateUniqueAccessCode({
-            prisma, gymId, apiKey, deviceId, logPrefix: '[reverse-cancel]',
-          })
-          updateData.accessCode = accessCode
+          accessCode = await generateUniqueAccessCode({ gymId })
           codeReissued = true
 
-          const headers = { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' }
-          const createRes = await fetch(`${SEAM_API}/access_codes/create`, {
-            method: 'POST', headers,
-            body:   JSON.stringify({
-              device_id: deviceId,
-              code:      accessCode,
-              name:      `${member.firstName} ${member.lastName}`,
-            }),
+          // Retries with a fresh PIN if this one is already on the lock
+          const result = await createLockCode({
+            apiKey, deviceIds: [deviceId], gymId, pin: accessCode,
+            name: `${member.firstName} ${member.lastName}`, logPrefix: '[reverse-cancel]',
           })
-          if (!createRes.ok) {
-            const text = await createRes.text()
-            console.error('[reverse-cancel] Seam create failed:', createRes.status, redactJsonText(text))
+          accessCode = result.pin
+          updateData.accessCode = accessCode
+          if (!result.ok) {
             // Non-fatal — the DB/Stripe reversal already succeeded; the code
             // just won't be live on the lock yet. Surfaced in the response.
+            console.error('[reverse-cancel] Seam create failed for code=%s', maskPin(accessCode))
           }
         }
       }
