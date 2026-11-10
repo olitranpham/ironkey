@@ -451,7 +451,7 @@ export default function DoorAccessPage() {
                               {unknown && (
                                 <p className="text-[11px] text-neutral-600 mt-0.5">
                                   unknown code
-                                  {c.pinLast2 && <> · pin ··{c.pinLast2}</>}
+                                  {c.code && <> · pin <span className="font-mono">{c.code}</span></>}
                                   {createdDay(c.createdAt) && <> · created {createdDay(c.createdAt)}</>}
                                   {tl && <> · {tl}</>}
                                 </p>
@@ -579,7 +579,7 @@ export default function DoorAccessPage() {
                 <p className="text-sm font-semibold text-white">remove access code?</p>
                 <p className="text-xs text-neutral-500">
                   {removeModal.name}
-                  {removeModal.type === 'unknown' && removeModal.pinLast2 && <> · pin ··{removeModal.pinLast2}</>}
+                  {removeModal.type === 'unknown' && removeModal.code && <> · pin <span className="font-mono">{removeModal.code}</span></>}
                 </p>
               </div>
             </div>

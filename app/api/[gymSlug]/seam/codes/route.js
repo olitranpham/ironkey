@@ -15,7 +15,7 @@ const SEAM_API = 'https://connect.getseam.com'
  * Cross-references with DB members to add type and memberId:
  *   member  — PIN or name matches a member at this gym
  *   guest   — PIN matches a guest profile with a waiver or a pass at this gym
- *   unknown — matches nothing (code name if any, PIN last 2, created date)
+ *   unknown — matches nothing (code name if any, full PIN, created date)
  */
 export async function GET(request, { params }) {
   try {
@@ -242,7 +242,6 @@ export async function GET(request, { params }) {
           name:         c.name?.trim() || 'unknown code',
           codeName:     c.name?.trim() || null,
           code:         c.code,
-          pinLast2:     c.code ? String(c.code).slice(-2) : null,
           createdAt:    c.created_at ?? null,
           status:       c.status,
           type:         'unknown',
