@@ -5,28 +5,30 @@ import { generateUniquePin, DEFAULT_PIN_LENGTH } from '@/lib/pins'
 import { maskEmail, findValidSeamCode, deliverGuestCode } from '@/lib/guestCodeDelivery'
 import { withPhone } from '@/lib/zapierPayload'
 import { limitRequest } from '@/lib/rateLimit'
+import { accessWindow, isWithinAccessHours, closedMessage } from '@/lib/accessHours'
 
 const SEAM_API = 'https://connect.getseam.com'
 
-const DAY_MS                = 24 * 60 * 60 * 1000
 const MAX_DUPLICATE_RETRIES = 5
 
 /**
- * Create a 24-hr code for `pin` on the lock. Seam's duplicate_access_code
+ * Create a code for `pin` on the lock, valid for `window` (24 hours, or the
+ * gym's access-hours window — lib/accessHours). Seam's duplicate_access_code
  * means the PIN is already taken on the lock — that is a failure, never
  * success: retry with a fresh collision-checked PIN (up to 5 times).
- * @returns {Promise<{ ok: boolean, pin: string, codeId?: string | null, endsAt?: string }>} pin may differ from the one passed in
+ * @returns {Promise<{ ok: boolean, pin: string, codeId?: string | null, startsAt?: string, endsAt?: string }>} pin may differ from the one passed in
  */
-async function createGuestSeamCode({ seamHeaders, deviceId, gymId, guestId, pin, name, seamCodes = [], logPrefix }) {
+async function createGuestSeamCode({ seamHeaders, deviceId, gymId, guestId, pin, name, window, seamCodes = [], logPrefix }) {
+  const startsAt = window.startsAt.toISOString()
+  const endsAt   = window.endsAt.toISOString()
   const tried   = new Set()
   let candidate = pin
   for (let attempt = 1; attempt <= MAX_DUPLICATE_RETRIES; attempt++) {
-    const endsAt        = new Date(Date.now() + DAY_MS).toISOString()
     const createPayload = {
       device_id: deviceId,
       name,
       code:      candidate,
-      starts_at: new Date().toISOString(),
+      starts_at: startsAt,
       ends_at:   endsAt,
     }
     console.log('%s Seam create payload — %j', logPrefix, redactObject(createPayload))
@@ -37,7 +39,7 @@ async function createGuestSeamCode({ seamHeaders, deviceId, gymId, guestId, pin,
     const createJson = await createRes.json().catch(() => ({}))
     console.log('%s Seam create response — status=%d body=%j', logPrefix, createRes.status, redactObject(createJson))
 
-    if (createRes.ok) return { ok: true, pin: candidate, codeId: createJson.access_code?.access_code_id ?? null, endsAt }
+    if (createRes.ok) return { ok: true, pin: candidate, codeId: createJson.access_code?.access_code_id ?? null, startsAt, endsAt }
     if (createJson?.error?.type !== 'duplicate_access_code') return { ok: false, pin: candidate }
 
     tried.add(candidate)
@@ -88,10 +90,15 @@ export async function POST(request, { params }) {
 
     const gym = await prisma.gym.findUnique({
       where:  { slug: gymSlug },
-      select: { id: true, seamApiKey: true, seamDeviceId: true, zapierGuestWebhookUrl: true },
+      select: { id: true, name: true, seamApiKey: true, seamDeviceId: true, zapierGuestWebhookUrl: true, timezone: true, accessHoursStart: true, accessHoursEnd: true, accessLastEntry: true },
     })
     if (!gym) {
       return NextResponse.json({ error: 'Gym not found' }, { status: 404 })
+    }
+
+    // Outside the gym's access hours → refuse before a pass is used
+    if (!isWithinAccessHours(gym)) {
+      return NextResponse.json({ ok: false, closed: true, error: closedMessage(gym) }, { status: 403 })
     }
 
     // No way to deliver a code → refuse before changing anything
@@ -206,8 +213,10 @@ export async function POST(request, { params }) {
     undo.checkInId    = used.checkIn.id
     const updated     = used.visit
 
-    // ── Refresh 24-hr Seam code on every check-in ───────────────────────
+    // ── Refresh the Seam code on every check-in ─────────────────────────
+    // 24 hours, or the gym's access-hours window for this check-in's day
     let codeFailed    = false
+    let codeStartsAt  = null
     let codeExpiresAt = null
     console.log('[checkin] Seam gate check — newCount=%s profile=%s seamApiKey=%s seamDeviceId=%s',
       newCount, profile.id, gym.seamApiKey ? '(set)' : 'null', gym.seamDeviceId ?? 'null')
@@ -221,6 +230,7 @@ export async function POST(request, { params }) {
       const validCode = storedPin ? await findValidSeamCode(seamHeaders, gym.seamDeviceId, storedPin) : null
 
       if (validCode) {
+        codeStartsAt  = validCode.starts_at ?? null
         codeExpiresAt = validCode.ends_at ?? null
         console.log('[checkin] repeat check-in within window — code already valid, skipping refresh — pin=%s ends_at=%s', maskPin(storedPin), validCode.ends_at)
       } else {
@@ -258,10 +268,11 @@ export async function POST(request, { params }) {
 
           const result = await createGuestSeamCode({
             seamHeaders, deviceId: gym.seamDeviceId, gymId: gym.id, guestId: profile.id,
-            pin, name: profile.name || email, seamCodes,
+            pin, name: profile.name || email, window: accessWindow(gym, new Date(), { lastEntry: false }), seamCodes,
             logPrefix: newCount === 0 ? '[checkin] exhausted —' : '[checkin]',
           })
           if (result.ok) {
+            codeStartsAt  = result.startsAt
             codeExpiresAt = result.endsAt
             undo.activatedSeamCode = { seamHeaders, codeId: result.codeId }
             if (result.pin !== profile.accessCode) {
@@ -296,6 +307,8 @@ export async function POST(request, { params }) {
       passType:   updated.passType,
       passesLeft: updated.passesLeft,
       type:       'checkin',
+      accessStartsAt: codeStartsAt,
+      accessEndsAt:   codeExpiresAt,
     }, profile.phone, `guest=${profile.id}`))
     if (!delivered) {
       await rollback()

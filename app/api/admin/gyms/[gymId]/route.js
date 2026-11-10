@@ -1,11 +1,13 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
+import { parseHHMM } from '@/lib/accessHours'
 
 const VALID_ACCESS_PROVIDERS = ['SEAM', 'KISI']
 
 /**
  * PATCH /api/admin/gyms/[gymId]
- * Body: { name?, slug?, seamApiKey?, seamDeviceId?, stripeAccountId?, accessProvider?, kisiApiKey?, kisiPlaceId?, kisiMemberGroupId?, kisiWeekendGroupId? }
+ * Body: { name?, slug?, seamApiKey?, seamDeviceId?, stripeAccountId?, accessProvider?, kisiApiKey?, kisiPlaceId?, kisiMemberGroupId?, kisiWeekendGroupId?,
+ *         accessHoursStart?, accessHoursEnd?, accessLastEntry? }
  * Updates gym settings. Only provided non-empty fields are updated.
  */
 export async function PATCH(request, { params }) {
@@ -36,6 +38,31 @@ export async function PATCH(request, { params }) {
     if (body.zapierOverdueWebhookUrl !== undefined) data.zapierOverdueWebhookUrl = body.zapierOverdueWebhookUrl.trim() || null
     if (body.zapierMembershipRequestWebhookUrl !== undefined) data.zapierMembershipRequestWebhookUrl = body.zapierMembershipRequestWebhookUrl.trim() || null
     if (body.leadWebhookUrl !== undefined) data.leadWebhookUrl = String(body.leadWebhookUrl).trim() || null
+    // Guest access hours ("HH:MM" in the gym's timezone) — opens and closes
+    // both set, or both empty for 24/7. Same-day windows only (closes after
+    // opens). Last entry is optional and must fall strictly between them.
+    if (body.accessHoursStart !== undefined || body.accessHoursEnd !== undefined || body.accessLastEntry !== undefined) {
+      const start     = String(body.accessHoursStart ?? '').trim()
+      const end       = String(body.accessHoursEnd   ?? '').trim()
+      const lastEntry = String(body.accessLastEntry  ?? '').trim()
+      if (!start && !end && !lastEntry) {
+        data.accessHoursStart = null
+        data.accessHoursEnd   = null
+        data.accessLastEntry  = null
+      } else {
+        const startMin = parseHHMM(start), endMin = parseHHMM(end)
+        if (startMin == null || endMin == null || endMin <= startMin) {
+          return NextResponse.json({ error: 'access hours must be HH:MM opens and closes, closes after opens (or all empty for 24/7)' }, { status: 400 })
+        }
+        const lastMin = lastEntry ? parseHHMM(lastEntry) : null
+        if (lastEntry && (lastMin == null || lastMin <= startMin || lastMin >= endMin)) {
+          return NextResponse.json({ error: 'last entry must be HH:MM between opens and closes (or empty)' }, { status: 400 })
+        }
+        data.accessHoursStart = start
+        data.accessHoursEnd   = end
+        data.accessLastEntry  = lastEntry || null
+      }
+    }
 
     console.log('[admin/gyms PATCH] gymId=%s writing fields=%j', gymId, Object.keys(data))
 
@@ -46,7 +73,7 @@ export async function PATCH(request, { params }) {
     const gym = await prisma.gym.update({
       where:  { id: gymId },
       data,
-      select: { id: true, name: true, slug: true, stripeAccountId: true, seamApiKey: true, seamDeviceId: true, accessProvider: true, kisiApiKey: true, kisiPlaceId: true, kisiMemberGroupId: true, kisiWeekendGroupId: true, zapierMemberWebhookUrl: true, zapierGuestWebhookUrl: true, zapierOverdueWebhookUrl: true, zapierMembershipRequestWebhookUrl: true, leadWebhookUrl: true },
+      select: { id: true, name: true, slug: true, stripeAccountId: true, seamApiKey: true, seamDeviceId: true, accessProvider: true, kisiApiKey: true, kisiPlaceId: true, kisiMemberGroupId: true, kisiWeekendGroupId: true, zapierMemberWebhookUrl: true, zapierGuestWebhookUrl: true, zapierOverdueWebhookUrl: true, zapierMembershipRequestWebhookUrl: true, leadWebhookUrl: true, accessHoursStart: true, accessHoursEnd: true, accessLastEntry: true, timezone: true },
     })
     console.log('[admin/gyms PATCH] DB result: name=%j slug=%j seamDeviceId=%j accessProvider=%j', gym.name, gym.slug, gym.seamDeviceId, gym.accessProvider)
 
@@ -68,6 +95,10 @@ export async function PATCH(request, { params }) {
         zapierOverdueWebhookUrl: gym.zapierOverdueWebhookUrl ?? '',
         zapierMembershipRequestWebhookUrl: gym.zapierMembershipRequestWebhookUrl ?? '',
         leadWebhookUrl:     gym.leadWebhookUrl ?? '',
+        accessHoursStart:   gym.accessHoursStart ?? '',
+        accessHoursEnd:     gym.accessHoursEnd ?? '',
+        accessLastEntry:    gym.accessLastEntry ?? '',
+        timezone:           gym.timezone,
       },
     })
   } catch (error) {

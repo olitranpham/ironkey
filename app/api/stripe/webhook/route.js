@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import prisma from '@/lib/prisma'
 import { deleteSeamCodeByPin, generateUniqueAccessCode, createLockCode } from '@/lib/seam'
+import { accessWindow } from '@/lib/accessHours'
 import { ensureKisiMembership, revokeAccess as revokeKisiAccess } from '@/lib/kisi'
 import { formatPhone } from '@/lib/phone'
 import { normalizeGradSemester } from '@/lib/gradSemester'
@@ -152,6 +153,10 @@ export async function POST(request) {
       kisiPlaceId:            true,
       kisiMemberGroupId:      true,
       kisiWeekendGroupId:     true,
+      timezone:               true,
+      accessHoursStart:       true,
+      accessHoursEnd:         true,
+      accessLastEntry:        true,
     },
   })
 
@@ -304,7 +309,9 @@ export async function POST(request) {
         console.log('[platform/webhook] reusing accessCode', maskPin(accessCode), 'for returning guest', email)
       }
 
-      // ── Program time-bound Seam access code for guest (24-hour window) ────────
+      // ── Program time-bound Seam access code for guest ──────────────────────
+      // 24 hours from now, or the gym's next access-hours window (lib/accessHours)
+      const guestWindow = accessWindow(gym)
       let alreadyActive = false
       const guestSeamApiKey = gym.seamApiKey ?? process.env.SEAM_API_KEY
       if (guestSeamApiKey) {
@@ -313,9 +320,8 @@ export async function POST(request) {
           Authorization:  `Bearer ${guestSeamApiKey}`,
           'Content-Type': 'application/json',
         }
-        const nowMs       = Date.now()
-        const startDt     = new Date(nowMs).toISOString()
-        const endDt       = new Date(nowMs + 24 * 60 * 60 * 1000).toISOString()
+        const startDt     = guestWindow.startsAt.toISOString()
+        const endDt       = guestWindow.endsAt.toISOString()
         try {
           let devices = deviceId ? [{ device_id: deviceId }] : []
           if (!deviceId) {
@@ -394,6 +400,7 @@ export async function POST(request) {
           // What the guest actually paid (cents, after discounts)
           amountPaid:      session.amount_total,
         }, {
+          expiresAt: guestWindow.endsAt,
           onCreate: async tx => {
             if (!waiverData) return
             // upsert: a concurrent delivery may have written it — never overwrite
@@ -451,6 +458,8 @@ export async function POST(request) {
       console.log('[platform/webhook] firing Zapier guest webhook (configured=%s)', Boolean(zapierGuestUrl))
       await deliverOrAudit(gym, zapierGuestUrl, withPhone({
         name: guestName, email, accessCode, passType, passesLeft: savedPassesLeft, firstTime, alreadyActive,
+        accessStartsAt:        guestWindow.startsAt.toISOString(),
+        accessEndsAt:          guestWindow.endsAt.toISOString(),
         isMinor:               guestIsMinor,
         guardianName:          guestIsMinor ? (meta.guardianName         || null) : null,
         guardianEmail:         guestIsMinor ? (meta.guardianEmail        || null) : null,

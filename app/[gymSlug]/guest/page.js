@@ -118,6 +118,9 @@ export default function GuestPage() {
   const [gymName,    setGymName]    = useState('')
   const [gymLogo,    setGymLogo]    = useState(null)
   const [plans,      setPlans]      = useState([])
+  // Set when a pass bought now gets a later door-code window (outside the
+  // gym's access hours / after last entry) — computed server-side
+  const [accessNotice, setAccessNotice] = useState(null)
   const [pageLoading, setPageLoading] = useState(true)
 
   // step: intent | email-input | new-form | returning-confirm | checkin-confirm | checkin-done | flex-confirm | flex-done
@@ -196,6 +199,19 @@ export default function GuestPage() {
       })
       .catch(() => {})
       .finally(() => setPageLoading(false))
+  }, [gymSlug])
+
+  // Re-checked every minute so the notice appears if closing / last entry
+  // passes while the form is open
+  useEffect(() => {
+    let cancelled = false
+    const load = () => fetch(`/api/${gymSlug}/guest/access-notice`)
+      .then(r => r.json())
+      .then(({ notice }) => { if (!cancelled) setAccessNotice(notice ?? null) })
+      .catch(() => {})
+    load()
+    const id = setInterval(load, 60_000)
+    return () => { cancelled = true; clearInterval(id) }
   }, [gymSlug])
 
   function setField(k, v) { setForm(f => ({ ...f, [k]: v })) }
@@ -900,6 +916,12 @@ export default function GuestPage() {
               />
             </Field>
 
+            {accessNotice && (
+              <p className="text-xs text-amber-300 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
+                {accessNotice}
+              </p>
+            )}
+
             {error && (
               <p className="text-xs text-rose-400 bg-rose-500/10 border border-rose-500/20 rounded-lg px-3 py-2">
                 {error}
@@ -1033,6 +1055,12 @@ export default function GuestPage() {
                 className={INPUT}
               />
             </Field>
+
+            {accessNotice && (
+              <p className="text-xs text-amber-300 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
+                {accessNotice}
+              </p>
+            )}
 
             {error && (
               <p className="text-xs text-rose-400 bg-rose-500/10 border border-rose-500/20 rounded-lg px-3 py-2">

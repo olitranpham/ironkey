@@ -188,6 +188,9 @@ function EditGymModal({ gym, onClose, onUpdated, onDeleted, adminToken }) {
   const [zapierOverdueWebhookUrl, setZapierOverdueWebhookUrl] = useState(gym.zapierOverdueWebhookUrl ?? '')
   const [zapierMembershipRequestWebhookUrl, setZapierMembershipRequestWebhookUrl] = useState(gym.zapierMembershipRequestWebhookUrl ?? '')
   const [leadWebhookUrl,         setLeadWebhookUrl]         = useState(gym.leadWebhookUrl ?? '')
+  const [accessHoursStart,       setAccessHoursStart]       = useState(gym.accessHoursStart ?? '')
+  const [accessHoursEnd,         setAccessHoursEnd]         = useState(gym.accessHoursEnd ?? '')
+  const [accessLastEntry,        setAccessLastEntry]        = useState(gym.accessLastEntry ?? '')
   const [loading,         setLoading]         = useState(false)
   const [saved,           setSaved]           = useState(false)
   const [error,           setError]           = useState(null)
@@ -201,7 +204,7 @@ function EditGymModal({ gym, onClose, onUpdated, onDeleted, adminToken }) {
       const res  = await fetch(`/api/admin/gyms/${gym.id}`, {
         method:  'PATCH',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
-        body:    JSON.stringify({ name, slug, seamApiKey, seamDeviceId, accessProvider, kisiApiKey, kisiPlaceId, kisiMemberGroupId, kisiWeekendGroupId, stripeAccountId, zapierMemberWebhookUrl, zapierGuestWebhookUrl, zapierOverdueWebhookUrl, zapierMembershipRequestWebhookUrl, leadWebhookUrl }),
+        body:    JSON.stringify({ name, slug, seamApiKey, seamDeviceId, accessProvider, kisiApiKey, kisiPlaceId, kisiMemberGroupId, kisiWeekendGroupId, stripeAccountId, zapierMemberWebhookUrl, zapierGuestWebhookUrl, zapierOverdueWebhookUrl, zapierMembershipRequestWebhookUrl, leadWebhookUrl, accessHoursStart, accessHoursEnd, accessLastEntry }),
       })
       const data = await res.json()
       if (!res.ok) { setError(data.error); return }
@@ -252,6 +255,11 @@ function EditGymModal({ gym, onClose, onUpdated, onDeleted, adminToken }) {
           <Field label="gym name" value={name} onChange={setName} />
           <Field label="slug"     value={slug} onChange={setSlug} mono />
           <Field label="seam device id" value={seamDeviceId} onChange={setSeamDeviceId} mono />
+          <div className="grid grid-cols-3 gap-3">
+            <Field label={`guest access opens (${gym.timezone ?? 'gym timezone'})`} value={accessHoursStart} onChange={setAccessHoursStart} placeholder="09:00 — empty = 24/7" mono />
+            <Field label="closes" value={accessHoursEnd} onChange={setAccessHoursEnd} placeholder="21:00" mono />
+            <Field label="last entry (purchases)" value={accessLastEntry} onChange={setAccessLastEntry} placeholder="20:00 — optional" mono />
+          </div>
           <div>
             <label className="block text-xs text-neutral-500 mb-1.5">door-access provider</label>
             <select

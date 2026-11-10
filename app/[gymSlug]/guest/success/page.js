@@ -12,6 +12,7 @@ export default function GuestSuccessPage() {
   const [gymName,    setGymName]    = useState('')
   const [gymLogo,    setGymLogo]    = useState(null)
   const [sentTo,      setSentTo]      = useState(null)
+  const [accessNotice, setAccessNotice] = useState(null)   // code window, gyms with access hours
   const [loading,     setLoading]     = useState(Boolean(sessionId))
   const [resendState, setResendState] = useState(null)   // null | 'sending' | 'sent'
   const [resendError, setResendError] = useState(null)
@@ -40,6 +41,7 @@ export default function GuestSuccessPage() {
         const json = await res.json()
         if (json.ok) {
           setSentTo(json.sentTo)
+          setAccessNotice(json.accessNotice ?? null)
           setLoading(false)
           return true
         }
@@ -105,6 +107,11 @@ export default function GuestSuccessPage() {
               your access code was emailed to <span className="text-white font-semibold">{sentTo}</span>.
               check your inbox (and spam).
             </p>
+            {accessNotice && (
+              <p className="text-xs text-amber-300 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
+                {accessNotice}
+              </p>
+            )}
             <button
               type="button"
               onClick={handleResend}

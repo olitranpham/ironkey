@@ -26,6 +26,14 @@ model Gym {
   seamApiKey             String?
   seamDeviceId           String?
 
+  // Daily door-access hours for time-bound guest codes, "HH:MM" in `timezone`
+  // (e.g. "09:00"/"21:00"). Null = 24/7: guest codes get a rolling 24 hours.
+  // accessLastEntry: purchases at/after it get the next day's window (null =
+  // closing time). Kiosk check-ins are refused outside the hours.
+  accessHoursStart       String?
+  accessHoursEnd         String?
+  accessLastEntry        String?
+
   // Door-access provider selection — defaults to Seam for every existing
   // gym; Kisi fields below are only read when accessProvider is KISI.
   accessProvider    AccessProvider @default(SEAM)
