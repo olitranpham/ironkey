@@ -5,6 +5,7 @@ import { isPinTaken, PIN_IN_USE_ERROR } from '@/lib/pins'
 import { requirePermission } from '@/lib/permissions'
 import { maskPin, redactJsonText } from '@/lib/redact'
 import { writeAudit } from '@/lib/audit'
+import { planAccessCodeSync } from '@/lib/doorSync'
 
 const SEAM_API = 'https://connect.getseam.com'
 
@@ -272,32 +273,35 @@ export async function GET(request, { params }) {
     console.log(`[seam/codes GET] ${devices.length} device(s), ${codes.length} total code(s) — ${memberCodeCount} member, ${guestCodeCount} guest, ${unknownCount} unknown (${members.length} members with codes in DB)`)
 
     // ── Background sync: write Seam codes back to Member.accessCode ───────────
-    // Collect updates for member codes whose DB accessCode is missing or stale.
-    // These are always name matches (a PIN match already equals the DB code),
-    // so a PIN that belongs to another member or a guest at this gym is never
-    // written — logged as a conflict for staff instead.
-    // Fire-and-forget so the response is never delayed.
-    const syncUpdates = codes
-      .filter(c => c.memberId && c.code)
-      .map(c => {
-        const m = members.find(m => m.id === c.memberId)
-        const pin = String(c.code).trim()
-        if (!m || m.accessCode === pin) return null
-        const pinOwner = memberByCode[pin]
-        if ((pinOwner && pinOwner.id !== m.id) || guestByCode.has(pin)) {
-          console.warn('[seam/codes sync] conflict — lock code "%s" %s matched member %s by name, but that PIN belongs to %s %s; not written',
-            c.name, maskPin(pin), m.id, pinOwner ? 'member' : 'guest', pinOwner ? pinOwner.id : guestByCode.get(pin).id)
-          return null
-        }
-        return { id: c.memberId, code: pin, name: c.name }
+    // Only an unambiguous exact-name match (lib/doorSync) is ever written —
+    // see planAccessCodeSync for the rules; everything else is logged as a
+    // conflict for staff. Reads the unmanaged list too, so "on the lock"
+    // means either list. Fire-and-forget so the response is never delayed.
+    ;(async () => {
+      const unmanaged = (await Promise.all(devices.map(device =>
+        fetch(`${SEAM_API}/access_codes/unmanaged/list`, {
+          method: 'POST', headers: seamHeaders, body: JSON.stringify({ device_id: device.device_id }),
+        }).then(r => (r.ok ? r.json() : null)).then(b => (b ? b.access_codes ?? [] : null)).catch(() => null)
+      )))
+      // Without the full lock picture the rules can't be applied — write nothing
+      if (unmanaged.some(list => list === null)) {
+        console.warn('[seam/codes sync] skipped — unmanaged code list unavailable')
+        return
+      }
+      const { writes, conflicts } = planAccessCodeSync({
+        lockCodes: [...access_codes, ...unmanaged.flat()],
+        members,
+        guests:    guestProfiles,
       })
-      .filter(Boolean)
-
-    // HOTFIX: writes disabled — name matching was overwriting members' PINs
-    // with other people's codes. Log what would have been written instead.
-    for (const u of syncUpdates) {
-      console.warn('[seam/codes sync] would write (disabled) %s → member %s (lock code "%s")', maskPin(u.code), u.id, u.name)
-    }
+      for (const c of conflicts) {
+        console.warn('[seam/codes sync] conflict — lock code "%s" %s vs member %s: %s; not written', c.codeName, maskPin(c.pin), c.memberId, c.reason)
+      }
+      await Promise.all(writes.map(w =>
+        prisma.member.update({ where: { id: w.memberId }, data: { accessCode: w.pin } })
+          .then(() => console.log('[seam/codes sync] wrote %s → member %s (lock code "%s")', maskPin(w.pin), w.memberId, w.codeName))
+          .catch(e  => console.error('[seam/codes sync] failed for member %s:', w.memberId, e.message))
+      ))
+    })().catch(e => console.error('[seam/codes sync] error:', e.message))
 
     return NextResponse.json({ codes })
   } catch (error) {
