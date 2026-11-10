@@ -293,14 +293,10 @@ export async function GET(request, { params }) {
       })
       .filter(Boolean)
 
-    if (syncUpdates.length) {
-      Promise.all(
-        syncUpdates.map(u =>
-          prisma.member.update({ where: { id: u.id }, data: { accessCode: u.code } })
-            .then(() => console.log('[seam/codes sync] wrote %s → member %s', maskPin(u.code), u.id))
-            .catch(e  => console.error('[seam/codes sync] failed for member %s:', u.id, e.message))
-        )
-      )
+    // HOTFIX: writes disabled — name matching was overwriting members' PINs
+    // with other people's codes. Log what would have been written instead.
+    for (const u of syncUpdates) {
+      console.warn('[seam/codes sync] would write (disabled) %s → member %s (lock code "%s")', maskPin(u.code), u.id, u.name)
     }
 
     return NextResponse.json({ codes })
