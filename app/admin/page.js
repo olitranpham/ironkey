@@ -254,14 +254,10 @@ function EditGymModal({ gym, onClose, onUpdated, onDeleted, adminToken }) {
           <div className="flex-1 min-h-0 overflow-y-auto px-6 space-y-3">
           <Field label="gym name" value={name} onChange={setName} />
           <Field label="slug"     value={slug} onChange={setSlug} mono />
-          <Field label="seam device id" value={seamDeviceId} onChange={setSeamDeviceId} mono />
-          <div className="grid grid-cols-3 gap-3">
-            <Field label={`guest access opens (${gym.timezone ?? 'gym timezone'})`} value={accessHoursStart} onChange={setAccessHoursStart} placeholder="09:00 — empty = 24/7" mono />
-            <Field label="closes" value={accessHoursEnd} onChange={setAccessHoursEnd} placeholder="21:00" mono />
-            <Field label="last entry (purchases)" value={accessLastEntry} onChange={setAccessLastEntry} placeholder="20:00 — optional" mono />
-          </div>
+          {/* Access — lock provider decides which fields show; switching only
+              hides fields (their values stay and are saved as before) */}
           <div>
-            <label className="block text-xs text-neutral-500 mb-1.5">door-access provider</label>
+            <label className="block text-xs text-neutral-500 mb-1.5">lock provider</label>
             <select
               value={accessProvider}
               onChange={e => setAccessProvider(e.target.value)}
@@ -271,10 +267,26 @@ function EditGymModal({ gym, onClose, onUpdated, onDeleted, adminToken }) {
               <option value="KISI">kisi</option>
             </select>
           </div>
-          <Field label="kisi api key (write-only)" value={kisiApiKey} onChange={setKisiApiKey} placeholder={gym.hasKisi ? '••••••••' : 'not set'} />
-          <Field label="kisi place id" value={kisiPlaceId} onChange={setKisiPlaceId} mono />
-          <Field label="kisi member group id" value={kisiMemberGroupId} onChange={setKisiMemberGroupId} mono />
-          <Field label="kisi weekend group id" value={kisiWeekendGroupId} onChange={setKisiWeekendGroupId} mono />
+          {accessProvider === 'KISI' ? (
+            <>
+              <Field label="kisi api key (write-only)" value={kisiApiKey} onChange={setKisiApiKey} placeholder={gym.hasKisi ? '••••••••' : 'not set'} />
+              <Field label="kisi place id" value={kisiPlaceId} onChange={setKisiPlaceId} mono />
+              <Field label="kisi member group id" value={kisiMemberGroupId} onChange={setKisiMemberGroupId} mono />
+              <Field label="kisi weekend group id" value={kisiWeekendGroupId} onChange={setKisiWeekendGroupId} mono />
+            </>
+          ) : (
+            <Field label="seam device id" value={seamDeviceId} onChange={setSeamDeviceId} mono />
+          )}
+          <div>
+            <div className="grid grid-cols-3 gap-3 items-end">
+              <Field label="opens"      value={accessHoursStart} onChange={setAccessHoursStart} placeholder="09:00" mono />
+              <Field label="closes"     value={accessHoursEnd}   onChange={setAccessHoursEnd}   placeholder="21:00" mono />
+              <Field label="last entry" value={accessLastEntry}  onChange={setAccessLastEntry}  placeholder="20:00" mono />
+            </div>
+            <p className="text-[11px] text-neutral-600 mt-1.5">
+              times in {gym.timezone ?? 'the gym timezone'}. leave empty for 24/7. last entry applies to purchases.
+            </p>
+          </div>
           <Field label="zapier member webhook url"  value={zapierMemberWebhookUrl}  onChange={setZapierMemberWebhookUrl}  placeholder="https://hooks.zapier.com/…" />
           <Field label="zapier guest webhook url"   value={zapierGuestWebhookUrl}   onChange={setZapierGuestWebhookUrl}   placeholder="https://hooks.zapier.com/…" />
           <Field label="zapier overdue webhook url" value={zapierOverdueWebhookUrl} onChange={setZapierOverdueWebhookUrl} placeholder="https://hooks.zapier.com/…" />
