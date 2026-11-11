@@ -51,6 +51,11 @@ export default function MembershipManagerPage() {
   const [understandsNotice, setUnderstandsNotice] = useState(false)
   const [submitting,        setSubmitting]        = useState(false)
 
+  // Overdue balance — "pay now" retries the open invoice; a decline links to
+  // Stripe's hosted page for that invoice
+  const [payState,         setPayState]         = useState(null) // null | 'paying' | 'paid' | 'nothing' | 'declined'
+  const [updatePaymentUrl, setUpdatePaymentUrl] = useState(null)
+
   useEffect(() => {
     fetch(`/api/${gymSlug}/join`)
       .then(r => r.json())
@@ -79,6 +84,36 @@ export default function MembershipManagerPage() {
       setError(err.message)
     } finally {
       setLookingUp(false)
+    }
+  }
+
+  async function handlePayNow() {
+    clearError()
+    setPayState('paying')
+    try {
+      const res  = await fetch(`/api/${gymSlug}/membership-request/pay`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ email: member.email }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (res.ok && (json.paid || json.nothingOwed)) {
+        setPayState(json.nothingOwed ? 'nothing' : 'paid')
+        // Re-read the membership so freeze / cancel come back once the balance is clear
+        const fresh = await fetch(`/api/${gymSlug}/membership-request?email=${encodeURIComponent(member.email)}`).then(r => r.json()).catch(() => null)
+        setMember(prev => ({ ...prev, ...(fresh?.member ?? {}), overdue: fresh?.member?.overdue ?? json.overdue }))
+        return
+      }
+      if (json.updatePaymentUrl) {
+        setUpdatePaymentUrl(json.updatePaymentUrl)
+        setPayState('declined')
+        return
+      }
+      setPayState(null)
+      setError((json.error ?? 'something went wrong — please try again.').toLowerCase())
+    } catch {
+      setPayState(null)
+      setError('something went wrong — please try again.')
     }
   }
 
@@ -206,6 +241,37 @@ export default function MembershipManagerPage() {
               </div>
             </div>
 
+            {member.overdue && (
+              <div className="bg-[#1c1c1c] border border-amber-500/20 rounded-2xl p-5 flex flex-col gap-3 shadow-2xl">
+                <p className="text-sm text-amber-300">you have an overdue balance. pay it to freeze or cancel your membership.</p>
+                {payState === 'declined' ? (
+                  <>
+                    <p className="text-xs text-neutral-400">your card on file was declined.</p>
+                    {updatePaymentUrl && (
+                      <a href={updatePaymentUrl} target="_blank" rel="noopener noreferrer" className={BUTTON_PRIMARY}>
+                        update payment method →
+                      </a>
+                    )}
+                  </>
+                ) : (
+                  <button type="button" onClick={handlePayNow} disabled={payState === 'paying'} className={BUTTON_PRIMARY}>
+                    {payState === 'paying' ? <><Loader2 size={15} className="animate-spin" /> paying…</> : 'pay now'}
+                  </button>
+                )}
+                {error && <p className="text-xs text-rose-400">{error}</p>}
+              </div>
+            )}
+            {payState === 'nothing' && !member.overdue && (
+              <p className="text-xs text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-lg px-3 py-2">
+                nothing owed.
+              </p>
+            )}
+            {payState === 'paid' && !member.overdue && (
+              <p className="text-xs text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-lg px-3 py-2">
+                payment received — thank you. you can now freeze or cancel your membership.
+              </p>
+            )}
+
             {availableActions.length === 0 ? (
               <div className="bg-[#1c1c1c] border border-white/10 rounded-2xl p-6 text-center shadow-2xl">
                 <p className="text-sm text-neutral-400">your membership is already canceled — there's nothing to manage here.</p>
@@ -215,11 +281,14 @@ export default function MembershipManagerPage() {
                 {availableActions.map(action => {
                   const copy = REQUEST_COPY[action]
                   const Icon = copy.icon
+                  // Freeze / cancel stay disabled until an overdue balance is paid
+                  const blocked = member.overdue && (action === 'freeze' || action === 'cancel')
                   return (
                     <button
                       key={action}
-                      onClick={() => selectAction(action)}
-                      className="w-full bg-[#1c1c1c] border border-neutral-800 rounded-2xl p-5 flex items-center gap-4 text-left hover:border-neutral-600 transition-colors group"
+                      onClick={() => !blocked && selectAction(action)}
+                      disabled={blocked}
+                      className="w-full bg-[#1c1c1c] border border-neutral-800 rounded-2xl p-5 flex items-center gap-4 text-left hover:border-neutral-600 transition-colors group disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:border-neutral-800"
                     >
                       <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center shrink-0 group-hover:bg-white/15 transition-colors">
                         <Icon size={18} className="text-white" />

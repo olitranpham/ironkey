@@ -126,6 +126,8 @@ export default function MembersPage() {
   const [confirmModal,    setConfirmModal]    = useState(null) // { action, member }
   const [actionLoading,   setActionLoading]   = useState(false)
   const [actionError,     setActionError]     = useState(null)
+  // Freeze / cancel refused because the membership is overdue — { message, amountDueFmt, canOverride }
+  const [overdueBlock,    setOverdueBlock]    = useState(null)
   const [successBanner,   setSuccessBanner]   = useState(null) // string | null, auto-dismisses
 
   // ── Fetch ────────────────────────────────────────────────────────────────
@@ -209,7 +211,7 @@ export default function MembersPage() {
     }
   }
 
-  async function confirmAction() {
+  async function confirmAction({ override = false } = {}) {
     const { action, member } = confirmModal
     setActionLoading(true)
     setActionError(null)
@@ -231,10 +233,16 @@ export default function MembersPage() {
       const res  = await fetch(`/api/${gymSlug}/${action}`, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body:    JSON.stringify({ memberId: member.id }),
+        body:    JSON.stringify({ memberId: member.id, ...(override ? { override: true } : {}) }),
       })
       const json = await res.json().catch(() => ({}))
+      // Overdue → blocked; OWNER/ADMIN get an explicit "… anyway" in the modal
+      if (res.status === 403 && json.overdue) {
+        setOverdueBlock({ message: json.error, amountDueFmt: json.amountDueFmt, canOverride: Boolean(json.canOverride) })
+        return
+      }
       if (!res.ok) throw new Error(requestError(res, json))
+      setOverdueBlock(null)
       const { member: updated } = json
       setMembers(prev => prev.map(m => m.id === updated.id ? { ...m, ...updated } : m))
       setSelectedMember(prev => prev?.id === updated.id ? { ...prev, ...updated } : prev)
@@ -504,6 +512,7 @@ export default function MembersPage() {
         onStatusChange={(memberId, newStatus) => {
           const actionMap = { FROZEN: 'freeze', CANCELED: 'cancel', ACTIVE: 'resume' }
           setActionError(null)
+          setOverdueBlock(null)
           setConfirmModal({ action: actionMap[newStatus], member: selectedMember })
         }}
         onReverseCancel={() => {
@@ -531,7 +540,9 @@ export default function MembersPage() {
           loading={actionLoading}
           error={actionError}
           onConfirm={confirmAction}
-          onClose={() => { setConfirmModal(null); setActionError(null) }}
+          overdueBlock={overdueBlock}
+          onOverride={() => confirmAction({ override: true })}
+          onClose={() => { setConfirmModal(null); setActionError(null); setOverdueBlock(null) }}
         />
       )}
 
@@ -541,7 +552,7 @@ export default function MembersPage() {
 
 // ── Confirm modal ─────────────────────────────────────────────────────────────
 
-function ConfirmModal({ action, member, loading, error, onConfirm, onClose }) {
+function ConfirmModal({ action, member, loading, error, overdueBlock, onOverride, onConfirm, onClose }) {
   const copy = CONFIRM_COPY[action]
   if (!copy) return null
 
@@ -577,6 +588,25 @@ function ConfirmModal({ action, member, loading, error, onConfirm, onClose }) {
         {/* Error */}
         {error && <p className="text-xs text-red-400 mb-3">{error}</p>}
 
+        {/* Overdue — blocked; OWNER/ADMIN can explicitly override (audited) */}
+        {overdueBlock && (
+          <div className="mb-3 space-y-1.5">
+            <p className="text-xs text-amber-300 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
+              {overdueBlock.message}
+              {overdueBlock.amountDueFmt && <> overdue balance: {overdueBlock.amountDueFmt}.</>}
+            </p>
+            {overdueBlock.canOverride && (
+              <button
+                onClick={onOverride}
+                disabled={loading}
+                className="w-full py-2 rounded-lg text-xs font-medium bg-red-500/10 text-red-400 hover:bg-red-500/20 disabled:opacity-40 transition-colors"
+              >
+                {loading ? 'please wait…' : `${action} anyway`}
+              </button>
+            )}
+          </div>
+        )}
+
         {/* Buttons */}
         <div className="flex gap-2">
           <button
@@ -587,8 +617,8 @@ function ConfirmModal({ action, member, loading, error, onConfirm, onClose }) {
             cancel
           </button>
           <button
-            onClick={onConfirm}
-            disabled={loading}
+            onClick={() => onConfirm()}
+            disabled={loading || Boolean(overdueBlock)}
             className={`flex-1 py-2 rounded-lg text-xs font-medium disabled:opacity-40 transition-colors ${copy.ctaCls}`}
           >
             {loading ? 'please wait…' : copy.cta}

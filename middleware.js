@@ -26,6 +26,7 @@ export async function middleware(request) {
     (request.method === 'POST' && /^\/api\/[^/]+\/guest-passes\/checkin\/resend$/.test(pathname)) ||
     /^\/api\/[^/]+\/flex-checkin$/.test(pathname) ||
     /^\/api\/[^/]+\/membership-request$/.test(pathname) ||
+    (request.method === 'POST' && /^\/api\/[^/]+\/membership-request\/pay$/.test(pathname)) ||
     (request.method === 'POST' && /^\/api\/[^/]+\/stripe\/webhook$/.test(pathname)) ||
     /^\/api\/[^/]+\/join(\/|$)/.test(pathname) ||
     /^\/api\/[^/]+\/guest(\/|$)/.test(pathname) ||

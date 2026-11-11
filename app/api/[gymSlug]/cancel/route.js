@@ -4,6 +4,7 @@ import prisma from '@/lib/prisma'
 import { requirePermission } from '@/lib/permissions'
 import { maskSecret } from '@/lib/redact'
 import { writeAudit } from '@/lib/audit'
+import { getOverdueState, overdueAuditMeta, formatAmount, OVERDUE_MESSAGE } from '@/lib/overdue'
 
 /**
  * Given a billing period end (Unix timestamp) and the subscription object,
@@ -35,7 +36,8 @@ export async function POST(request, { params }) {
     const { ctx, errorResponse } = await requirePermission(request, gymSlug, 'members.cancel')
     if (errorResponse) return errorResponse
     const gymId        = ctx.gym.id
-    const { memberId } = await request.json()
+    const body         = await request.json()
+    const { memberId } = body
 
     if (!memberId) return NextResponse.json({ error: 'memberId required' }, { status: 400 })
 
@@ -45,6 +47,24 @@ export async function POST(request, { params }) {
     ])
 
     if (!existing) return NextResponse.json({ error: 'Member not found' }, { status: 404 })
+
+    // ── Overdue: blocked unless OWNER/ADMIN explicitly overrides ──────────
+    // The overdue page's "cancel for nonpayment" (body.nonpayment) is the
+    // manual counterpart of the overdue-cancel cron — never blocked, always
+    // audited with the overdue amount.
+    const overdue = await getOverdueState(gym, existing)
+    if (body.nonpayment === true) {
+      writeAudit(ctx, 'member.cancel_nonpayment', 'Member', memberId, overdueAuditMeta(overdue))
+    } else if (overdue.overdue) {
+      const canOverride = ['OWNER', 'ADMIN'].includes(ctx.user?.role)
+      if (!(body.override === true && canOverride)) {
+        return NextResponse.json({
+          error: OVERDUE_MESSAGE, overdue: true, canOverride,
+          amountDue: overdue.amountDue, amountDueFmt: formatAmount(overdue.amountDue, overdue.currency),
+        }, { status: 403 })
+      }
+      writeAudit(ctx, 'member.overdue_override', 'Member', memberId, { action: 'cancel', ...overdueAuditMeta(overdue) })
+    }
 
     const subId     = existing.stripeSubscriptionId
     const stripeKey = gym?.stripeSecretKey

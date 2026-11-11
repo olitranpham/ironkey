@@ -2,11 +2,14 @@ import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { withPhone } from '@/lib/zapierPayload'
 import { limitRequest } from '@/lib/rateLimit'
+import { getOverdueState, OVERDUE_MESSAGE } from '@/lib/overdue'
 
 /**
  * GET /api/[gymSlug]/membership-request?email=...
  * Public — looks up a member by email for the self-service membership
  * manager page. Returns just enough to drive the UI; no sensitive fields.
+ * `overdue` (Member.status OVERDUE, or the Stripe subscription past_due /
+ * unpaid right now) disables freeze / cancel and shows "pay now".
  */
 export async function GET(request, { params }) {
   try {
@@ -19,12 +22,12 @@ export async function GET(request, { params }) {
 
     if (!email) return NextResponse.json({ error: 'email is required' }, { status: 400 })
 
-    const gym = await prisma.gym.findUnique({ where: { slug: gymSlug }, select: { id: true } })
+    const gym = await prisma.gym.findUnique({ where: { slug: gymSlug }, select: { id: true, stripeSecretKey: true } })
     if (!gym) return NextResponse.json({ error: 'Gym not found' }, { status: 404 })
 
     const member = await prisma.member.findUnique({
       where:  { gymId_email: { gymId: gym.id, email } },
-      select: { firstName: true, lastName: true, email: true, membershipType: true, status: true },
+      select: { id: true, firstName: true, lastName: true, email: true, membershipType: true, status: true, stripeSubscriptionId: true },
     })
 
     if (!member) {
@@ -38,6 +41,7 @@ export async function GET(request, { params }) {
         email:          member.email,
         membershipType: member.membershipType,
         status:         member.status,
+        overdue:        member.status === 'CANCELED' ? false : (await getOverdueState(gym, member)).overdue,
       },
     })
   } catch (error) {
@@ -76,16 +80,21 @@ export async function POST(request, { params }) {
 
     const gym = await prisma.gym.findUnique({
       where:  { slug: gymSlug },
-      select: { id: true, zapierMembershipRequestWebhookUrl: true },
+      select: { id: true, stripeSecretKey: true, zapierMembershipRequestWebhookUrl: true },
     })
     if (!gym) return NextResponse.json({ error: 'Gym not found' }, { status: 404 })
 
     const member = await prisma.member.findUnique({
       where:  { gymId_email: { gymId: gym.id, email } },
-      select: { id: true, firstName: true, lastName: true, email: true, phone: true },
+      select: { id: true, firstName: true, lastName: true, email: true, phone: true, status: true, stripeSubscriptionId: true },
     })
     if (!member) {
       return NextResponse.json({ error: "we couldn't find a membership associated with that email" }, { status: 404 })
+    }
+
+    // Overdue members can't request a freeze or cancel until they pay
+    if ((requestType === 'freeze' || requestType === 'cancel') && (await getOverdueState(gym, member)).overdue) {
+      return NextResponse.json({ error: OVERDUE_MESSAGE, overdue: true }, { status: 403 })
     }
 
     const memberName = `${member.firstName} ${member.lastName}`.trim()

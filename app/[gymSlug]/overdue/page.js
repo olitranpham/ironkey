@@ -20,9 +20,9 @@ const CONFIRM_COPY = {
     cta: 'yes, mark active', ctaCls: 'bg-sky-500/10 text-sky-400 hover:bg-sky-500/20',
   },
   cancel: {
-    title:   'cancel membership?',
-    bullets: ['a 30-day notice policy applies', 'member retains access through notice period', 'this action cannot be easily undone'],
-    cta: 'yes, cancel', ctaCls: 'bg-red-500/10 text-red-400 hover:bg-red-500/20',
+    title:   'cancel for nonpayment?',
+    bullets: ['a 30-day notice policy applies', 'member retains access through notice period', 'this action cannot be easily undone', 'recorded in the audit log with the overdue amount'],
+    cta: 'yes, cancel for nonpayment', ctaCls: 'bg-red-500/10 text-red-400 hover:bg-red-500/20',
   },
 }
 
@@ -148,7 +148,8 @@ export default function OverduePage() {
         const res = await fetch(`/api/${gymSlug}/cancel`, {
           method:  'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body:    JSON.stringify({ memberId: row.id }),
+          // Nonpayment cancel — exempt from the overdue freeze/cancel block, audited
+          body:    JSON.stringify({ memberId: row.id, nonpayment: true }),
         })
         if (!res.ok) throw new Error('Cancel failed')
         const json = await res.json()
@@ -394,7 +395,7 @@ function OverduePanel({ row, membershipBorder, onClose, onAction }) {
           onClick={() => onAction('cancel')}
           className="w-full py-2 rounded-lg text-xs font-medium bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors"
         >
-          cancel membership
+          cancel for nonpayment
         </button>
       </div>
 

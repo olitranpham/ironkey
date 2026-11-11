@@ -128,12 +128,23 @@ export default function DashboardPage() {
     setActionError(null)
     try {
       const token = localStorage.getItem('ik_token')
-      const res = await fetch(`/api/${gymSlug}/${action.route}`, {
+      const post  = override => fetch(`/api/${gymSlug}/${action.route}`, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body:    JSON.stringify({ memberId }),
+        body:    JSON.stringify({ memberId, ...(override ? { override: true } : {}) }),
       })
-      const json = await res.json().catch(() => ({}))
+      let res  = await post(false)
+      let json = await res.json().catch(() => ({}))
+      // Overdue → blocked; OWNER/ADMIN may explicitly override (audited)
+      if (res.status === 403 && json.overdue) {
+        const owed = json.amountDueFmt ? ` overdue balance: ${json.amountDueFmt}.` : ''
+        if (!json.canOverride || !confirm(`${json.error}${owed}\n\n${action.route} anyway?`)) {
+          setActionError(`${json.error}${owed}`)
+          return
+        }
+        res  = await post(true)
+        json = await res.json().catch(() => ({}))
+      }
       if (!res.ok) throw new Error(requestError(res, json))
       const { member: updated } = json
       setMembers(prev => prev.map(m => m.id === memberId ? { ...m, ...updated } : m))

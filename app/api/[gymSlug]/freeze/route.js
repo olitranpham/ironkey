@@ -6,6 +6,7 @@ import { deleteSeamCodeByPin } from '@/lib/seam'
 import { revokeAccess as revokeKisiAccess } from '@/lib/kisi'
 import { maskSecret, maskPin } from '@/lib/redact'
 import { writeAudit } from '@/lib/audit'
+import { getOverdueState, overdueAuditMeta, formatAmount, OVERDUE_MESSAGE } from '@/lib/overdue'
 
 export async function POST(request, { params }) {
   try {
@@ -13,7 +14,8 @@ export async function POST(request, { params }) {
     const { ctx, errorResponse } = await requirePermission(request, gymSlug, 'members.freeze')
     if (errorResponse) return errorResponse
     const gymId        = ctx.gym.id
-    const { memberId } = await request.json()
+    const body         = await request.json()
+    const { memberId } = body
 
     if (!memberId) return NextResponse.json({ error: 'memberId required' }, { status: 400 })
 
@@ -26,6 +28,19 @@ export async function POST(request, { params }) {
     ])
 
     if (!existing) return NextResponse.json({ error: 'Member not found' }, { status: 404 })
+
+    // ── Overdue: blocked unless OWNER/ADMIN explicitly overrides ──────────
+    const overdue = await getOverdueState(gym, existing)
+    if (overdue.overdue) {
+      const canOverride = ['OWNER', 'ADMIN'].includes(ctx.user?.role)
+      if (!(body.override === true && canOverride)) {
+        return NextResponse.json({
+          error: OVERDUE_MESSAGE, overdue: true, canOverride,
+          amountDue: overdue.amountDue, amountDueFmt: formatAmount(overdue.amountDue, overdue.currency),
+        }, { status: 403 })
+      }
+      writeAudit(ctx, 'member.overdue_override', 'Member', memberId, { action: 'freeze', ...overdueAuditMeta(overdue) })
+    }
 
     const subId          = existing.stripeSubscriptionId
     const stripeKey      = gym?.stripeSecretKey
