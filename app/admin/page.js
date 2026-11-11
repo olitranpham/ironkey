@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { RefreshCw, Plus, ExternalLink, Settings, CheckCircle2, Circle, X, Eye, EyeOff } from 'lucide-react'
+import { RefreshCw, Plus, ExternalLink, Settings, CheckCircle2, Circle, X, Eye, EyeOff, ChevronDown } from 'lucide-react'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -43,19 +43,39 @@ function MaskedInput({ label, value, onChange, placeholder }) {
   )
 }
 
-function Field({ label, value, onChange, placeholder, mono }) {
+function Field({ label, value, onChange, placeholder, mono, tag, invalid }) {
   return (
     <div>
-      <label className="block text-xs text-neutral-500 mb-1.5">{label}</label>
+      <div className="flex items-center justify-between mb-1.5">
+        <label className="block text-xs text-neutral-500">{label}</label>
+        {tag}
+      </div>
       <input
         type="text"
         value={value}
         onChange={e => onChange(e.target.value)}
         placeholder={placeholder}
-        className={`w-full bg-[#292929] border border-neutral-700 rounded-lg px-3 py-2 text-xs text-white placeholder-neutral-600 focus:outline-none focus:border-neutral-500 focus:ring-1 focus:ring-neutral-500 transition-colors ${mono ? 'font-mono' : ''}`}
+        aria-invalid={invalid || undefined}
+        className={`w-full bg-[#292929] border rounded-lg px-3 py-2 text-xs text-white placeholder-neutral-600 focus:outline-none focus:ring-1 transition-colors ${invalid ? 'border-red-500/70 focus:border-red-500 focus:ring-red-500/40' : 'border-neutral-700 focus:border-neutral-500 focus:ring-neutral-500'} ${mono ? 'font-mono' : ''}`}
       />
     </div>
   )
+}
+
+/** "set" / "not set" tag shown beside a webhook field's label */
+function SetTag({ set }) {
+  return (
+    <span className={`text-[10px] px-1.5 py-0.5 rounded ${set ? 'bg-emerald-500/10 text-emerald-400' : 'bg-white/5 text-neutral-500'}`}>
+      {set ? 'set' : 'not set'}
+    </span>
+  )
+}
+
+/** An empty URL is fine (left as is); anything else must be a valid https URL */
+function isValidWebhookUrl(value) {
+  const v = value.trim()
+  if (!v) return true
+  try { return new URL(v).protocol === 'https:' } catch { return false }
 }
 
 // ── Gym card ──────────────────────────────────────────────────────────────────
@@ -194,11 +214,31 @@ function EditGymModal({ gym, onClose, onUpdated, onDeleted, adminToken }) {
   const [loading,         setLoading]         = useState(false)
   const [saved,           setSaved]           = useState(false)
   const [error,           setError]           = useState(null)
+  const [zapierOpen,      setZapierOpen]      = useState(false)
+  const [invalidZapier,   setInvalidZapier]   = useState([])   // keys of webhook fields that failed validation
   const [confirmDelete,   setConfirmDelete]   = useState(false)
   const [deleting,        setDeleting]        = useState(false)
 
+  // Zapier webhook fields — grouped in one collapsible section
+  const zapierFields = [
+    { key: 'member',             label: 'member',              value: zapierMemberWebhookUrl,            set: setZapierMemberWebhookUrl },
+    { key: 'guest',              label: 'guest',               value: zapierGuestWebhookUrl,             set: setZapierGuestWebhookUrl },
+    { key: 'overdue',            label: 'overdue',             value: zapierOverdueWebhookUrl,           set: setZapierOverdueWebhookUrl },
+    { key: 'membershipRequests', label: 'membership requests', value: zapierMembershipRequestWebhookUrl, set: setZapierMembershipRequestWebhookUrl },
+    { key: 'leadInvites',        label: 'lead invites',        value: leadWebhookUrl,                    set: setLeadWebhookUrl },
+  ]
+  const zapierSetCount = zapierFields.filter(f => f.value.trim()).length
+
   async function handleSubmit(e) {
     e.preventDefault()
+    // Invalid webhook URL → open the section and highlight it; nothing is sent
+    const badZapier = zapierFields.filter(f => !isValidWebhookUrl(f.value))
+    setInvalidZapier(badZapier.map(f => f.key))
+    if (badZapier.length) {
+      setZapierOpen(true)
+      setError(`${badZapier.map(f => f.label).join(', ')} webhook url must be a valid https:// url`)
+      return
+    }
     setLoading(true); setError(null)
     try {
       const res  = await fetch(`/api/admin/gyms/${gym.id}`, {
@@ -287,11 +327,37 @@ function EditGymModal({ gym, onClose, onUpdated, onDeleted, adminToken }) {
               times in {gym.timezone ?? 'the gym timezone'}. leave empty for 24/7. last entry applies to purchases.
             </p>
           </div>
-          <Field label="zapier member webhook url"  value={zapierMemberWebhookUrl}  onChange={setZapierMemberWebhookUrl}  placeholder="https://hooks.zapier.com/…" />
-          <Field label="zapier guest webhook url"   value={zapierGuestWebhookUrl}   onChange={setZapierGuestWebhookUrl}   placeholder="https://hooks.zapier.com/…" />
-          <Field label="zapier overdue webhook url" value={zapierOverdueWebhookUrl} onChange={setZapierOverdueWebhookUrl} placeholder="https://hooks.zapier.com/…" />
-          <Field label="zapier membership request webhook url" value={zapierMembershipRequestWebhookUrl} onChange={setZapierMembershipRequestWebhookUrl} placeholder="https://hooks.zapier.com/…" />
-          <Field label="zapier lead invite webhook url" value={leadWebhookUrl} onChange={setLeadWebhookUrl} placeholder="https://hooks.zapier.com/…" />
+          {/* Zapier webhooks — collapsed by default; every value is still sent on
+              save exactly as before, so collapsing never blanks a stored URL */}
+          <div className="border border-neutral-800 rounded-lg">
+            <button
+              type="button"
+              onClick={() => setZapierOpen(o => !o)}
+              aria-expanded={zapierOpen}
+              className="w-full flex items-center justify-between px-3 py-2.5 text-xs text-neutral-300 hover:text-white transition-colors"
+            >
+              <span>zapier webhooks</span>
+              <span className="flex items-center gap-2 text-neutral-500">
+                {zapierSetCount} of {zapierFields.length} set
+                <ChevronDown size={13} className={`transition-transform ${zapierOpen ? 'rotate-180' : ''}`} />
+              </span>
+            </button>
+            {zapierOpen && (
+              <div className="px-3 pb-3 space-y-3 border-t border-neutral-800 pt-3">
+                {zapierFields.map(f => (
+                  <Field
+                    key={f.key}
+                    label={f.label}
+                    value={f.value}
+                    onChange={v => { f.set(v); setInvalidZapier(prev => prev.filter(k => k !== f.key)) }}
+                    placeholder="https://hooks.zapier.com/…"
+                    tag={<SetTag set={Boolean(f.value.trim())} />}
+                    invalid={invalidZapier.includes(f.key)}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
 
           {/* Delete */}
           <div className="border-t border-neutral-800 pt-4 mt-2">
