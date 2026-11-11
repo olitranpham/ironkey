@@ -2,9 +2,10 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams } from 'next/navigation'
-import { Search, RefreshCw, TrendingUp, AlertTriangle, Download } from 'lucide-react'
+import { Search, RefreshCw, TrendingUp, AlertTriangle } from 'lucide-react'
 import { getGymTheme } from '@/lib/gymThemes'
 import { GuestProfilePanel, fmtDate } from '@/components/GuestProfilePanel'
+import ExportButton from '@/components/ExportButton'
 import { monthKey, DEFAULT_GYM_TIME_ZONE } from '@/lib/etMonth'
 import {
   AreaChart,
@@ -445,14 +446,7 @@ export default function GuestPassesPage() {
         </div>
         <div className="ml-auto flex items-center gap-3">
           {exportError && <span className="text-[11px] text-red-400">{exportError}</span>}
-          <button
-            onClick={handleExport}
-            disabled={exporting || loading}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-white text-black hover:bg-neutral-200 disabled:opacity-40 transition-colors"
-          >
-            <Download size={12} />
-            {exporting ? 'exporting…' : 'csv export'}
-          </button>
+          <ExportButton onClick={handleExport} disabled={loading} busy={exporting} />
         </div>
       </header>
 

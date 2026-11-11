@@ -2,9 +2,10 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams } from 'next/navigation'
-import { Search, RefreshCw, AlertTriangle, Download } from 'lucide-react'
+import { Search, RefreshCw, AlertTriangle } from 'lucide-react'
 import { getGymTheme } from '@/lib/gymThemes'
 import MemberProfileDrawer from '@/components/MemberProfileDrawer'
+import ExportButton from '@/components/ExportButton'
 import { CATEGORY_OPTIONS, classifyMembershipType, classifyMembershipTypeAll } from '@/lib/membershipCategory'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -373,13 +374,7 @@ export default function MembersPage() {
           )}
         </div>
         {!loading && members.length > 0 && (
-          <button
-            onClick={exportCSV}
-            title="export csv"
-            className="p-1.5 rounded-lg text-neutral-500 hover:text-white hover:bg-white/5 transition-colors"
-          >
-            <Download size={15} />
-          </button>
+          <ExportButton onClick={exportCSV} />
         )}
       </header>
 
