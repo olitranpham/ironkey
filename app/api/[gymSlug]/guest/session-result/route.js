@@ -13,8 +13,8 @@ const PENDING = () => NextResponse.json({ ok: false, pending: true })
  * Never returns the access code. Returns { ok: true, sentTo, accessNotice } once the
  * session is a PAID checkout on this gym's Stripe account and the webhook has
  * saved the guest's code (which it emails); otherwise { ok: false, pending: true }
- * with no guest data. accessNotice is the pass's code window for gyms with
- * access hours (lib/accessHours), else null.
+ * with no guest data. accessNotice is set when the pass's code window starts
+ * later (bought outside the gym's access hours — lib/accessHours), else null.
  */
 export async function GET(request, { params }) {
   try {

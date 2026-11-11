@@ -20,7 +20,7 @@ export async function GET(request, { params }) {
 
     const now = new Date()
     const { endsAt } = accessWindow(gym, now)
-    return NextResponse.json({ notice: accessNotice(gym, { at: now, endsAt }, { deferredOnly: true }) })
+    return NextResponse.json({ notice: accessNotice(gym, { at: now, endsAt }) })
   } catch (error) {
     console.error('[guest/access-notice]', error.message)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

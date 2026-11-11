@@ -619,6 +619,12 @@ export default function GuestPage() {
           >
             <SectionDivider label="guest pass registration" />
 
+            {accessNotice && (
+              <p className="text-xs text-amber-300 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
+                {accessNotice}
+              </p>
+            )}
+
             {/* Name */}
             <div className="grid grid-cols-2 gap-3">
               <Field label="first name" required>
@@ -916,12 +922,6 @@ export default function GuestPage() {
               />
             </Field>
 
-            {accessNotice && (
-              <p className="text-xs text-amber-300 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
-                {accessNotice}
-              </p>
-            )}
-
             {error && (
               <p className="text-xs text-rose-400 bg-rose-500/10 border border-rose-500/20 rounded-lg px-3 py-2">
                 {error}
@@ -1004,6 +1004,12 @@ export default function GuestPage() {
               <p className="text-xs text-neutral-500 mt-1">{lookupEmail}</p>
             </div>
 
+            {accessNotice && (
+              <p className="text-xs text-amber-300 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
+                {accessNotice}
+              </p>
+            )}
+
             {/* Name */}
             <Field label="full name" required>
               <input
@@ -1055,12 +1061,6 @@ export default function GuestPage() {
                 className={INPUT}
               />
             </Field>
-
-            {accessNotice && (
-              <p className="text-xs text-amber-300 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
-                {accessNotice}
-              </p>
-            )}
 
             {error && (
               <p className="text-xs text-rose-400 bg-rose-500/10 border border-rose-500/20 rounded-lg px-3 py-2">
