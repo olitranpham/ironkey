@@ -6,6 +6,7 @@ import { RefreshCw, Activity, Search, TrendingUp, Lock, Unlock, AlertTriangle } 
 import { getGymTheme } from '@/lib/gymThemes'
 import { buildRetentionData, retentionTick } from '@/lib/retentionChart'
 import MemberProfileDrawer from '@/components/MemberProfileDrawer'
+import ConfirmModal from '@/components/ConfirmModal'
 import { overdueMessage } from '@/lib/overdueMessage'
 import {
   AreaChart,
@@ -97,6 +98,7 @@ export default function DashboardPage() {
   const [removing,       setRemoving]       = useState(false)
   const [removeError,    setRemoveError]    = useState(null)
   const [actionError,    setActionError]    = useState(null) // e.g. reverse-cancel failure
+  const [statusModal,    setStatusModal]    = useState(null) // freeze/cancel dialog: { memberId, newStatus, stage: 'confirm'|'overdue', amountDueFmt, canOverride, error }
   const [successBanner,  setSuccessBanner]  = useState(null) // string | null, auto-dismisses
 
   const timerRef     = useRef(null)
@@ -114,44 +116,53 @@ export default function DashboardPage() {
     closeTimer.current = setTimeout(() => setSelectedMember(null), 220)
   }
 
-  // Status changes go through the Stripe/door-aware routes, never a raw PATCH
+  // Status changes go through the Stripe/door-aware routes, never a raw PATCH.
+  // Freeze / cancel confirm in an in-app dialog first; resume runs directly.
   const STATUS_ACTIONS = {
-    FROZEN:   { route: 'freeze', confirm: 'Freeze this membership? Billing will be paused and their door access removed.' },
-    CANCELED: { route: 'cancel', confirm: 'Cancel this membership at the end of the current billing period?' },
+    FROZEN:   { route: 'freeze', title: 'freeze membership?', confirm: 'Freeze this membership? Billing will be paused and their door access removed.', cta: 'yes, freeze', ctaCls: 'bg-sky-500/10 text-sky-400 hover:bg-sky-500/20', overrideCta: 'freeze anyway' },
+    CANCELED: { route: 'cancel', title: 'cancel membership?', confirm: 'Cancel this membership at the end of the current billing period?', cta: 'yes, cancel', ctaCls: 'bg-red-500/10 text-red-400 hover:bg-red-500/20', overrideCta: 'cancel membership anyway' },
     ACTIVE:   { route: 'resume' },
   }
 
-  async function handleStatusChange(memberId, newStatus) {
+  function handleStatusChange(memberId, newStatus) {
     const action = STATUS_ACTIONS[newStatus]
     if (!action) return
-    if (action.confirm && !confirm(action.confirm)) return
+    setActionError(null)
+    if (action.confirm) {
+      setStatusModal({ memberId, newStatus, stage: 'confirm', error: null })
+      return
+    }
+    runStatusChange(memberId, newStatus)
+  }
+
+  async function runStatusChange(memberId, newStatus, { override = false } = {}) {
+    const action  = STATUS_ACTIONS[newStatus]
+    const inModal = Boolean(action.confirm)
     setUpdatingStatus(true)
     setActionError(null)
+    if (inModal) setStatusModal(prev => prev && { ...prev, error: null })
     try {
       const token = localStorage.getItem('ik_token')
-      const post  = override => fetch(`/api/${gymSlug}/${action.route}`, {
+      const res   = await fetch(`/api/${gymSlug}/${action.route}`, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body:    JSON.stringify({ memberId, ...(override ? { override: true } : {}) }),
       })
-      let res  = await post(false)
-      let json = await res.json().catch(() => ({}))
+      const json = await res.json().catch(() => ({}))
       // Overdue → blocked; OWNER/ADMIN may explicitly override (audited)
       if (res.status === 403 && json.overdue) {
-        const message = overdueMessage({ viewer: 'admin', amountDueFmt: json.amountDueFmt })
-        if (!json.canOverride || !confirm(`${message}\n\n${action.route} anyway?`)) {
-          setActionError(message)
-          return
-        }
-        res  = await post(true)
-        json = await res.json().catch(() => ({}))
+        setStatusModal({ memberId, newStatus, stage: 'overdue', amountDueFmt: json.amountDueFmt, canOverride: Boolean(json.canOverride), error: null })
+        return
       }
       if (!res.ok) throw new Error(requestError(res, json))
       const { member: updated } = json
       setMembers(prev => prev.map(m => m.id === memberId ? { ...m, ...updated } : m))
       setSelectedMember(prev => prev?.id === memberId ? { ...prev, ...updated } : prev)
+      if (inModal) setStatusModal(null)
     } catch (err) {
-      setActionError(err.message || 'something went wrong — please try again')
+      const message = err.message || 'something went wrong — please try again'
+      if (inModal) setStatusModal(prev => prev && { ...prev, error: message })
+      else setActionError(message)
     } finally {
       setUpdatingStatus(false)
     }
@@ -394,6 +405,31 @@ export default function DashboardPage() {
           setSelectedMember(prev => prev?.id === updated.id ? { ...prev, ...updated } : prev)
         }}
       />
+
+      {/* ── Freeze / cancel confirm (then the overdue override) ────────────── */}
+      {statusModal && (() => {
+        const action  = STATUS_ACTIONS[statusModal.newStatus]
+        const member  = members.find(m => m.id === statusModal.memberId) ?? selectedMember
+        const overdue = statusModal.stage === 'overdue'
+        return (
+          <ConfirmModal
+            title={overdue ? 'overdue balance' : action.title}
+            subtitle={member ? `${member.firstName} ${member.lastName}` : null}
+            error={statusModal.error}
+            loading={updatingStatus}
+            confirmLabel={overdue ? action.overrideCta : action.cta}
+            confirmClassName={overdue ? 'bg-red-500/10 text-red-400 hover:bg-red-500/20' : action.ctaCls}
+            onConfirm={overdue && !statusModal.canOverride
+              ? undefined
+              : () => runStatusChange(statusModal.memberId, statusModal.newStatus, { override: overdue })}
+            onClose={() => setStatusModal(null)}
+          >
+            {overdue
+              ? <p className="text-amber-300">{overdueMessage({ viewer: 'admin', amountDueFmt: statusModal.amountDueFmt })}</p>
+              : <p>{action.confirm}</p>}
+          </ConfirmModal>
+        )
+      })()}
 
       {/* ── Remove member confirm modal ───────────────────────────────────── */}
       {removeTarget && (
