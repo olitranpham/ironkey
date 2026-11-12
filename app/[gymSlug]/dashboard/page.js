@@ -6,6 +6,7 @@ import { RefreshCw, Activity, Search, TrendingUp, Lock, Unlock, AlertTriangle } 
 import { getGymTheme } from '@/lib/gymThemes'
 import { buildRetentionData, retentionTick } from '@/lib/retentionChart'
 import MemberProfileDrawer from '@/components/MemberProfileDrawer'
+import { overdueMessage } from '@/lib/overdueMessage'
 import {
   AreaChart,
   Area,
@@ -137,9 +138,9 @@ export default function DashboardPage() {
       let json = await res.json().catch(() => ({}))
       // Overdue → blocked; OWNER/ADMIN may explicitly override (audited)
       if (res.status === 403 && json.overdue) {
-        const owed = json.amountDueFmt ? ` overdue balance: ${json.amountDueFmt}.` : ''
-        if (!json.canOverride || !confirm(`${json.error}${owed}\n\n${action.route} anyway?`)) {
-          setActionError(`${json.error}${owed}`)
+        const message = overdueMessage({ viewer: 'admin', amountDueFmt: json.amountDueFmt })
+        if (!json.canOverride || !confirm(`${message}\n\n${action.route} anyway?`)) {
+          setActionError(message)
           return
         }
         res  = await post(true)

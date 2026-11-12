@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation'
 import { Loader2, ChevronLeft, Snowflake, PlayCircle, XCircle } from 'lucide-react'
 import PublicPageHeader from '@/components/PublicPageHeader'
 import { Field, INPUT, BUTTON_PRIMARY } from '@/components/PublicPageStyles'
+import { overdueMessage } from '@/lib/overdueMessage'
 
 const STATUS_LABEL = {
   ACTIVE:   'active',
@@ -243,7 +244,7 @@ export default function MembershipManagerPage() {
 
             {member.overdue && (
               <div className="bg-[#1c1c1c] border border-amber-500/20 rounded-2xl p-5 flex flex-col gap-3 shadow-2xl">
-                <p className="text-sm text-amber-300">you have an overdue balance. pay it to freeze or cancel your membership.</p>
+                <p className="text-sm text-amber-300">{overdueMessage()}</p>
                 {payState === 'declined' ? (
                   <>
                     <p className="text-xs text-neutral-400">your card on file was declined.</p>

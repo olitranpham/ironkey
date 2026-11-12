@@ -6,6 +6,7 @@ import { Search, RefreshCw, AlertTriangle } from 'lucide-react'
 import { getGymTheme } from '@/lib/gymThemes'
 import MemberProfileDrawer from '@/components/MemberProfileDrawer'
 import ExportButton from '@/components/ExportButton'
+import { overdueMessage } from '@/lib/overdueMessage'
 import { CATEGORY_OPTIONS, classifyMembershipType, classifyMembershipTypeAll } from '@/lib/membershipCategory'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -238,7 +239,7 @@ export default function MembersPage() {
       const json = await res.json().catch(() => ({}))
       // Overdue → blocked; OWNER/ADMIN get an explicit "… anyway" in the modal
       if (res.status === 403 && json.overdue) {
-        setOverdueBlock({ message: json.error, amountDueFmt: json.amountDueFmt, canOverride: Boolean(json.canOverride) })
+        setOverdueBlock({ amountDueFmt: json.amountDueFmt, canOverride: Boolean(json.canOverride) })
         return
       }
       if (!res.ok) throw new Error(requestError(res, json))
@@ -592,8 +593,7 @@ function ConfirmModal({ action, member, loading, error, overdueBlock, onOverride
         {overdueBlock && (
           <div className="mb-3 space-y-1.5">
             <p className="text-xs text-amber-300 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
-              {overdueBlock.message}
-              {overdueBlock.amountDueFmt && <> overdue balance: {overdueBlock.amountDueFmt}.</>}
+              {overdueMessage({ viewer: 'admin', amountDueFmt: overdueBlock.amountDueFmt })}
             </p>
             {overdueBlock.canOverride && (
               <button
