@@ -3,6 +3,7 @@
 import { useParams } from 'next/navigation'
 import { useCallback, useEffect, useState } from 'react'
 import { Loader2 } from 'lucide-react'
+import { requestError } from '@/lib/requestError'
 
 const token = () => localStorage.getItem('ik_token')
 
@@ -14,11 +15,6 @@ const STATUS_STYLE = {
   converted: 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20',
 }
 
-// User-facing message for a failed API call; 403 means the user lacks the permission.
-function requestError(res, json) {
-  if (res.status === 403) return "you don't have permission to do that"
-  return json?.error || `request failed (${res.status})`
-}
 
 export default function LeadsPage() {
   const { gymSlug } = useParams()

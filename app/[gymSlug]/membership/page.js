@@ -45,6 +45,7 @@ async function memberFetch(url, options = {}) {
 }
 
 function formatCard(card) {
+  if (card.label) return card.label   // non-card default (link, bank, …)
   const exp = `${String(card.expMonth).padStart(2, '0')}/${String(card.expYear).slice(-2)}`
   return `${card.brand} •••• ${card.last4} · exp ${exp}`
 }

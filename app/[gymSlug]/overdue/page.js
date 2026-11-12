@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams } from 'next/navigation'
 import { AlertTriangle, X, CreditCard, User } from 'lucide-react'
 import { getGymTheme } from '@/lib/gymThemes'
-import { DrawerSection, DrawerField } from '@/components/MemberProfileDrawer'
+import { DrawerSection, DrawerField } from '@/components/DrawerParts'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 

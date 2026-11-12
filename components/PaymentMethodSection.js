@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { CreditCard, RefreshCw, Copy, Mail, Check, Loader2 } from 'lucide-react'
-import { DrawerSection, DrawerField } from '@/components/MemberProfileDrawer'
+import { DrawerSection, DrawerField } from '@/components/DrawerParts'
 import ConfirmModal from '@/components/ConfirmModal'
 
 function auth() {
@@ -11,6 +11,7 @@ function auth() {
 }
 
 function formatCard(card) {
+  if (card.label) return card.label   // non-card default (link, bank, …)
   const exp = `${String(card.expMonth).padStart(2, '0')}/${String(card.expYear).slice(-2)}`
   return `${card.brand} •••• ${card.last4} · exp ${exp}`
 }

@@ -1,13 +1,11 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useParams } from 'next/navigation'
-import { Search, RefreshCw, AlertTriangle } from 'lucide-react'
-import { getGymTheme } from '@/lib/gymThemes'
-import MemberProfileDrawer from '@/components/MemberProfileDrawer'
+import { Search, RefreshCw } from 'lucide-react'
 import ExportButton from '@/components/ExportButton'
-import ConfirmModal from '@/components/ConfirmModal'
-import { overdueMessage } from '@/lib/overdueMessage'
+import MemberDrawer from '@/components/member-drawer/MemberDrawer'
+import { useMemberParam } from '@/components/member-drawer/useMemberParam'
 import { CATEGORY_OPTIONS, classifyMembershipType, classifyMembershipTypeAll } from '@/lib/membershipCategory'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -23,67 +21,6 @@ const STATUS_TEXT = {
 }
 
 const AVATAR_COLOR = 'bg-white'
-
-const CONFIRM_COPY = {
-  freeze: {
-    title:   'freeze membership?',
-    bullets: [
-      'access will be removed immediately',
-      'maximum freeze duration is 6 months',
-      'you can resume the membership at any time',
-    ],
-    cta:     'yes, freeze',
-    ctaCls:  'bg-sky-500/10 text-sky-400 hover:bg-sky-500/20',
-  },
-  cancel: {
-    title:   'cancel membership?',
-    bullets: [
-      'the member stays active until their billing period ends',
-      'their door access is preserved until stripe confirms cancellation',
-      'a cancellation scheduled event will be logged today',
-    ],
-    cta:     'yes, cancel',
-    ctaCls:  'bg-red-500/10 text-red-400 hover:bg-red-500/20',
-  },
-  resume: {
-    title:   'resume membership?',
-    bullets: [
-      'the member will regain immediate access',
-      'their membership will return to active status',
-    ],
-    cta:     'yes, resume',
-    ctaCls:  'bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20',
-  },
-  overdue: {
-    title:   'mark as overdue?',
-    bullets: [
-      'the member will appear on the overdue payments page',
-      'their access is not affected until you cancel',
-    ],
-    cta:     'yes, mark overdue',
-    ctaCls:  'bg-amber-500/10 text-amber-400 hover:bg-amber-500/20',
-  },
-  remove: {
-    title:   'remove member?',
-    bullets: [
-      'their record will be permanently deleted',
-      'their door access code will be removed from the lock',
-      'this action cannot be undone',
-    ],
-    cta:     'yes, remove',
-    ctaCls:  'bg-red-500/10 text-red-400 hover:bg-red-500/20',
-  },
-  'reverse-cancel': {
-    title:   'reverse cancellation?',
-    bullets: [
-      'only works if their billing period hasn’t ended yet',
-      'their membership stays active on its normal schedule',
-      'their door code is reissued only if it was already revoked — otherwise it’s untouched',
-    ],
-    cta:     'yes, reverse cancellation',
-    ctaCls:  'bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20',
-  },
-}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -101,15 +38,8 @@ function fmtDate(iso) {
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
-// User-facing message for a failed API call; 403 means the user lacks the permission.
-function requestError(res, json) {
-  if (res.status === 403) return "you don't have permission to do that"
-  return json?.error || `request failed (${res.status})`
-}
-
 export default function MembersPage() {
   const { gymSlug } = useParams()
-  const { membershipBorder } = getGymTheme(gymSlug)
   const tabs = FLEX_GYMS.has(gymSlug) ? ALL_TABS : ALL_TABS.filter(t => t !== 'flex')
 
   const [members,   setMembers]   = useState([])
@@ -119,18 +49,8 @@ export default function MembersPage() {
   const [activeTab,  setActiveTab]  = useState('active')
   const [typeFilter, setTypeFilter] = useState('')
 
-  // Slide-out panel
-  const [selectedMember, setSelectedMember] = useState(null)
-  const [panelOpen,      setPanelOpen]      = useState(false)
-  const closeTimer = useRef(null)
-
-  // Confirm modal
-  const [confirmModal,    setConfirmModal]    = useState(null) // { action, member }
-  const [actionLoading,   setActionLoading]   = useState(false)
-  const [actionError,     setActionError]     = useState(null)
-  // Freeze / cancel refused because the membership is overdue — { message, amountDueFmt, canOverride }
-  const [overdueBlock,    setOverdueBlock]    = useState(null)
-  const [successBanner,   setSuccessBanner]   = useState(null) // string | null, auto-dismisses
+  // Member drawer — ?member=<id>&tab=<tab>
+  const drawer = useMemberParam('overview')
 
   // ── Fetch ────────────────────────────────────────────────────────────────
 
@@ -152,123 +72,6 @@ export default function MembersPage() {
   }, [gymSlug])
 
   useEffect(() => { fetchMembers() }, [fetchMembers])
-
-  // ── Panel helpers ────────────────────────────────────────────────────────
-
-  function openPanel(member) {
-    setSelectedMember(member)
-    setPanelOpen(true)
-  }
-
-  function closePanel() {
-    setPanelOpen(false)
-    clearTimeout(closeTimer.current)
-    closeTimer.current = setTimeout(() => setSelectedMember(null), 220)
-  }
-
-  // ── Action helpers ───────────────────────────────────────────────────────
-
-  async function handleSaveAccessCode(memberId, code) {
-    console.log('[handleSaveAccessCode] memberId=%s code=%s', memberId, code)
-    try {
-      const token = localStorage.getItem('ik_token')
-      const res = await fetch(`/api/${gymSlug}/members/${memberId}`, {
-        method:  'PATCH',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body:    JSON.stringify({ accessCode: code }),
-      })
-      console.log('[handleSaveAccessCode] response status:', res.status)
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}))
-        console.error('[handleSaveAccessCode] error:', err)
-        throw new Error(err.error ?? 'Failed')
-      }
-      const { member: updated } = await res.json()
-      console.log('[handleSaveAccessCode] updated member:', updated)
-      setMembers(prev => prev.map(m => m.id === memberId ? { ...m, ...updated } : m))
-      setSelectedMember(prev => prev?.id === memberId ? { ...prev, ...updated } : prev)
-    } catch (err) {
-      console.error('[handleSaveAccessCode] caught:', err.message)
-      alert(err.message)   // e.g. 409 "code already in use"
-    }
-  }
-
-  async function handleSaveField(memberId, fields) {
-    try {
-      const token = localStorage.getItem('ik_token')
-      const res = await fetch(`/api/${gymSlug}/members/${memberId}`, {
-        method:  'PATCH',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body:    JSON.stringify(fields),
-      })
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}))
-        throw new Error(err.error ?? 'Failed')
-      }
-      const { member: updated } = await res.json()
-      setMembers(prev => prev.map(m => m.id === memberId ? { ...m, ...updated } : m))
-      setSelectedMember(prev => prev?.id === memberId ? { ...prev, ...updated } : prev)
-    } catch (err) {
-      console.error('[handleSaveField] caught:', err.message)
-    }
-  }
-
-  async function confirmAction({ override = false } = {}) {
-    const { action, member } = confirmModal
-    setActionLoading(true)
-    setActionError(null)
-    try {
-      const token = localStorage.getItem('ik_token')
-
-      if (action === 'remove') {
-        const res = await fetch(`/api/${gymSlug}/members/${member.id}`, {
-          method:  'DELETE',
-          headers: { Authorization: `Bearer ${token}` },
-        })
-        if (!res.ok) throw new Error(requestError(res, await res.json().catch(() => ({}))))
-        setMembers(prev => prev.filter(m => m.id !== member.id))
-        setConfirmModal(null)
-        closePanel()
-        return
-      }
-
-      const res  = await fetch(`/api/${gymSlug}/${action}`, {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body:    JSON.stringify({ memberId: member.id, ...(override ? { override: true } : {}) }),
-      })
-      const json = await res.json().catch(() => ({}))
-      // Overdue → blocked; the overdue dialog offers OWNER/ADMIN an explicit "… anyway"
-      if (res.status === 403 && json.overdue) {
-        setOverdueBlock({ amountDueFmt: json.amountDueFmt, canOverride: Boolean(json.canOverride) })
-        return
-      }
-      if (!res.ok) throw new Error(requestError(res, json))
-      setOverdueBlock(null)
-      const { member: updated } = json
-      setMembers(prev => prev.map(m => m.id === updated.id ? { ...m, ...updated } : m))
-      setSelectedMember(prev => prev?.id === updated.id ? { ...prev, ...updated } : prev)
-      if (json.error === 'stripe_dashboard_sub') {
-        setActionError(json.message)
-        // Leave modal open so the owner sees the message
-      } else {
-        setConfirmModal(null)
-        if (action === 'reverse-cancel') {
-          setSuccessBanner(
-            json.codeReissued
-              ? `cancellation reversed — their old code was revoked, new code: ${json.accessCode}`
-              : 'cancellation reversed — their existing door code is unaffected'
-          )
-          setTimeout(() => setSuccessBanner(null), 8000)
-        }
-      }
-    } catch (err) {
-      console.error('[confirmAction]', err)
-      setActionError(err.message || 'something went wrong — please try again')
-    } finally {
-      setActionLoading(false)
-    }
-  }
 
   // ── CSV export ───────────────────────────────────────────────────────────
 
@@ -388,13 +191,6 @@ export default function MembersPage() {
         )}
       </header>
 
-      {/* Success banner (e.g. reverse-cancellation result) */}
-      {successBanner && (
-        <div className="shrink-0 px-6 py-2 bg-emerald-500/10 border-b border-emerald-500/20">
-          <p className="text-xs text-emerald-400">{successBanner}</p>
-        </div>
-      )}
-
       {/* Main */}
       <main className="md:flex-1 flex flex-col p-5 gap-4 md:overflow-hidden md:min-h-0">
 
@@ -469,7 +265,7 @@ export default function MembersPage() {
                   {visible.map((m, i) => (
                     <tr
                       key={m.id}
-                      onClick={() => openPanel(m)}
+                      onClick={() => drawer.openMember(m.id)}
                       className={`group hover:bg-white/5 transition-colors cursor-pointer ${i % 2 === 0 ? 'bg-white/[0.02]' : ''}`}
                     >
                       {/* Name + email + avatar */}
@@ -505,123 +301,17 @@ export default function MembersPage() {
         </div>
       </main>
 
-      <MemberProfileDrawer
-        member={selectedMember}
-        open={panelOpen}
+      <MemberDrawer
         gymSlug={gymSlug}
-        membershipBorder={membershipBorder}
-        onClose={closePanel}
-        onStatusChange={(memberId, newStatus) => {
-          const actionMap = { FROZEN: 'freeze', CANCELED: 'cancel', ACTIVE: 'resume' }
-          setActionError(null)
-          setOverdueBlock(null)
-          setConfirmModal({ action: actionMap[newStatus], member: selectedMember })
-        }}
-        onReverseCancel={() => {
-          setActionError(null)
-          setConfirmModal({ action: 'reverse-cancel', member: selectedMember })
-        }}
-        onRemoveMember={() => {
-          setActionError(null)
-          setConfirmModal({ action: 'remove', member: selectedMember })
-        }}
-        onSaveAccessCode={handleSaveAccessCode}
-        onSaveField={handleSaveField}
-        updating={actionLoading}
-        onPlanChanged={updated => {
-          setMembers(prev => prev.map(m => m.id === updated.id ? { ...m, ...updated } : m))
-          setSelectedMember(prev => prev?.id === updated.id ? { ...prev, ...updated } : prev)
-        }}
+        memberId={drawer.memberId}
+        initialTab={drawer.tab}
+        seed={members.find(m => m.id === drawer.memberId)}
+        onClose={drawer.close}
+        onTabChange={drawer.setTab}
+        onMemberUpdated={updated => setMembers(prev => prev.map(m => m.id === updated.id ? { ...m, ...updated } : m))}
+        onMemberRemoved={id => setMembers(prev => prev.filter(m => m.id !== id))}
       />
 
-      {/* ── Confirm modal — swapped for the overdue dialog when blocked ───── */}
-      {confirmModal && !overdueBlock && (
-        <MemberActionModal
-          action={confirmModal.action}
-          member={confirmModal.member}
-          loading={actionLoading}
-          error={actionError}
-          onConfirm={confirmAction}
-          onClose={() => { setConfirmModal(null); setActionError(null) }}
-        />
-      )}
-      {confirmModal && overdueBlock && (
-        <ConfirmModal
-          title="overdue balance"
-          subtitle={`${confirmModal.member.firstName} ${confirmModal.member.lastName}`}
-          error={actionError}
-          loading={actionLoading}
-          confirmLabel={confirmModal.action === 'freeze' ? 'freeze anyway' : 'cancel membership anyway'}
-          confirmClassName="bg-red-500/10 text-red-400 hover:bg-red-500/20"
-          onConfirm={overdueBlock.canOverride ? () => confirmAction({ override: true }) : undefined}
-          onClose={() => { setConfirmModal(null); setActionError(null); setOverdueBlock(null) }}
-        >
-          <p className="text-amber-300">{overdueMessage({ viewer: 'admin', amountDueFmt: overdueBlock.amountDueFmt })}</p>
-        </ConfirmModal>
-      )}
-
     </div>
   )
 }
-
-// ── Confirm modal ─────────────────────────────────────────────────────────────
-
-function MemberActionModal({ action, member, loading, error, onConfirm, onClose }) {
-  const copy = CONFIRM_COPY[action]
-  if (!copy) return null
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/70" onClick={!loading ? onClose : undefined} />
-
-      {/* Card */}
-      <div className="relative bg-[#1c1c1c] border border-neutral-800 rounded-xl w-full max-w-sm p-6 shadow-2xl">
-
-        {/* Icon */}
-        <div className="flex items-center gap-3 mb-4">
-          <div className="w-9 h-9 rounded-lg bg-neutral-800 flex items-center justify-center shrink-0">
-            <AlertTriangle size={16} className="text-neutral-400" />
-          </div>
-          <div>
-            <p className="text-sm font-semibold text-white">{copy.title}</p>
-            <p className="text-xs text-neutral-500">{member.firstName} {member.lastName}</p>
-          </div>
-        </div>
-
-        {/* Bullets */}
-        <ul className="space-y-1.5 mb-5">
-          {copy.bullets.map((b, i) => (
-            <li key={i} className="flex items-start gap-2 text-xs text-neutral-400">
-              <span className="mt-1.5 w-1 h-1 rounded-full bg-neutral-600 shrink-0" />
-              {b}
-            </li>
-          ))}
-        </ul>
-
-        {/* Error */}
-        {error && <p className="text-xs text-red-400 mb-3">{error}</p>}
-
-        {/* Buttons */}
-        <div className="flex gap-2">
-          <button
-            onClick={onClose}
-            disabled={loading}
-            className="flex-1 py-2 rounded-lg text-xs font-medium text-neutral-400 border border-neutral-700 hover:text-white hover:border-neutral-600 disabled:opacity-40 transition-colors"
-          >
-            cancel
-          </button>
-          <button
-            onClick={() => onConfirm()}
-            disabled={loading}
-            className={`flex-1 py-2 rounded-lg text-xs font-medium disabled:opacity-40 transition-colors ${copy.ctaCls}`}
-          >
-            {loading ? 'please wait…' : copy.cta}
-          </button>
-        </div>
-
-      </div>
-    </div>
-  )
-}
-

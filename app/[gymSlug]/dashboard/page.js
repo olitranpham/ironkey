@@ -2,12 +2,11 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams } from 'next/navigation'
-import { RefreshCw, Activity, Search, TrendingUp, Lock, Unlock, AlertTriangle } from 'lucide-react'
+import { RefreshCw, Activity, Search, TrendingUp, Lock, Unlock } from 'lucide-react'
 import { getGymTheme } from '@/lib/gymThemes'
 import { buildRetentionData, retentionTick } from '@/lib/retentionChart'
-import MemberProfileDrawer from '@/components/MemberProfileDrawer'
-import ConfirmModal from '@/components/ConfirmModal'
-import { overdueMessage } from '@/lib/overdueMessage'
+import MemberDrawer from '@/components/member-drawer/MemberDrawer'
+import { useMemberParam } from '@/components/member-drawer/useMemberParam'
 import {
   AreaChart,
   Area,
@@ -70,12 +69,6 @@ function dateLabelFor(tab) {
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
-// User-facing message for a failed API call; 403 means the user lacks the permission.
-function requestError(res, json) {
-  if (res.status === 403) return "you don't have permission to do that"
-  return json?.error || `request failed (${res.status})`
-}
-
 export default function DashboardPage() {
   const { gymSlug } = useParams()
   const { membershipBorder } = getGymTheme(gymSlug)
@@ -91,168 +84,11 @@ export default function DashboardPage() {
   const [doorEventsLoading, setDoorEventsLoading] = useState(true)
   const [doorEventsError,   setDoorEventsError]   = useState(null)
 
-  const [selectedMember, setSelectedMember] = useState(null)
-  const [panelOpen,      setPanelOpen]      = useState(false)
-  const [updatingStatus, setUpdatingStatus] = useState(false)
-  const [removeTarget,   setRemoveTarget]   = useState(null) // member to confirm-remove
-  const [removing,       setRemoving]       = useState(false)
-  const [removeError,    setRemoveError]    = useState(null)
-  const [actionError,    setActionError]    = useState(null) // e.g. reverse-cancel failure
-  const [statusModal,    setStatusModal]    = useState(null) // freeze/cancel dialog: { memberId, newStatus, stage: 'confirm'|'overdue', amountDueFmt, canOverride, error }
-  const [successBanner,  setSuccessBanner]  = useState(null) // string | null, auto-dismisses
+  // Member drawer — ?member=<id>&tab=<tab>
+  const drawer = useMemberParam('overview')
 
   const timerRef     = useRef(null)
   const doorTimerRef = useRef(null)
-  const closeTimer   = useRef(null)
-
-  function openPanel(member) {
-    setSelectedMember(member)
-    setPanelOpen(true)
-  }
-
-  function closePanel() {
-    setPanelOpen(false)
-    clearTimeout(closeTimer.current)
-    closeTimer.current = setTimeout(() => setSelectedMember(null), 220)
-  }
-
-  // Status changes go through the Stripe/door-aware routes, never a raw PATCH.
-  // Freeze / cancel confirm in an in-app dialog first; resume runs directly.
-  const STATUS_ACTIONS = {
-    FROZEN:   { route: 'freeze', title: 'freeze membership?', confirm: 'Freeze this membership? Billing will be paused and their door access removed.', cta: 'yes, freeze', ctaCls: 'bg-sky-500/10 text-sky-400 hover:bg-sky-500/20', overrideCta: 'freeze anyway' },
-    CANCELED: { route: 'cancel', title: 'cancel membership?', confirm: 'Cancel this membership at the end of the current billing period?', cta: 'yes, cancel', ctaCls: 'bg-red-500/10 text-red-400 hover:bg-red-500/20', overrideCta: 'cancel membership anyway' },
-    ACTIVE:   { route: 'resume' },
-  }
-
-  function handleStatusChange(memberId, newStatus) {
-    const action = STATUS_ACTIONS[newStatus]
-    if (!action) return
-    setActionError(null)
-    if (action.confirm) {
-      setStatusModal({ memberId, newStatus, stage: 'confirm', error: null })
-      return
-    }
-    runStatusChange(memberId, newStatus)
-  }
-
-  async function runStatusChange(memberId, newStatus, { override = false } = {}) {
-    const action  = STATUS_ACTIONS[newStatus]
-    const inModal = Boolean(action.confirm)
-    setUpdatingStatus(true)
-    setActionError(null)
-    if (inModal) setStatusModal(prev => prev && { ...prev, error: null })
-    try {
-      const token = localStorage.getItem('ik_token')
-      const res   = await fetch(`/api/${gymSlug}/${action.route}`, {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body:    JSON.stringify({ memberId, ...(override ? { override: true } : {}) }),
-      })
-      const json = await res.json().catch(() => ({}))
-      // Overdue → blocked; OWNER/ADMIN may explicitly override (audited)
-      if (res.status === 403 && json.overdue) {
-        setStatusModal({ memberId, newStatus, stage: 'overdue', amountDueFmt: json.amountDueFmt, canOverride: Boolean(json.canOverride), error: null })
-        return
-      }
-      if (!res.ok) throw new Error(requestError(res, json))
-      const { member: updated } = json
-      setMembers(prev => prev.map(m => m.id === memberId ? { ...m, ...updated } : m))
-      setSelectedMember(prev => prev?.id === memberId ? { ...prev, ...updated } : prev)
-      if (inModal) setStatusModal(null)
-    } catch (err) {
-      const message = err.message || 'something went wrong — please try again'
-      if (inModal) setStatusModal(prev => prev && { ...prev, error: message })
-      else setActionError(message)
-    } finally {
-      setUpdatingStatus(false)
-    }
-  }
-
-  async function handleReverseCancel(memberId) {
-    setUpdatingStatus(true)
-    setActionError(null)
-    try {
-      const token = localStorage.getItem('ik_token')
-      const res = await fetch(`/api/${gymSlug}/reverse-cancel`, {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body:    JSON.stringify({ memberId }),
-      })
-      const json = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(requestError(res, json))
-      const { member: updated } = json
-      setMembers(prev => prev.map(m => m.id === memberId ? { ...m, ...updated } : m))
-      setSelectedMember(prev => prev?.id === memberId ? { ...prev, ...updated } : prev)
-      setSuccessBanner(
-        json.codeReissued
-          ? `cancellation reversed — their old code was revoked, new code: ${json.accessCode}`
-          : 'cancellation reversed — their existing door code is unaffected'
-      )
-      setTimeout(() => setSuccessBanner(null), 8000)
-    } catch (err) {
-      setActionError(err.message || 'something went wrong — please try again')
-    } finally {
-      setUpdatingStatus(false)
-    }
-  }
-
-  async function handleConfirmRemove() {
-    if (!removeTarget) return
-    setRemoving(true)
-    setRemoveError(null)
-    try {
-      const token = localStorage.getItem('ik_token')
-      const res   = await fetch(`/api/${gymSlug}/members/${removeTarget.id}`, {
-        method:  'DELETE',
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      const json = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(requestError(res, json))
-      setMembers(prev => prev.filter(m => m.id !== removeTarget.id))
-      setRemoveTarget(null)
-      closePanel()
-    } catch (err) {
-      setRemoveError(err.message || 'something went wrong — please try again')
-    } finally {
-      setRemoving(false)
-    }
-  }
-
-  async function handleAccessCodeSave(memberId, code) {
-    try {
-      const token = localStorage.getItem('ik_token')
-      const res = await fetch(`/api/${gymSlug}/members/${memberId}`, {
-        method:  'PATCH',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body:    JSON.stringify({ accessCode: code }),
-      })
-      const json = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(requestError(res, json))
-      const { member: updated } = json
-      setMembers(prev => prev.map(m => m.id === memberId ? { ...m, ...updated } : m))
-      setSelectedMember(prev => prev?.id === memberId ? { ...prev, ...updated } : prev)
-    } catch (err) {
-      setActionError(err.message || 'could not save access code')
-    }
-  }
-
-  async function handleSaveField(memberId, fields) {
-    try {
-      const token = localStorage.getItem('ik_token')
-      const res = await fetch(`/api/${gymSlug}/members/${memberId}`, {
-        method:  'PATCH',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body:    JSON.stringify(fields),
-      })
-      const json = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(requestError(res, json))
-      const { member: updated } = json
-      setMembers(prev => prev.map(m => m.id === memberId ? { ...m, ...updated } : m))
-      setSelectedMember(prev => prev?.id === memberId ? { ...prev, ...updated } : prev)
-    } catch (err) {
-      setActionError(err.message || 'could not save changes')
-    }
-  }
 
   // ── Fetch ───────────────────────────────────────────────────────────────
 
@@ -338,20 +174,6 @@ export default function DashboardPage() {
 
       </header>
 
-      {/* Success / error banners (e.g. reverse-cancellation result) */}
-      {successBanner && (
-        <div className="shrink-0 px-6 py-2 bg-emerald-500/10 border-b border-emerald-500/20">
-          <p className="text-xs text-emerald-400">{successBanner}</p>
-        </div>
-      )}
-      {/* Fixed + z-50 so errors from actions inside the member drawer (z-40 overlay) stay visible */}
-      {actionError && (
-        <div role="alert" className="fixed top-4 left-1/2 -translate-x-1/2 z-50 w-[calc(100%-2rem)] max-w-md px-4 py-2 rounded-lg bg-neutral-900 border border-red-500/40 shadow-lg flex items-center justify-between gap-3">
-          <p className="text-xs text-red-400">{actionError}</p>
-          <button onClick={() => setActionError(null)} className="text-xs text-red-400/70 hover:text-red-400 shrink-0">dismiss</button>
-        </div>
-      )}
-
       {/* ── Body ─────────────────────────────────────────────────────────── */}
       <main className="flex-1 flex flex-col p-4 md:p-5 pb-4 md:pb-5 gap-4 overflow-y-auto lg:overflow-hidden lg:min-h-0">
 
@@ -370,7 +192,7 @@ export default function DashboardPage() {
                 setSearch={setSearch}
                 activeTab={activeTab}
                 setActiveTab={setActiveTab}
-                onRowClick={openPanel}
+                onRowClick={m => drawer.openMember(m.id)}
                 className="lg:flex-1 lg:min-h-0"
               />
               <DoorActivity
@@ -388,95 +210,16 @@ export default function DashboardPage() {
 
       </main>
 
-      <MemberProfileDrawer
-        member={selectedMember}
-        open={panelOpen}
+      <MemberDrawer
         gymSlug={gymSlug}
-        membershipBorder={membershipBorder}
-        onClose={closePanel}
-        onStatusChange={handleStatusChange}
-        onSaveAccessCode={handleAccessCodeSave}
-        onSaveField={handleSaveField}
-        onRemoveMember={() => { setRemoveError(null); setRemoveTarget(selectedMember) }}
-        onReverseCancel={() => handleReverseCancel(selectedMember.id)}
-        updating={updatingStatus}
-        onPlanChanged={updated => {
-          setMembers(prev => prev.map(m => m.id === updated.id ? { ...m, ...updated } : m))
-          setSelectedMember(prev => prev?.id === updated.id ? { ...prev, ...updated } : prev)
-        }}
+        memberId={drawer.memberId}
+        initialTab={drawer.tab}
+        seed={members.find(m => m.id === drawer.memberId)}
+        onClose={drawer.close}
+        onTabChange={drawer.setTab}
+        onMemberUpdated={updated => setMembers(prev => prev.map(m => m.id === updated.id ? { ...m, ...updated } : m))}
+        onMemberRemoved={id => setMembers(prev => prev.filter(m => m.id !== id))}
       />
-
-      {/* ── Freeze / cancel confirm (then the overdue override) ────────────── */}
-      {statusModal && (() => {
-        const action  = STATUS_ACTIONS[statusModal.newStatus]
-        const member  = members.find(m => m.id === statusModal.memberId) ?? selectedMember
-        const overdue = statusModal.stage === 'overdue'
-        return (
-          <ConfirmModal
-            title={overdue ? 'overdue balance' : action.title}
-            subtitle={member ? `${member.firstName} ${member.lastName}` : null}
-            error={statusModal.error}
-            loading={updatingStatus}
-            confirmLabel={overdue ? action.overrideCta : action.cta}
-            confirmClassName={overdue ? 'bg-red-500/10 text-red-400 hover:bg-red-500/20' : action.ctaCls}
-            onConfirm={overdue && !statusModal.canOverride
-              ? undefined
-              : () => runStatusChange(statusModal.memberId, statusModal.newStatus, { override: overdue })}
-            onClose={() => setStatusModal(null)}
-          >
-            {overdue
-              ? <p className="text-amber-300">{overdueMessage({ viewer: 'admin', amountDueFmt: statusModal.amountDueFmt })}</p>
-              : <p>{action.confirm}</p>}
-          </ConfirmModal>
-        )
-      })()}
-
-      {/* ── Remove member confirm modal ───────────────────────────────────── */}
-      {removeTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/70" onClick={!removing ? () => setRemoveTarget(null) : undefined} />
-          <div className="relative bg-[#1c1c1c] border border-neutral-800 rounded-xl w-full max-w-sm p-6 shadow-2xl">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-9 h-9 rounded-lg bg-neutral-800 flex items-center justify-center shrink-0">
-                <AlertTriangle size={16} className="text-neutral-400" />
-              </div>
-              <div>
-                <p className="text-sm font-semibold text-white">remove member?</p>
-                <p className="text-xs text-neutral-500">{removeTarget.firstName} {removeTarget.lastName}</p>
-              </div>
-            </div>
-            <ul className="space-y-1.5 mb-5">
-              {[
-                'their record will be permanently deleted',
-                'their door access code will be removed from the lock',
-                'this action cannot be undone',
-              ].map((b, i) => (
-                <li key={i} className="flex items-start gap-2 text-xs text-neutral-400">
-                  <span className="mt-1.5 w-1 h-1 rounded-full bg-neutral-600 shrink-0" />
-                  {b}
-                </li>
-              ))}
-            </ul>
-            {removeError && <p className="text-xs text-red-400 mb-3">{removeError}</p>}
-            <div className="flex gap-2">
-              <button
-                onClick={() => setRemoveTarget(null)}
-                disabled={removing}
-                className="flex-1 py-2 rounded-lg text-xs font-medium text-neutral-400 border border-neutral-700 hover:text-white hover:border-neutral-600 disabled:opacity-40 transition-colors"
-              >
-                cancel
-              </button>
-              <button
-                onClick={handleConfirmRemove}
-                disabled={removing}
-                className="flex-1 py-2 rounded-lg text-xs font-medium bg-red-500/10 text-red-400 hover:bg-red-500/20 disabled:opacity-40 transition-colors"
-              >
-                {removing ? 'removing…' : 'yes, remove'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
     </div>
   )

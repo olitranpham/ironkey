@@ -1,10 +1,10 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useParams } from 'next/navigation'
 import { RefreshCw, KeyRound, AlertTriangle, X, Search, UserPlus } from 'lucide-react'
-import { getGymTheme } from '@/lib/gymThemes'
-import MemberProfileDrawer from '@/components/MemberProfileDrawer'
+import MemberDrawer from '@/components/member-drawer/MemberDrawer'
+import { useMemberParam } from '@/components/member-drawer/useMemberParam'
 import { fillSuggestedPin } from '@/lib/suggestPin'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -42,7 +42,6 @@ const TYPE_ORDER = { guest: 0, member: 1, unknown: 2 }
 
 export default function DoorAccessPage() {
   const { gymSlug } = useParams()
-  const { membershipBorder } = getGymTheme(gymSlug)
 
   const [codes,         setCodes]         = useState([])
   const [loading,       setLoading]       = useState(true)
@@ -143,34 +142,10 @@ export default function DoorAccessPage() {
     }
   }
 
-  // ── Member profile drawer ─────────────────────────────────────────────────
-  const [selectedMember, setSelectedMember] = useState(null)
-  const [selectedCode,   setSelectedCode]   = useState(null) // Seam code obj for the open member
-  const [panelOpen,      setPanelOpen]      = useState(false)
-  const closeTimer = useRef(null)
-
-  function closePanel() {
-    setPanelOpen(false)
-    clearTimeout(closeTimer.current)
-    closeTimer.current = setTimeout(() => setSelectedMember(null), 220)
-  }
-
-  async function openMemberPanel(code) {
-    if (code.type !== 'member' || !code.memberId) return
-    setSelectedCode(code)
-    setPanelOpen(true)
-    try {
-      const token = localStorage.getItem('ik_token')
-      const res   = await fetch(`/api/${gymSlug}/members/${code.memberId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      if (!res.ok) throw new Error(`${res.status}`)
-      const { member } = await res.json()
-      setSelectedMember(member)
-    } catch {
-      closePanel()
-    }
-  }
+  // ── Member profile drawer — ?member=<id>&tab=<tab>, access tab by default ──
+  const drawer = useMemberParam('access')
+  // The open member's row in this page's lock-code list (code status, delete)
+  const selectedCode = drawer.memberId ? codes.find(c => c.type === 'member' && c.memberId === drawer.memberId) ?? null : null
 
   async function handleDeleteCode() {
     if (!selectedCode) return
@@ -183,46 +158,10 @@ export default function DoorAccessPage() {
       })
       if (!res.ok) throw new Error(`${res.status}`)
       setCodes(prev => prev.filter(c => c.id !== selectedCode.id))
-      closePanel()
+      drawer.close()
     } catch (err) {
       console.error('[door-access] delete code failed', err.message)
-      // Don't re-throw — MemberProfileDrawer has no error boundary around onDeleteCode
-    }
-  }
-
-  async function handleSaveAccessCode(memberId, code) {
-    try {
-      const token = localStorage.getItem('ik_token')
-      const res   = await fetch(`/api/${gymSlug}/members/${memberId}`, {
-        method:  'PATCH',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body:    JSON.stringify({ accessCode: code }),
-      })
-      if (!res.ok) {
-        const j = await res.json().catch(() => ({}))
-        throw new Error(j.error || 'could not save the code')
-      }
-      const { member: updated } = await res.json()
-      setSelectedMember(prev => prev?.id === memberId ? { ...prev, ...updated } : prev)
-      fetchCodes()
-    } catch (err) {
-      alert(err.message)   // e.g. 409 "code already in use"
-    }
-  }
-
-  async function handleSaveField(memberId, fields) {
-    try {
-      const token = localStorage.getItem('ik_token')
-      const res   = await fetch(`/api/${gymSlug}/members/${memberId}`, {
-        method:  'PATCH',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body:    JSON.stringify(fields),
-      })
-      if (!res.ok) throw new Error('Failed')
-      const { member: updated } = await res.json()
-      setSelectedMember(prev => prev?.id === memberId ? { ...prev, ...updated } : prev)
-    } catch {
-      // non-fatal
+      // Don't re-throw — the drawer has no error boundary around onDeleteCode
     }
   }
 
@@ -436,7 +375,7 @@ export default function DoorAccessPage() {
                     return (
                       <tr
                         key={c.id}
-                        onClick={() => openMemberPanel(c)}
+                        onClick={() => c.type === 'member' && c.memberId && drawer.openMember(c.memberId)}
                         className={`group hover:bg-white/5 transition-colors ${c.type === 'member' && c.memberId ? 'cursor-pointer' : ''} ${i % 2 === 0 ? 'bg-white/[0.02]' : ''}`}
                       >
                         {/* Name + type + time left */}
@@ -735,16 +674,16 @@ export default function DoorAccessPage() {
         </div>
       )}
 
-      <MemberProfileDrawer
-        member={selectedMember}
-        open={panelOpen}
+      <MemberDrawer
         gymSlug={gymSlug}
-        membershipBorder={membershipBorder}
-        onClose={closePanel}
-        onSaveAccessCode={handleSaveAccessCode}
-        onSaveField={handleSaveField}
-        onDeleteCode={accessProvider === 'KISI' ? undefined : handleDeleteCode}
-        simplified={true}
+        memberId={drawer.memberId}
+        initialTab={drawer.tab}
+        onClose={drawer.close}
+        onTabChange={drawer.setTab}
+        onMemberUpdated={() => fetchCodes()}
+        onMemberRemoved={() => fetchCodes()}
+        codeStatus={selectedCode && selectedCode.status ? { status: selectedCode.status, codeType: selectedCode.codeType, endsAt: selectedCode.endsAt } : undefined}
+        onDeleteCode={selectedCode && accessProvider !== 'KISI' ? handleDeleteCode : undefined}
       />
 
     </div>
