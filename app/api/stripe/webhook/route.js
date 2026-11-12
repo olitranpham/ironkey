@@ -694,6 +694,11 @@ export async function POST(request) {
 
     const isMinor = meta.isMinor === 'true'
 
+    // The checkout's Stripe customer (string, or object if expanded). Every
+    // subscription checkout creates one; PT payment links resolve theirs above.
+    const checkoutCustomerId = ptPaymentLinkCustomerId
+      ?? (typeof session.customer === 'string' ? session.customer : session.customer?.id ?? null)
+
     if (!member) {
       member = await prisma.member.create({
         data: {
@@ -705,7 +710,7 @@ export async function POST(request) {
           status:              'ACTIVE',
           membershipType:      resolvedMembershipType,
           stripeSubscriptionId: subId,
-          ...(ptPaymentLinkCustomerId ? { stripeCustomerId: ptPaymentLinkCustomerId } : {}),
+          ...(checkoutCustomerId ? { stripeCustomerId: checkoutCustomerId } : {}),
           ...agreementPending,
           priceId,
           dateAccessed:        new Date(),
@@ -734,7 +739,7 @@ export async function POST(request) {
           status:              'ACTIVE',
           membershipType:      resolvedMembershipType || undefined,
           stripeSubscriptionId: subId ?? member.stripeSubscriptionId,
-          ...(ptPaymentLinkCustomerId ? { stripeCustomerId: ptPaymentLinkCustomerId } : {}),
+          ...(checkoutCustomerId ? { stripeCustomerId: checkoutCustomerId } : {}),
           priceId:             priceId ?? member.priceId,
           dateAccessed:        new Date(),
           // Only set when the form actually submitted a phone this time —
@@ -892,7 +897,7 @@ export async function POST(request) {
       emergencyRelationship: meta.emergencyRelationship || null,
       membershipType:        membershipType.toLowerCase(),
       subId,
-      ...(ptPaymentLinkCustomerId ? { customerId: ptPaymentLinkCustomerId } : {}),
+      ...(checkoutCustomerId ? { customerId: checkoutCustomerId } : {}),
       accessCode,
     }, { reactivate: Boolean(subId), via: 'stripe_checkout' })
       .then(({ status, json }) => { if (status >= 400) console.error('[platform/webhook] members notify failed:', status, json.error) })

@@ -122,6 +122,9 @@ export async function POST(request, { params }) {
     const session = await stripe.checkout.sessions.create({
       mode:                  isRutgersPowerliftingOneOff ? 'payment' : 'subscription',
       customer_email:        email,
+      // Payment mode only makes a customer if asked — the one-off needs one so
+      // the member gets a stripeCustomerId like subscription joins do
+      ...(isRutgersPowerliftingOneOff ? { customer_creation: 'always' } : {}),
       line_items:            lineItems,
       ...(promo ? { discounts: promo.discounts } : {}),
       success_url: `${origin}/${gymSlug}/join/success?session_id={CHECKOUT_SESSION_ID}`,
