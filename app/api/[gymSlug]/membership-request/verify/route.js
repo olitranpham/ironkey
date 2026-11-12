@@ -40,7 +40,7 @@ export async function POST(request, { params }) {
       return NextResponse.json({ error: "verification email isn't available right now. please contact the gym." }, { status: 503 })
     }
 
-    const gym = await prisma.gym.findUnique({ where: { slug: gymSlug }, select: { id: true, slug: true, name: true, logoUrl: true } })
+    const gym = await prisma.gym.findUnique({ where: { slug: gymSlug }, select: { id: true, slug: true, name: true, displayName: true, logoUrl: true } })
     if (!gym) return NextResponse.json({ error: 'Gym not found' }, { status: 404 })
 
     const member = await prisma.member.findUnique({ where: { gymId_email: { gymId: gym.id, email } }, select: { id: true, email: true } })

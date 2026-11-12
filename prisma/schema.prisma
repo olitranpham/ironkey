@@ -12,6 +12,9 @@ datasource db {
 model Gym {
   id        String   @id @default(cuid())
   name      String
+  // Customer-facing brand name when it differs from `name` (e.g. Oasis Boston →
+  // "Oasis Powerlifting Club"). Null → use name. Only the verification email reads it today.
+  displayName String?
   slug      String   @unique
   timezone  String   @default("America/New_York")
 
