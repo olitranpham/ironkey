@@ -66,6 +66,12 @@ function ChartTooltip({ active, payload, label }) {
           <span className="font-semibold text-white">{fmtExact(Math.abs(p.value))}</span>
         </p>
       ))}
+      {payload[0]?.payload?.refunds > 0 && (
+        <p className="flex justify-between gap-4 text-neutral-400">
+          <span>refunds</span>
+          <span className="font-semibold text-white">−{fmtExact(payload[0].payload.refunds)}</span>
+        </p>
+      )}
     </div>
   )
 }
@@ -275,6 +281,7 @@ export default function RevenuePage() {
       pt:          m.pt ?? 0,
       guestPasses: m.guestPasses ?? 0,
       concessions: m.concessions ?? 0,
+      refunds:     m.refunds ?? 0,   // tooltip only — already netted out of the categories
       income:      entryMap[m.month]?.income   ?? 0,
       expenses:    -(entryMap[m.month]?.expenses ?? 0),  // negative → below axis
     }))

@@ -7,6 +7,8 @@ import { isPtProduct } from '@/lib/ptProducts'
 import { cachedLookup } from '@/lib/stripeLookupCache'
 import { trainerBillingProductId } from '@/lib/trainerBilling'
 
+const idOf = v => (typeof v === 'string' ? v : v?.id ?? null)
+
 // ── Server-side cache ─────────────────────────────────────────────────────────
 
 const revenueCache = new Map()
@@ -208,6 +210,20 @@ export async function GET(request, { params }) {
       })
     })
 
+    // Cents refunded on a one-time session's payment, capped at its total.
+    // The charge usually sits in the same month's charge list; otherwise the
+    // payment intent's latest charge is read (not cached — refunds can change).
+    async function refundedCents(session, chargeByIntent) {
+      const intentId = idOf(session.payment_intent)
+      if (!intentId) return 0   // $0 / fully discounted checkouts have no payment
+      let charge = chargeByIntent.get(intentId)
+      if (!charge) {
+        const intent = await stripeWithRetry(() => stripe.paymentIntents.retrieve(intentId, { expand: ['latest_charge'] })).catch(() => null)
+        charge = intent?.latest_charge && typeof intent.latest_charge === 'object' ? intent.latest_charge : null
+      }
+      return Math.min(charge?.amount_refunded ?? 0, session.amount_total ?? 0)
+    }
+
     async function categorizeOneTimeSession(session) {
       const source = session.metadata?.source
       if (source === 'concessions') return 'concessions'
@@ -269,14 +285,23 @@ export async function GET(request, { params }) {
       let ptCents          = ptShares.reduce((sum, n) => sum + n, 0)
       const membershipCents = invoiceCharges.reduce((sum, c) => sum + c.amount, 0) - ptCents
 
-      // One-time payments — paid Checkout Sessions in payment mode
+      // One-time payments — paid Checkout Sessions in payment mode, net of
+      // refunds: amount_total − the charge's amount_refunded (partial refunds
+      // included; a fully refunded session nets to $0). A refunded session
+      // still reports payment_status 'paid', so the charge is the source.
       const oneTimeSessions = sessions.filter(s => s.mode === 'payment' && s.payment_status === 'paid')
-      const categories = await Promise.all(oneTimeSessions.map(categorizeOneTimeSession))
+      const chargeByIntent  = new Map(charges.filter(c => c.payment_intent).map(c => [idOf(c.payment_intent), c]))
+      const [categories, refunded] = await Promise.all([
+        Promise.all(oneTimeSessions.map(categorizeOneTimeSession)),
+        Promise.all(oneTimeSessions.map(session => refundedCents(session, chargeByIntent))),
+      ])
 
       let guestPassCents   = 0
       let concessionsCents = 0
+      let refundCents      = 0
       oneTimeSessions.forEach((session, idx) => {
-        const amt = session.amount_total ?? 0
+        const amt = (session.amount_total ?? 0) - refunded[idx]
+        refundCents += refunded[idx]
         if (categories[idx] === 'concessions') concessionsCents += amt
         else if (categories[idx] === 'pt')     ptCents         += amt
         else                                   guestPassCents  += amt
@@ -286,10 +311,11 @@ export async function GET(request, { params }) {
       const guestPasses  = guestPassCents   / 100
       const concessions  = concessionsCents / 100
       const pt           = ptCents          / 100
+      const refunds      = refundCents      / 100
 
       console.log(
-        '[stripe/revenue] %s %s — memberships=%s pt=%s guestPasses=%s concessions=%s',
-        gymSlug, key, memberships.toFixed(2), pt.toFixed(2), guestPasses.toFixed(2), concessions.toFixed(2),
+        '[stripe/revenue] %s %s — memberships=%s pt=%s guestPasses=%s concessions=%s refunds=%s',
+        gymSlug, key, memberships.toFixed(2), pt.toFixed(2), guestPasses.toFixed(2), concessions.toFixed(2), refunds.toFixed(2),
       )
 
       return {
@@ -298,6 +324,7 @@ export async function GET(request, { params }) {
         guestPasses,
         concessions,
         pt,
+        refunds,   // one-time payments refunded this month (already netted out of the categories)
         amount: memberships + pt + guestPasses + concessions,
       }
     }))
