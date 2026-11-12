@@ -217,6 +217,7 @@ function EditGymModal({ gym, onClose, onUpdated, onDeleted, adminToken }) {
   const [zapierOpen,      setZapierOpen]      = useState(false)
   const [invalidZapier,   setInvalidZapier]   = useState([])   // keys of webhook fields that failed validation
   const [confirmDelete,   setConfirmDelete]   = useState(false)
+  const [confirmSlug,     setConfirmSlug]     = useState('')
   const [deleting,        setDeleting]        = useState(false)
 
   // Zapier webhook fields — grouped in one collapsible section
@@ -263,7 +264,8 @@ function EditGymModal({ gym, onClose, onUpdated, onDeleted, adminToken }) {
     try {
       const res = await fetch(`/api/admin/gyms/${gym.id}`, {
         method:  'DELETE',
-        headers: { Authorization: `Bearer ${adminToken}` },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
+        body:    JSON.stringify({ confirmSlug: confirmSlug.trim() }),
       })
       if (!res.ok) { const d = await res.json(); setError(d.error); setDeleting(false); return }
       onDeleted(gym.id)
@@ -372,11 +374,18 @@ function EditGymModal({ gym, onClose, onUpdated, onDeleted, adminToken }) {
             ) : (
               <div className="space-y-2">
                 <p className="text-xs text-red-400 text-center">this will permanently delete <span className="font-semibold">{gym.name.toLowerCase()}</span> and all its data</p>
+                <input
+                  type="text"
+                  value={confirmSlug}
+                  onChange={e => setConfirmSlug(e.target.value)}
+                  placeholder={`type ${gym.slug} to confirm`}
+                  className="w-full bg-[#252525] border border-red-900 rounded-lg px-3 py-2 text-xs text-white placeholder-neutral-600 font-mono focus:outline-none focus:border-red-700"
+                />
                 <div className="flex gap-2">
-                  <button type="button" onClick={() => setConfirmDelete(false)} disabled={deleting} className="flex-1 py-2 rounded-lg text-xs font-medium border border-neutral-700 text-neutral-400 hover:text-white disabled:opacity-40 transition-colors">
+                  <button type="button" onClick={() => { setConfirmDelete(false); setConfirmSlug('') }} disabled={deleting} className="flex-1 py-2 rounded-lg text-xs font-medium border border-neutral-700 text-neutral-400 hover:text-white disabled:opacity-40 transition-colors">
                     cancel
                   </button>
-                  <button type="button" onClick={handleDelete} disabled={deleting} className="flex-1 py-2 rounded-lg text-xs font-medium bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-900 disabled:opacity-40 transition-colors">
+                  <button type="button" onClick={handleDelete} disabled={deleting || confirmSlug.trim() !== gym.slug} className="flex-1 py-2 rounded-lg text-xs font-medium bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-900 disabled:opacity-40 transition-colors">
                     {deleting ? 'deleting…' : 'yes, delete'}
                   </button>
                 </div>

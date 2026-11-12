@@ -111,12 +111,19 @@ export async function PATCH(request, { params }) {
 }
 
 /**
- * DELETE /api/admin/gyms/[gymId]
- * Deletes the gym and all associated data (cascades via schema).
+ * DELETE /api/admin/gyms/[gymId]   Body: { confirmSlug }
+ * Deletes the gym and all associated data (cascades via schema). The gym's
+ * slug must be typed back in confirmSlug.
  */
 export async function DELETE(request, { params }) {
   try {
     const { gymId } = await params
+    const body = await request.json().catch(() => ({}))
+    const gym  = await prisma.gym.findUnique({ where: { id: gymId }, select: { slug: true } })
+    if (!gym) return NextResponse.json({ error: 'Gym not found' }, { status: 404 })
+    if (String(body.confirmSlug ?? '').trim() !== gym.slug) {
+      return NextResponse.json({ error: 'type the gym slug to confirm' }, { status: 400 })
+    }
     await prisma.gym.delete({ where: { id: gymId } })
     return NextResponse.json({ ok: true })
   } catch (error) {

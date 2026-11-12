@@ -1,13 +1,21 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
-import { verifyPassword, signToken, verifySuperadminCredentials } from '@/lib/auth'
+import { verifyPassword, signToken } from '@/lib/auth'
+import { hit, clientIp, tooManyRequests } from '@/lib/rateLimit'
+
+// Every attempt counts, per IP and per email (front desks share an IP, hence the higher IP limit)
+const LIMITS = [
+  { scope: 'ip',    limit: 30, windowSec: 15 * 60 },
+  { scope: 'email', limit: 10, windowSec: 15 * 60 },
+]
 
 /**
  * POST /api/auth/login
  * Body: { email, password, gymSlug? }
  *
- * 1. If email/password match ADMIN_EMAIL/ADMIN_PASSWORD_HASH env vars → superadmin JWT, redirect to /admin
- * 2. Otherwise look up gym user:
+ * Gym staff only — superadmin credentials are not accepted here (the admin
+ * portal signs in at /api/admin/login). Rate-limited per IP and per email.
+ * Looks up the gym user:
  *    - Single gym → return token + gym
  *    - Multiple gyms, no gymSlug → return { multipleGyms: true, gyms }
  *    - gymSlug provided → resolve to that gym
@@ -20,11 +28,11 @@ export async function POST(request) {
       return NextResponse.json({ error: 'Email and password are required' }, { status: 400 })
     }
 
-    // ── Superadmin check (first) ──────────────────────────────────────────────
-    if (await verifySuperadminCredentials(email, password)) {
-      const token = signToken({ role: 'SUPERADMIN' })
-      return NextResponse.json({ token, superadmin: true })
-    }
+    const ip      = clientIp(request)
+    const results = await Promise.all(LIMITS.map(l =>
+      hit(`auth-login:${l.scope}:${l.scope === 'ip' ? ip : String(email).trim().toLowerCase()}`, l.limit, l.windowSec)))
+    const blocked = results.filter(r => !r.allowed)
+    if (blocked.length) return tooManyRequests(Math.max(...blocked.map(r => r.retryAfterSec)))
 
     // ── Gym user lookup ───────────────────────────────────────────────────────
     const users = await prisma.gymUser.findMany({

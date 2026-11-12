@@ -1,13 +1,21 @@
 import { NextResponse } from 'next/server'
-import { signToken, isSuperadminConfigured, verifySuperadminCredentials } from '@/lib/auth'
+import { signSuperadminToken, isSuperadminConfigured, verifySuperadminCredentials } from '@/lib/auth'
+import { hit, clientIp, tooManyRequests } from '@/lib/rateLimit'
+
+// Every attempt counts, per IP and per email
+const LIMITS = [
+  { scope: 'ip',    limit: 10, windowSec: 15 * 60 },
+  { scope: 'email', limit: 5,  windowSec: 15 * 60 },
+]
 
 /**
  * POST /api/admin/login
  * Body: { email, password }
  *
- * Checks against ADMIN_EMAIL + ADMIN_PASSWORD_HASH env vars (bcrypt), falling
- * back to plaintext ADMIN_PASSWORD only if the hash is unset.
- * Returns a JWT with role: 'SUPERADMIN'.
+ * The only superadmin login (the admin portal's form). Checks ADMIN_EMAIL +
+ * ADMIN_PASSWORD_HASH (bcrypt); plaintext ADMIN_PASSWORD is read only while
+ * no hash is set. Rate-limited per IP and per email. Returns an 8-hour JWT
+ * with role: 'SUPERADMIN'.
  */
 export async function POST(request) {
   try {
@@ -16,6 +24,12 @@ export async function POST(request) {
     if (!email || !password) {
       return NextResponse.json({ error: 'Email and password are required' }, { status: 400 })
     }
+
+    const ip      = clientIp(request)
+    const results = await Promise.all(LIMITS.map(l =>
+      hit(`admin-login:${l.scope}:${l.scope === 'ip' ? ip : String(email).trim().toLowerCase()}`, l.limit, l.windowSec)))
+    const blocked = results.filter(r => !r.allowed)
+    if (blocked.length) return tooManyRequests(Math.max(...blocked.map(r => r.retryAfterSec)))
 
     if (!isSuperadminConfigured()) {
       console.error('[admin/login] ADMIN_EMAIL or ADMIN_PASSWORD_HASH is not set')
@@ -26,7 +40,7 @@ export async function POST(request) {
       return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 })
     }
 
-    const token = signToken({ role: 'SUPERADMIN' })
+    const token = signSuperadminToken()
     return NextResponse.json({ token })
   } catch (error) {
     console.error('[admin/login]', error.message)

@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { signToken } from '@/lib/auth'
+import { clientIp } from '@/lib/rateLimit'
+import { writeAudit } from '@/lib/audit'
 
 /**
  * POST /api/admin/gyms/[gymId]/impersonate
@@ -27,6 +29,15 @@ export async function POST(request, { params }) {
       { id: user.id, gymId: gym.id, role: user.role, impersonatedBy: 'SUPERADMIN' },
       { expiresIn: '1h' },
     )
+
+    // Who was impersonated, when and from where (actor null = superadmin)
+    writeAudit({ gym, user: null }, 'admin.impersonate_start', 'GymUser', user.id, {
+      impersonatedBy: 'SUPERADMIN',
+      targetRole:     user.role,
+      startedAt:      new Date().toISOString(),
+      ip:             clientIp(request),
+      expiresIn:      '1h',
+    })
 
     return NextResponse.json({
       token,

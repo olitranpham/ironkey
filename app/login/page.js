@@ -42,12 +42,6 @@ function LoginPage() {
       const data = await res.json()
       if (!res.ok) { setError(data.error ?? 'login failed.'); return }
 
-      if (data.superadmin) {
-        localStorage.setItem('ik_admin_token', data.token)
-        router.push('/admin')
-        return
-      }
-
       if (data.multipleGyms) {
         setGyms(data.gyms)
         setStep('pick-gym')
