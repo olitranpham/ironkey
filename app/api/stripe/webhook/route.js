@@ -20,6 +20,7 @@ import { resolveAgreement } from '@/lib/agreements'
 import { isPtProduct, oasisPtMembershipType, splitFullName } from '@/lib/ptProducts'
 import { recordPassPromotion, handleCardSetupCompleted, isTrainerBillingSubscription } from '@/lib/trainerBilling'
 import { handleMemberCardSetupCompleted, MEMBER_CARD_SETUP_KIND } from '@/lib/memberBilling'
+import { seamConfig } from '@/lib/seamConfig'
 
 /**
  * The typed waiver / agreement signature from checkout metadata, or null when
@@ -322,26 +323,16 @@ export async function POST(request) {
       // 24 hours from now, or the gym's next access-hours window (lib/accessHours)
       const guestWindow = accessWindow(gym)
       let alreadyActive = false
-      const guestSeamApiKey = gym.seamApiKey ?? process.env.SEAM_API_KEY
-      if (guestSeamApiKey) {
-        const deviceId    = gym.seamDeviceId ?? process.env.SEAM_DEVICE_ID
+      const guestSeam = seamConfig(gym)
+      if (guestSeam) {
         const seamHeaders = {
-          Authorization:  `Bearer ${guestSeamApiKey}`,
+          Authorization:  `Bearer ${guestSeam.apiKey}`,
           'Content-Type': 'application/json',
         }
         const startDt     = guestWindow.startsAt.toISOString()
         const endDt       = guestWindow.endsAt.toISOString()
         try {
-          let devices = deviceId ? [{ device_id: deviceId }] : []
-          if (!deviceId) {
-            const devRes = await fetch(`${SEAM_API}/devices/list`, {
-              method: 'POST', headers: seamHeaders, body: JSON.stringify({}),
-            })
-            if (devRes.ok) {
-              const { devices: devList = [] } = await devRes.json()
-              devices = devList
-            }
-          }
+          const devices = [{ device_id: guestSeam.deviceId }]
           // duplicate_access_code means the PIN is already taken on a lock —
           // a failure, never success. Undo this attempt's codes on the other
           // devices and retry with a fresh collision-checked PIN.
@@ -817,8 +808,7 @@ export async function POST(request) {
       return NextResponse.json({ received: true })
     }
 
-    const memberSeamApiKey   = gym.seamApiKey ?? process.env.SEAM_API_KEY
-    const memberSeamDeviceId = gym.seamDeviceId ?? process.env.SEAM_DEVICE_ID
+    const memberSeam = seamConfig(gym)
 
     // Rutgers Powerlifting Club — one-off $5 payment, club president lets
     // members in manually, so this membership type must never get a Seam
@@ -833,22 +823,10 @@ export async function POST(request) {
       // Program the lock before saving/delivering the code: a PIN that's
       // already on the lock is retried with a fresh one, and the member must
       // be sent the PIN that's actually live
-      if (memberSeamApiKey) {
+      if (memberSeam) {
         try {
-          let deviceIds = memberSeamDeviceId ? [memberSeamDeviceId] : []
-          if (!memberSeamDeviceId) {
-            const devRes = await fetch(`${SEAM_API}/devices/list`, {
-              method:  'POST',
-              headers: { Authorization: `Bearer ${memberSeamApiKey}`, 'Content-Type': 'application/json' },
-              body:    JSON.stringify({}),
-            })
-            if (devRes.ok) {
-              const { devices: devList = [] } = await devRes.json()
-              deviceIds = devList.map(d => d.device_id)
-            }
-          }
           const result = await createLockCode({
-            apiKey: memberSeamApiKey, deviceIds, gymId: gym.id, pin: accessCode,
+            apiKey: memberSeam.apiKey, deviceIds: [memberSeam.deviceId], gymId: gym.id, pin: accessCode,
             name: `${firstName} ${lastName}`, logPrefix: '[platform/webhook]',
           })
           accessCode = result.pin
@@ -994,9 +972,9 @@ export async function POST(request) {
       await revokeKisiAccess(gym, member.kisiRoleAssignmentId)
       await prisma.member.update({ where: { id: member.id }, data: { kisiRoleAssignmentId: null } })
     } else {
-      const cancelSeamApiKey = gym.seamApiKey ?? process.env.SEAM_API_KEY
-      if (member.accessCode && cancelSeamApiKey) {
-        await deleteSeamCodeByPin(cancelSeamApiKey, member.accessCode, gym.seamDeviceId, '[platform/webhook]')
+      const cancelSeam = seamConfig(gym)
+      if (member.accessCode && cancelSeam) {
+        await deleteSeamCodeByPin(cancelSeam.apiKey, member.accessCode, cancelSeam.deviceId, '[platform/webhook]')
       }
     }
 

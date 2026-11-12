@@ -3,6 +3,7 @@ import prisma from '@/lib/prisma'
 import { listEvents as listKisiEvents } from '@/lib/kisi'
 import { requirePermission } from '@/lib/permissions'
 import { redactJsonText } from '@/lib/redact'
+import { seamConfig } from '@/lib/seamConfig'
 
 const SEAM_API = 'https://connect.getseam.com'
 
@@ -50,21 +51,17 @@ export async function GET(request, { params }) {
       return NextResponse.json({ visits: [] })
     }
 
-    const apiKey   = gym.seamApiKey   ?? process.env.SEAM_API_KEY
-    const deviceId = gym.seamDeviceId ?? null   // no env fallback — must be gym-specific
-    if (!apiKey || (!deviceId && !gym.seamConnectedAccountId)) {
-      return NextResponse.json({ visits: [] })
-    }
+    // The gym's own key + device only — otherwise no lock, no Seam call
+    const seam = seamConfig(gym)
+    if (!seam) return NextResponse.json({ visits: [] })
+    const { apiKey, deviceId } = seam
 
     const headers = {
       Authorization: `Bearer ${apiKey}`,
       'Content-Type': 'application/json',
     }
-    // Scope by device ID if the gym has one, otherwise by connected account —
-    // same convention as /api/[gymSlug]/seam/events.
-    const scopeBody = deviceId
-      ? { device_id: deviceId }
-      : { connected_account_id: gym.seamConnectedAccountId }
+    // Always scoped to the gym's own device (same as /api/[gymSlug]/seam/events)
+    const scopeBody = { device_id: deviceId }
 
     // ── Find the access_code_id matching this member's PIN ──────────────────
     const codesRes = await fetch(`${SEAM_API}/access_codes/list`, {

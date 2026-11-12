@@ -3,6 +3,7 @@ import prisma from '@/lib/prisma'
 import { deleteSeamCodeById } from '@/lib/seam'
 import { requirePermission } from '@/lib/permissions'
 import { writeAudit } from '@/lib/audit'
+import { seamConfig } from '@/lib/seamConfig'
 
 // Roles that may remove a code matching no member or guest at the gym
 const UNKNOWN_CODE_ROLES = new Set(['OWNER', 'ADMIN'])
@@ -24,12 +25,13 @@ export async function DELETE(request, { params }) {
 
     const gym = await prisma.gym.findUnique({
       where:  { slug: gymSlug },
-      select: { id: true, seamApiKey: true },
+      select: { id: true, seamApiKey: true, seamDeviceId: true },
     })
     if (!gym) return NextResponse.json({ error: 'Gym not found' }, { status: 404 })
 
-    const apiKey = gym.seamApiKey ?? process.env.SEAM_API_KEY
-    if (!apiKey) return NextResponse.json({ error: 'Seam not configured' }, { status: 422 })
+    const seam = seamConfig(gym)
+    if (!seam) return NextResponse.json({ error: 'no lock connected' }, { status: 422 })
+    const { apiKey } = seam
 
     if (!UNKNOWN_CODE_ROLES.has(ctx.user.role)) {
       const [memberHolder, guestHolder] = pin ? await Promise.all([

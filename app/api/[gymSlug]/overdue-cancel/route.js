@@ -5,6 +5,7 @@ import prisma from '@/lib/prisma'
 import { deleteSeamCodeByPin } from '@/lib/seam'
 import { formatPhone } from '@/lib/phone'
 import { withPhone } from '@/lib/zapierPayload'
+import { seamConfig } from '@/lib/seamConfig'
 
 /**
  * POST /api/[gymSlug]/overdue-cancel
@@ -195,9 +196,9 @@ export async function POST(request, { params }) {
 
           // 3. Delete Seam access code and clear from DB
           if (accessCode) {
-            const seamKey = gym.seamApiKey ?? process.env.SEAM_API_KEY
-            if (seamKey) {
-              await deleteSeamCodeByPin(seamKey, accessCode, gym.seamDeviceId ?? process.env.SEAM_DEVICE_ID, '[overdue-cancel]')
+            const seam = seamConfig(gym)
+            if (seam) {
+              await deleteSeamCodeByPin(seam.apiKey, accessCode, seam.deviceId, '[overdue-cancel]')
             }
             if (member) {
               await prisma.member.update({ where: { id: member.id }, data: { accessCode: null } })

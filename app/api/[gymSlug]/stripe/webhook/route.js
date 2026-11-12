@@ -4,6 +4,7 @@ import Stripe from 'stripe'
 import prisma from '@/lib/prisma'
 import { deleteSeamCodeByPin } from '@/lib/seam'
 import { maskPin } from '@/lib/redact'
+import { seamConfig } from '@/lib/seamConfig'
 
 /**
  * POST /api/[gymSlug]/stripe/webhook
@@ -82,8 +83,9 @@ export async function POST(request, { params }) {
     console.log('[webhook] subscription deleted for member:', member.id, '| accessCode:', maskPin(member.accessCode))
 
     // ── Delete Seam access code ─────────────────────────────────────────────
-    if (member.accessCode && gym.seamApiKey) {
-      await deleteSeamCodeByPin(gym.seamApiKey, member.accessCode, gym.seamDeviceId, '[webhook]')
+    const seam = seamConfig(gym)
+    if (member.accessCode && seam) {
+      await deleteSeamCodeByPin(seam.apiKey, member.accessCode, seam.deviceId, '[webhook]')
     }
 
     // ── Ensure DB status is CANCELED ────────────────────────────────────────

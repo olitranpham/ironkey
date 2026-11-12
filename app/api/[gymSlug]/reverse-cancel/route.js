@@ -6,6 +6,7 @@ import { ensureKisiMembership } from '@/lib/kisi'
 import { requirePermission } from '@/lib/permissions'
 import { maskPin } from '@/lib/redact'
 import { writeAudit } from '@/lib/audit'
+import { seamConfig } from '@/lib/seamConfig'
 
 /**
  * POST /api/[gymSlug]/reverse-cancel
@@ -118,10 +119,11 @@ export async function POST(request, { params }) {
       // assuming, since staff could have separately removed the code by hand
       // (e.g. the door-access page's own "remove" action) independent of
       // subscription state.
-      const apiKey   = gym.seamApiKey ?? process.env.SEAM_API_KEY
-      const deviceId = gym.seamDeviceId ?? process.env.SEAM_DEVICE_ID
+      const seam     = seamConfig(gym)
+      const apiKey   = seam?.apiKey
+      const deviceId = seam?.deviceId
 
-      if (apiKey) {
+      if (seam) {
         const stillLive = member.accessCode
           ? await isAccessCodeLiveOnSeam(apiKey, deviceId, member.accessCode)
           : false

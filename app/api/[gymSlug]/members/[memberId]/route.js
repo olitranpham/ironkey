@@ -7,6 +7,7 @@ import { requirePermission, can, forbidden, trainerMemberScope, trainerMemberVie
 import { maskPin, redactJsonText } from '@/lib/redact'
 import { isPinTaken, PIN_IN_USE_ERROR } from '@/lib/pins'
 import { writeAudit } from '@/lib/audit'
+import { seamConfig } from '@/lib/seamConfig'
 
 const SEAM_API = 'https://connect.getseam.com'
 const VALID_STUDENT_CATEGORIES = ['Student', 'Military', 'EMT']
@@ -373,10 +374,11 @@ export async function DELETE(request, { params }) {
       console.log('[members DELETE] Kisi revoke — roleAssignmentId=%s ok=%s memberId=%s', member.kisiRoleAssignmentId, ok, memberId)
     } else {
       // ── Remove Seam access code ─────────────────────────────────────────
-      const apiKey   = gym.seamApiKey   ?? process.env.SEAM_API_KEY
-      const deviceId = gym.seamDeviceId ?? process.env.SEAM_DEVICE_ID
+      const seam     = seamConfig(gym)
+      const apiKey   = seam?.apiKey
+      const deviceId = seam?.deviceId
 
-      if (member.accessCode && apiKey && deviceId) {
+      if (member.accessCode && seam) {
         const { ok } = await deleteSeamCodeByPin(apiKey, member.accessCode, deviceId, '[members DELETE]')
         console.log('[members DELETE] Seam delete — pin=%s ok=%s memberId=%s', maskPin(member.accessCode), ok, memberId)
       } else {

@@ -267,15 +267,16 @@ export default function DoorAccessPage() {
       const res   = await fetch(`/api/${gymSlug}/seam/codes`, {
         headers: { Authorization: `Bearer ${token}` },
       })
-      if (res.status === 422) {
+      const json = res.ok ? await res.json() : null
+      // No Seam key or device on this gym → no lock connected (no Seam call was made)
+      if (res.status === 422 || json?.noLock) {
         setNoDevice(true)
         setCodes([])
         setFetchErr(null)
         return
       }
       if (!res.ok) throw new Error(`${res.status}`)
-      const { codes } = await res.json()
-      setCodes(codes)
+      setCodes(json.codes)
       setFetchErr(null)
     } catch {
       setFetchErr('could not load access codes')
@@ -412,8 +413,8 @@ export default function DoorAccessPage() {
             ) : noDevice ? (
               <div className="flex flex-col items-center justify-center h-48 gap-2">
                 <KeyRound size={20} className="text-neutral-700" />
-                <p className="text-sm text-neutral-500">no device configured</p>
-                <p className="text-xs text-neutral-600">add a Seam device ID in the admin portal to enable door access</p>
+                <p className="text-sm text-neutral-500">no lock connected</p>
+                <p className="text-xs text-neutral-600">add this gym's seam api key and device id in the admin portal to enable door access</p>
               </div>
             ) : fetchErr ? (
               <div className="flex flex-col items-center justify-center h-48 gap-3">

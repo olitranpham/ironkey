@@ -7,6 +7,7 @@ import { revokeAccess as revokeKisiAccess } from '@/lib/kisi'
 import { maskSecret, maskPin } from '@/lib/redact'
 import { writeAudit } from '@/lib/audit'
 import { getOverdueState, overdueAuditMeta, formatAmount, OVERDUE_MESSAGE } from '@/lib/overdue'
+import { seamConfig } from '@/lib/seamConfig'
 
 export async function POST(request, { params }) {
   try {
@@ -90,14 +91,13 @@ export async function POST(request, { params }) {
       await prisma.member.update({ where: { id: memberId }, data: { kisiRoleAssignmentId: null } })
     } else {
       // ── Delete Seam access code ─────────────────────────────────────────
-      const seamKey      = gym?.seamApiKey ?? process.env.SEAM_API_KEY
-      const seamDeviceId = gym?.seamDeviceId
-      const accessCode   = existing.accessCode
+      const seam       = seamConfig(gym)
+      const accessCode = existing.accessCode
 
-      if (seamKey && accessCode) {
-        await deleteSeamCodeByPin(seamKey, accessCode, seamDeviceId, '[freeze]')
+      if (seam && accessCode) {
+        await deleteSeamCodeByPin(seam.apiKey, accessCode, seam.deviceId, '[freeze]')
       } else {
-        console.warn('[freeze] Skipping Seam — accessCode:', maskPin(accessCode), '| key present:', Boolean(seamKey))
+        console.warn('[freeze] Skipping Seam — accessCode:', maskPin(accessCode), '| lock connected:', Boolean(seam))
       }
     }
 

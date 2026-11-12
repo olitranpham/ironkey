@@ -5,6 +5,7 @@ import { requirePermission } from '@/lib/permissions'
 import { ensureKisiMembership } from '@/lib/kisi'
 import { maskSecret, maskPin } from '@/lib/redact'
 import { writeAudit } from '@/lib/audit'
+import { seamConfig } from '@/lib/seamConfig'
 
 const SEAM_API = 'https://connect.getseam.com'
 
@@ -74,8 +75,9 @@ export async function POST(request, { params }) {
       }
     } else {
       // ── Recreate Seam access code ───────────────────────────────────────
-      const seamKey      = gym?.seamApiKey ?? process.env.SEAM_API_KEY
-      const seamDeviceId = gym?.seamDeviceId
+      const seam         = seamConfig(gym)
+      const seamKey      = seam?.apiKey
+      const seamDeviceId = seam?.deviceId
       const accessCode   = existing.accessCode
       const fullName     = `${existing.firstName} ${existing.lastName}`.trim()
 

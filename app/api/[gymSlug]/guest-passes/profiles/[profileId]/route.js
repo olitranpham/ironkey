@@ -6,6 +6,7 @@ import { requirePermission, can, forbidden } from '@/lib/permissions'
 import { maskPin } from '@/lib/redact'
 import { writeAudit } from '@/lib/audit'
 import { isPinTaken, PIN_IN_USE_ERROR } from '@/lib/pins'
+import { seamConfig } from '@/lib/seamConfig'
 
 /**
  * GET /api/[gymSlug]/guest-passes/profiles/[profileId]
@@ -162,10 +163,10 @@ export async function DELETE(request, { params }) {
         return NextResponse.json({ error: 'Profile not found' }, { status: 404 })
       }
 
-      const apiKey   = gym.seamApiKey   ?? process.env.SEAM_API_KEY
-      const deviceId = gym.seamDeviceId ?? process.env.SEAM_DEVICE_ID
-      if (profile.accessCode && apiKey) {
-        const { ok } = await deleteSeamCodeByPin(apiKey, profile.accessCode, deviceId, '[guest-profile DELETE full]')
+      const seam   = seamConfig(gym)
+      const apiKey = seam?.apiKey
+      if (profile.accessCode && seam) {
+        const { ok } = await deleteSeamCodeByPin(seam.apiKey, profile.accessCode, seam.deviceId, '[guest-profile DELETE full]')
         console.log('[guest-profile DELETE full] Seam delete — pin=%s ok=%s profileId=%s', maskPin(profile.accessCode), ok, profileId)
       } else {
         console.log('[guest-profile DELETE full] skipping Seam — accessCode=%s apiKey=%s', profile.accessCode ? maskPin(profile.accessCode) : 'none', apiKey ? '(set)' : 'MISSING')
@@ -215,10 +216,10 @@ export async function DELETE(request, { params }) {
     }
 
     // ── Remove Seam access code, if one was issued ──────────────────────────
-    const apiKey   = gym.seamApiKey   ?? process.env.SEAM_API_KEY
-    const deviceId = gym.seamDeviceId ?? process.env.SEAM_DEVICE_ID
-    if (profile.accessCode && apiKey) {
-      const { ok } = await deleteSeamCodeByPin(apiKey, profile.accessCode, deviceId, '[guest-profile DELETE]')
+    const seam   = seamConfig(gym)
+    const apiKey = seam?.apiKey
+    if (profile.accessCode && seam) {
+      const { ok } = await deleteSeamCodeByPin(seam.apiKey, profile.accessCode, seam.deviceId, '[guest-profile DELETE]')
       console.log('[guest-profile DELETE] Seam delete — pin=%s ok=%s profileId=%s', maskPin(profile.accessCode), ok, profileId)
     } else {
       console.log('[guest-profile DELETE] skipping Seam — accessCode=%s apiKey=%s', profile.accessCode ? maskPin(profile.accessCode) : 'none', apiKey ? '(set)' : 'MISSING')

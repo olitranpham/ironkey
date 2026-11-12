@@ -6,6 +6,7 @@ import { requirePermission } from '@/lib/permissions'
 import { maskPin, redactJsonText } from '@/lib/redact'
 import { writeAudit } from '@/lib/audit'
 import { planAccessCodeSync } from '@/lib/doorSync'
+import { seamConfig } from '@/lib/seamConfig'
 
 const SEAM_API = 'https://connect.getseam.com'
 
@@ -27,56 +28,20 @@ export async function GET(request, { params }) {
     const gym = await prisma.gym.findUnique({ where: { slug: gymSlug } })
     if (!gym) return NextResponse.json({ error: 'Gym not found' }, { status: 404 })
 
-    const apiKey   = gym.seamApiKey ?? process.env.SEAM_API_KEY
-    const deviceId = gym.seamDeviceId ?? process.env.SEAM_DEVICE_ID
+    const seam = seamConfig(gym)
+    console.log('[seam/codes GET] slug=%s gymId=%s seamDeviceId=%j seamApiKey=%s', gymSlug, gym.id, gym.seamDeviceId, gym.seamApiKey ? '(set)' : 'null')
 
-    console.log(
-      '[seam/codes GET] slug=%s gymId=%s seamDeviceId(db)=%j seamApiKey(db)=%s deviceId(resolved)=%j apiKey(resolved)=%s',
-      gymSlug, gym.id,
-      gym.seamDeviceId,
-      gym.seamApiKey ? '(set)' : 'null',
-      deviceId,
-      apiKey ? '(set)' : 'null',
-    )
-
-    if (!apiKey) return NextResponse.json({ error: 'Seam not configured' }, { status: 422 })
+    // No key or no device on this gym → no lock connected; nothing is fetched
+    if (!seam) return NextResponse.json({ codes: [], noLock: true })
+    const { apiKey, deviceId } = seam
 
     const seamHeaders = {
       Authorization: `Bearer ${apiKey}`,
       'Content-Type': 'application/json',
     }
 
-    // ── 1. List devices ───────────────────────────────────────────────────────
-    // If the gym has a specific device ID configured, scope to that device only.
-    // Otherwise list all devices for the connected account.
-    let devices = []
-
-    if (deviceId) {
-      devices = [{ device_id: deviceId }]
-    } else {
-      const devicesRes = await fetch(`${SEAM_API}/devices/list`, {
-        method: 'POST',
-        headers: seamHeaders,
-        body: JSON.stringify(
-          gym.seamConnectedAccountId
-            ? { connected_account_id: gym.seamConnectedAccountId }
-            : {},
-        ),
-      })
-
-      if (!devicesRes.ok) {
-        const text = await devicesRes.text()
-        console.error('[seam/codes GET] devices error:', devicesRes.status, redactJsonText(text))
-        return NextResponse.json({ error: 'Seam API error fetching devices' }, { status: 502 })
-      }
-
-      const body = await devicesRes.json()
-      devices = body.devices ?? []
-    }
-
-    if (devices.length === 0) {
-      return NextResponse.json({ codes: [] })
-    }
+    // ── 1. The gym's own device ───────────────────────────────────────────────
+    const devices = [{ device_id: deviceId }]
 
     // ── 2. Fetch access codes per device ──────────────────────────────────────
     const codeResults = await Promise.all(
@@ -343,11 +308,11 @@ export async function POST(request, { params }) {
       )
     }
 
-    const apiKey   = gym.seamApiKey ?? process.env.SEAM_API_KEY
-    const deviceId = gym.seamDeviceId ?? process.env.SEAM_DEVICE_ID
-    if (!apiKey) {
-      return NextResponse.json({ error: 'Seam not configured' }, { status: 422 })
+    const seam = seamConfig(gym)
+    if (!seam) {
+      return NextResponse.json({ error: 'no lock connected' }, { status: 422 })
     }
+    const { apiKey, deviceId } = seam
 
     // A code explicitly supplied by the caller must not collide with any
     // member, guest or partner code, or any code on the lock, at this gym
@@ -381,26 +346,8 @@ export async function POST(request, { params }) {
         return NextResponse.json({ error: 'Failed to update code on lock' }, { status: 502 })
       }
     } else {
-      // ── Create new code on device(s) ──────────────────────────────────────
-      let devices = []
-
-      if (deviceId) {
-        devices = [{ device_id: deviceId }]
-      } else {
-        const devicesRes = await fetch(`${SEAM_API}/devices/list`, {
-          method:  'POST',
-          headers: seamHeaders,
-          body:    JSON.stringify(
-            gym.seamConnectedAccountId
-              ? { connected_account_id: gym.seamConnectedAccountId }
-              : {},
-          ),
-        })
-        if (devicesRes.ok) {
-          const body = await devicesRes.json()
-          devices = body.devices ?? []
-        }
-      }
+      // ── Create new code on the gym's device ───────────────────────────────
+      const devices = [{ device_id: deviceId }]
 
       // A generated PIN that turns out to be on the lock already is retried
       // with a fresh one; a PIN staff typed in is never swapped — rejected.
