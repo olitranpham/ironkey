@@ -189,6 +189,7 @@ model Member {
   membershipEvents MembershipEvent[]
   ptSessions       PTSessionMember[]
   couponRedemptions CouponRedemption[]
+  verificationCodes MemberVerificationCode[]
 
   @@unique([gymId, email])
 
@@ -682,4 +683,23 @@ model RateLimit {
   key         String   @id
   count       Int
   windowStart DateTime
+}
+
+// ─── MemberVerificationCode ──────────────────────────────────────────────────
+// One-time email codes for the public member portal (lib/memberSession.js).
+// Only an HMAC of the code is stored. A code is usable until expiresAt, for at
+// most 5 attempts, and once (consumedAt). Sending a new code consumes older ones.
+
+model MemberVerificationCode {
+  id         String    @id @default(cuid())
+  gymId      String
+  memberId   String
+  member     Member    @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  codeHash   String
+  attempts   Int       @default(0)
+  expiresAt  DateTime
+  consumedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([memberId, createdAt])
 }

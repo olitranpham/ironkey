@@ -7,6 +7,7 @@ import { formatPhone } from '@/lib/phone'
 import { fillSuggestedPin } from '@/lib/suggestPin'
 import { formatMembershipTypeDisplay } from '@/lib/membershipCategory'
 import { AgreementSection } from '@/components/AgreementSection'
+import PaymentMethodSection from '@/components/PaymentMethodSection'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -1156,6 +1157,9 @@ function DrawerContent({ member, gymSlug, membershipBorder, onClose, onStatusCha
             </DrawerField>
           )}
         </DrawerSection>
+
+        {/* Card on file + "update payment method" link — hidden in simplified mode */}
+        {!simplified && member.id && <PaymentMethodSection gymSlug={gymSlug} member={member} />}
 
         {/* Membership history — hidden in simplified mode */}
         {!simplified && <DrawerSection icon={History} title="history">

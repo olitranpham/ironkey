@@ -25,8 +25,10 @@ export async function middleware(request) {
     (request.method === 'POST' && /^\/api\/[^/]+\/guest-passes\/checkin$/.test(pathname)) ||
     (request.method === 'POST' && /^\/api\/[^/]+\/guest-passes\/checkin\/resend$/.test(pathname)) ||
     /^\/api\/[^/]+\/flex-checkin$/.test(pathname) ||
-    /^\/api\/[^/]+\/membership-request$/.test(pathname) ||
-    (request.method === 'POST' && /^\/api\/[^/]+\/membership-request\/pay$/.test(pathname)) ||
+    // Member portal: no staff JWT — every route checks the member session
+    // cookie itself (lib/memberSession requireMemberSession), except the
+    // /verify send + confirm steps that create it
+    /^\/api\/[^/]+\/membership-request(\/|$)/.test(pathname) ||
     (request.method === 'POST' && /^\/api\/[^/]+\/stripe\/webhook$/.test(pathname)) ||
     /^\/api\/[^/]+\/join(\/|$)/.test(pathname) ||
     /^\/api\/[^/]+\/guest(\/|$)/.test(pathname) ||

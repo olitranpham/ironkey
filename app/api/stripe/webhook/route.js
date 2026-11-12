@@ -19,6 +19,7 @@ import { withPhone, stripeSessionPhone } from '@/lib/zapierPayload'
 import { resolveAgreement } from '@/lib/agreements'
 import { isPtProduct, oasisPtMembershipType, splitFullName } from '@/lib/ptProducts'
 import { recordPassPromotion, handleCardSetupCompleted, isTrainerBillingSubscription } from '@/lib/trainerBilling'
+import { handleMemberCardSetupCompleted, MEMBER_CARD_SETUP_KIND } from '@/lib/memberBilling'
 
 /**
  * The typed waiver / agreement signature from checkout metadata, or null when
@@ -184,6 +185,14 @@ export async function POST(request) {
     if (session.mode === 'setup' && meta.ironkey_kind === 'trainer_card_setup') {
       await handleCardSetupCompleted(accountStripe, gym, session)
         .catch(err => console.error('[platform/webhook] trainer card setup failed:', err.message))
+      return NextResponse.json({ received: true })
+    }
+
+    // ── Member saved a card ("update payment method": portal or staff link) ─
+    // Makes it the default and retries any open membership invoice with it
+    if (session.mode === 'setup' && meta.ironkey_kind === MEMBER_CARD_SETUP_KIND) {
+      await handleMemberCardSetupCompleted(accountStripe, gym, session)
+        .catch(err => console.error('[platform/webhook] member card setup failed:', err.message))
       return NextResponse.json({ received: true })
     }
 
