@@ -56,7 +56,7 @@ export async function POST(request, { params }) {
 
       const expiresAt = new Date(session.expires_at * 1000).toISOString()
       try {
-        await sendEmail({ to: member.email, fromName: gym.name, ...paymentLinkEmail(gym, member, session.url, expiresAt) })
+        await sendEmail({ to: member.email, ...paymentLinkEmail(gym, member, session.url, expiresAt) })
       } catch (err) {
         console.error('[members/payment-link] email failed for member %s: %s', member.id, err.message)
         return NextResponse.json({ error: "couldn't send the email — copy the link instead" }, { status: 502 })

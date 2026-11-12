@@ -48,7 +48,7 @@ export async function POST(request, { params }) {
 
     const code = await issueCode(gym.id, member.id)
     try {
-      await sendEmail({ to: member.email, fromName: gym.name, ...verificationCodeEmail(gym, code, CODE_TTL_MIN) })
+      await sendEmail({ to: member.email, ...verificationCodeEmail(gym, code, CODE_TTL_MIN) })
     } catch (err) {
       console.error('[member-verify] send failed for member %s: %s', member.id, err.message)
       return NextResponse.json({ error: "we couldn't send the code. please try again in a minute." }, { status: 502 })
