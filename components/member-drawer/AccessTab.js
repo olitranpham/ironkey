@@ -13,11 +13,13 @@ const LOCK_STATUS = {
   syncing:   { text: 'syncing',     cls: 'text-amber-400' },
   failed:    { text: 'failed',      cls: 'text-red-400' },
   notOnLock: { text: 'not on lock', cls: 'text-neutral-400' },
+  offline:   { text: 'lock offline', cls: 'text-neutral-400' },   // Seam can't read the lock's state
 }
 function lockStatus({ status, failed }) {
   if (failed) return LOCK_STATUS.failed
   if (status === 'set') return LOCK_STATUS.onLock
-  if (status === 'setting' || status === 'removing' || status === 'unknown') return LOCK_STATUS.syncing
+  if (status === 'unknown') return LOCK_STATUS.offline
+  if (status === 'setting' || status === 'removing') return LOCK_STATUS.syncing
   return LOCK_STATUS.notOnLock   // 'unset' or 'none'
 }
 
