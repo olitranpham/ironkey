@@ -55,11 +55,10 @@ function cancelWindowOpen(member) {
  *   onTabChange?: (tab: string) => void,
  *   onMemberUpdated?: (member: object) => void,
  *   onMemberRemoved?: (memberId: string) => void,
- *   codeStatus?: object,            // door access: this member's Seam code row
  *   onDeleteCode?: () => Promise<void>,
  * }} props
  */
-export default function MemberDrawer({ gymSlug, memberId, initialTab = 'overview', seed, onClose, onTabChange, onMemberUpdated, onMemberRemoved, codeStatus, onDeleteCode }) {
+export default function MemberDrawer({ gymSlug, memberId, initialTab = 'overview', seed, onClose, onTabChange, onMemberUpdated, onMemberRemoved, onDeleteCode }) {
   const open = Boolean(memberId)
   const [member, setMember]   = useState(null)
   const [perms, setPerms]     = useState(null)    // Set of the viewer's permissions
@@ -244,7 +243,6 @@ export default function MemberDrawer({ gymSlug, memberId, initialTab = 'overview
                   gymSlug={gymSlug}
                   accessProvider={accessProvider}
                   save={can('members.edit') ? save : undefined}
-                  codeStatus={codeStatus}
                   onDeleteCode={accessProvider === 'KISI' ? undefined : onDeleteCode}
                 />
               )}

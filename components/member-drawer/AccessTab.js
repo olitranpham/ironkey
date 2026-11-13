@@ -1,39 +1,18 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import Link from 'next/link'
 import { KeyRound, DoorOpen } from 'lucide-react'
 import { fillSuggestedPin } from '@/lib/suggestPin'
 import { DrawerSection, DrawerField } from '@/components/DrawerParts'
-import { ListState, INPUT_CLS, SAVE_CLS, fmtDate, fmtDateTime } from '@/components/member-drawer/fields'
-
-// Seam code state → lock status. Errors win; `none` = no code for this member on the lock.
-const LOCK_STATUS = {
-  onLock:    { text: 'on lock',     cls: 'text-emerald-400' },
-  syncing:   { text: 'syncing',     cls: 'text-amber-400' },
-  failed:    { text: 'failed',      cls: 'text-red-400' },
-  notOnLock: { text: 'not on lock', cls: 'text-neutral-400' },
-  offline:   { text: 'lock offline', cls: 'text-neutral-400' },   // Seam can't read the lock's state
-}
-function lockStatus({ status, failed }) {
-  if (failed) return LOCK_STATUS.failed
-  if (status === 'set') return LOCK_STATUS.onLock
-  if (status === 'unknown') return LOCK_STATUS.offline
-  if (status === 'setting' || status === 'removing') return LOCK_STATUS.syncing
-  return LOCK_STATUS.notOnLock   // 'unset' or 'none'
-}
+import { ListState, INPUT_CLS, SAVE_CLS, fmtDateTime } from '@/components/member-drawer/fields'
 
 /**
- * Access: door PIN (Seam) or Kisi invite status, the lock code's status,
- * Oasis flex check-ins and door visits.
+ * Access: door PIN (Seam) or Kisi invite status, Oasis flex check-ins and
+ * door visits.
  *
- * `codeStatus` — the member's row from the door-access page's own Seam list
- * ({ status, failed, codeType, endsAt }, or { status: 'none' } when the member
- * has no code on the lock), passed only there; other pages show the stored
- * PIN and link to door access instead (no per-member Seam call).
  * `onDeleteCode` — door access only: remove this code from the lock.
  */
-export default function AccessTab({ member, gymSlug, accessProvider, save, codeStatus, onDeleteCode }) {
+export default function AccessTab({ member, gymSlug, accessProvider, save, onDeleteCode }) {
   const [visits, setVisits] = useState(null)   // null = loading
   const [codeError, setCodeError] = useState(null)
   const [resending, setResending] = useState(false)
@@ -68,7 +47,6 @@ export default function AccessTab({ member, gymSlug, accessProvider, save, codeS
     setDeleting(false)
   }
 
-  const lock = codeStatus ? lockStatus(codeStatus) : null
 
   return (
     <>
@@ -98,20 +76,6 @@ export default function AccessTab({ member, gymSlug, accessProvider, save, codeS
             <PinRow member={member} gymSlug={gymSlug} onSave={save ? saveCode : undefined} />
             {codeError && (
               <div className="px-3 py-2 bg-[#1c1c1c]"><p className="text-[11px] text-red-400">{codeError}</p></div>
-            )}
-            {lock ? (
-              <DrawerField label="lock status">
-                <span className={`text-xs ml-4 text-right ${lock.cls}`}>
-                  {lock.text}
-                  {codeStatus.codeType === 'time_bound' && codeStatus.endsAt ? ` · until ${fmtDate(codeStatus.endsAt)}` : ''}
-                </span>
-              </DrawerField>
-            ) : (
-              <DrawerField label="lock status">
-                <Link href={`/${gymSlug}/door-access`} className="text-xs text-neutral-400 hover:text-white underline ml-4">
-                  view on door access
-                </Link>
-              </DrawerField>
             )}
           </>
         )}

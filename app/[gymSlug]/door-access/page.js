@@ -682,11 +682,6 @@ export default function DoorAccessPage() {
         onTabChange={drawer.setTab}
         onMemberUpdated={() => fetchCodes()}
         onMemberRemoved={() => fetchCodes()}
-        codeStatus={
-          accessProvider === 'KISI' || noDevice || loading ? undefined
-            : selectedCode ? { status: selectedCode.status, failed: Boolean(selectedCode.failed), codeType: selectedCode.codeType, endsAt: selectedCode.endsAt }
-            : { status: 'none' }   // loaded, and this member has no code on the lock
-        }
         onDeleteCode={selectedCode && accessProvider !== 'KISI' ? handleDeleteCode : undefined}
       />
 
