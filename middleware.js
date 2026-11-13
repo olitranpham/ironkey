@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { verifyTokenEdge, extractBearerToken } from '@/lib/jwt-edge'
 
+const SUPERADMIN_MAX_AGE_SEC = 8 * 60 * 60
+
 export async function middleware(request) {
   const { pathname } = request.nextUrl
 
@@ -55,6 +57,12 @@ export async function middleware(request) {
   if (pathname.startsWith('/api/admin/')) {
     if (payload.role !== 'SUPERADMIN') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+    // Superadmin sessions last 8h (lib/auth signSuperadminToken). Also enforced
+    // by iat so tokens signed before that limit (7-day expiry) stop working.
+    const ageSec = Math.floor(Date.now() / 1000) - Number(payload.iat ?? 0)
+    if (!payload.iat || ageSec > SUPERADMIN_MAX_AGE_SEC || ageSec < -60) {
+      return NextResponse.json({ error: 'Session expired — sign in again' }, { status: 401 })
     }
     return next()
   }
