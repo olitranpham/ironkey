@@ -14,7 +14,11 @@ import { seamConfig } from '@/lib/seamConfig'
  * Body: { token: string, dryRun?: boolean }
  *
  * For each past_due / unpaid Stripe subscription:
- *   1–13 days overdue  → fire Zapier warning webhook
+ *   1–13 days overdue  → Zapier warning webhook, once a day: never twice within
+ *                         24 h per member (15 min slack for the daily run's drift),
+ *                         recorded as an 'member.overdue_reminder_sent' audit row.
+ *                         Skipped for members FROZEN or CANCELED in Ironkey and
+ *                         for subscriptions with collection paused.
  *  14+  days overdue  → cancel sub, set member CANCELED, delete Seam code, fire Zapier cancel webhook
  *
  * dryRun:true skips every Stripe mutation, DB write (including the phone
@@ -58,6 +62,9 @@ async function resolvePhone({ stripe, member, sub, gymSlug, email, dryRun }) {
   console.log('[overdue-cancel] no phone for %s gym=%s', email, gymSlug)
   return null
 }
+
+const REMINDER_ACTION  = 'member.overdue_reminder_sent'
+const REMINDER_MIN_GAP = 24 * 60 * 60 * 1000 - 15 * 60 * 1000   // 24 h, less the daily run's drift
 
 export async function POST(request, { params }) {
   try {
@@ -221,20 +228,52 @@ export async function POST(request, { params }) {
 
         canceled++
       } else {
-        // ── Warning (day 1, 7, or 13 only) ───────────────────────────────────────
+        // ── Warning: once a day while overdue (days 1–13) ─────────────────────
+        // Not for members frozen or canceled in Ironkey, or paused collection
+        if (member && (member.status === 'FROZEN' || member.status === 'CANCELED')) {
+          console.log('[overdue-cancel] skip reminder sub=%s — member %s', sub.id, member.status)
+          continue
+        }
+        if (sub.pause_collection) {
+          console.log('[overdue-cancel] skip reminder sub=%s — collection paused', sub.id)
+          continue
+        }
 
-        if ([1, 7, 13].includes(daysOverdue)) {
-          const warningPayload = withPhone({ name, email, accessCode, status: 'overdue_warning', daysOverdue, invoiceUrl }, resolvedPhone, phoneRecordId)
-          if (dryRun) {
-            payloads.push({ type: 'overdue_warning', payload: warningPayload })
-            warnings++
-          } else if (zapierUrl) {
-            fetch(zapierUrl, {
+        // At most one reminder per member (or unmatched subscription) per 24 h
+        const reminderTarget = member?.id ?? sub.id
+        const lastReminder   = await prisma.auditLog.findFirst({
+          where:   { gymId: gym.id, action: REMINDER_ACTION, targetId: reminderTarget },
+          orderBy: { createdAt: 'desc' },
+          select:  { createdAt: true },
+        })
+        if (lastReminder && Date.now() - lastReminder.createdAt.getTime() < REMINDER_MIN_GAP) {
+          console.log('[overdue-cancel] skip reminder sub=%s — last sent %s', sub.id, lastReminder.createdAt.toISOString())
+          continue
+        }
+
+        const warningPayload = withPhone({ name, email, accessCode, status: 'overdue_warning', daysOverdue, invoiceUrl }, resolvedPhone, phoneRecordId)
+        if (dryRun) {
+          payloads.push({ type: 'overdue_warning', payload: warningPayload, lastReminderAt: lastReminder?.createdAt ?? null })
+          warnings++
+        } else if (zapierUrl) {
+          try {
+            const res = await fetch(zapierUrl, {
               method:  'POST',
               headers: { 'Content-Type': 'application/json' },
               body:    JSON.stringify(warningPayload),
-            }).catch(e => console.error('[overdue-cancel] zapier warning webhook error:', e.message))
+            })
+            if (!res.ok) throw new Error(`zapier ${res.status}`)
+            // Recorded only once Zapier accepted it — the 24 h guard reads this
+            await prisma.auditLog.create({
+              data: {
+                gymId: gym.id, actorId: null, action: REMINDER_ACTION,
+                targetType: member ? 'Member' : 'Subscription', targetId: reminderTarget,
+                meta: { subscriptionId: sub.id, daysOverdue, email },
+              },
+            })
             warnings++
+          } catch (e) {
+            console.error('[overdue-cancel] zapier warning webhook error for sub=%s: %s', sub.id, e.message)
           }
         }
       }
