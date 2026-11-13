@@ -104,7 +104,7 @@ export default function GuestSuccessPage() {
           <div className="w-full bg-neutral-900 rounded-xl p-4 text-left space-y-3">
             {/* The door code is never shown here — it's emailed to the address on the profile */}
             <p className="text-sm text-neutral-300">
-              your access code was emailed to <span className="text-white font-semibold">{sentTo}</span>.
+              your door code was emailed to <span className="text-white font-semibold">{sentTo}</span>.
               check your inbox (and spam).
             </p>
             {accessNotice && (
@@ -133,7 +133,7 @@ export default function GuestSuccessPage() {
             </p>
             <p className="text-xs text-neutral-400 flex items-start gap-2">
               <span className="text-neutral-500 shrink-0">•</span>
-              your access code will be sent to your email shortly.
+              your door code will be sent to your email shortly.
             </p>
           </div>
         )}

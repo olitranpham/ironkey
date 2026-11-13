@@ -627,7 +627,7 @@ export default function GuestPassesPage() {
               {[
                 'their guest pass history will be permanently deleted',
                 'their profile record will be permanently deleted',
-                'their door access code will be removed from the lock, if one was issued',
+                'their door code will be removed from the lock, if one was issued',
                 'this action cannot be undone',
               ].map((b, i) => (
                 <li key={i} className="flex items-start gap-2 text-xs text-neutral-400">

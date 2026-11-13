@@ -330,7 +330,7 @@ export function GuestProfilePanel({ profile, passTypeBorder, onClose, onSaveCode
         )}
 
         {/* Access code */}
-        <GSection icon={KeyRound} title="access code">
+        <GSection icon={KeyRound} title="door code">
           <div className="flex items-center justify-between px-3 py-2.5 bg-[#1c1c1c]">
             <span className="text-xs text-zinc-400 shrink-0">pin</span>
             <div className="flex items-center gap-2 ml-4">

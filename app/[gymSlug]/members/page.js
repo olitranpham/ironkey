@@ -88,7 +88,7 @@ export default function MembersPage() {
 
     const header = [
       'first name', 'last name', 'email', 'phone',
-      'membership type', 'status', 'access code',
+      'membership type', 'status', 'door code',
       'join date', 'freeze date', 'cancel date',
       'date of birth', 'address',
       'emergency contact name', 'emergency contact phone', 'emergency contact relationship',

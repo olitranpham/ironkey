@@ -58,7 +58,7 @@ export const ACTION_COPY = {
     title:   'remove member?',
     bullets: [
       'their record will be permanently deleted',
-      'their door access code will be removed from the lock',
+      'their door code will be removed from the lock',
       'this action cannot be undone',
     ],
     cta:    'yes, remove',

@@ -262,7 +262,7 @@ export default function PartnerCheckinsPage() {
             <ul className="space-y-1.5 mb-5">
               {[
                 'their partner check-in history at this gym will be permanently deleted',
-                'their door access code will be removed from the lock, if one was issued',
+                'their door code will be removed from the lock, if one was issued',
                 'this action cannot be undone',
               ].map((b, i) => (
                 <li key={i} className="flex items-start gap-2 text-xs text-neutral-400">

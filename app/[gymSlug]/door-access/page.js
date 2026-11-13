@@ -85,7 +85,7 @@ export default function DoorAccessPage() {
     if (!addForm.email.trim())          { setAddError('email is required');            return }
     if (!addForm.phone.trim())          { setAddError('phone is required');            return }
     if (!addForm.membershipType.trim()) { setAddError('membership type is required'); return }
-    if (accessProvider !== 'KISI' && !addForm.accessCode.trim()) { setAddError('access code is required'); return }
+    if (accessProvider !== 'KISI' && !addForm.accessCode.trim()) { setAddError('door code is required'); return }
     if (!addForm.joinDate)              { setAddError('joined date is required');     return }
     setAddSubmitting(true)
     setAddError(null)
@@ -218,7 +218,7 @@ export default function DoorAccessPage() {
       setCodes(json.codes)
       setFetchErr(null)
     } catch {
-      setFetchErr('could not load access codes')
+      setFetchErr('could not load door codes')
     } finally {
       setLoading(false)
     }
@@ -364,7 +364,7 @@ export default function DoorAccessPage() {
               </div>
             ) : visible.length === 0 ? (
               <div className="flex items-center justify-center h-48">
-                <p className="text-sm text-neutral-600">no access codes found</p>
+                <p className="text-sm text-neutral-600">no door codes found</p>
               </div>
             ) : (
               <table className="w-full text-sm">
@@ -458,7 +458,7 @@ export default function DoorAccessPage() {
                 <KeyRound size={16} className="text-neutral-400" />
               </div>
               <div>
-                <p className="text-sm font-semibold text-white">change access code</p>
+                <p className="text-sm font-semibold text-white">change door code</p>
                 <p className="text-xs text-neutral-500">{changeModal.name}</p>
               </div>
               <button onClick={() => setChangeModal(null)} disabled={actionLoading} className="ml-auto p-1.5 rounded-lg text-neutral-600 hover:text-white hover:bg-white/5 transition-colors">
@@ -516,7 +516,7 @@ export default function DoorAccessPage() {
                 <AlertTriangle size={16} className="text-neutral-400" />
               </div>
               <div>
-                <p className="text-sm font-semibold text-white">remove access code?</p>
+                <p className="text-sm font-semibold text-white">remove door code?</p>
                 <p className="text-xs text-neutral-500">
                   {removeModal.name}
                   {removeModal.type === 'unknown' && removeModal.code && <> · pin <span className="font-mono">{removeModal.code}</span></>}
@@ -635,7 +635,7 @@ export default function DoorAccessPage() {
               <div className="flex gap-3">
                 {accessProvider !== 'KISI' && (
                   <div className="flex-1">
-                    <label className="block text-[11px] text-neutral-500 mb-1">access code</label>
+                    <label className="block text-[11px] text-neutral-500 mb-1">door code</label>
                     <input
                       value={addForm.accessCode}
                       onChange={e => setAddForm(p => ({ ...p, accessCode: e.target.value.replace(/\D/g, '').slice(0, 6) }))}
@@ -682,7 +682,11 @@ export default function DoorAccessPage() {
         onTabChange={drawer.setTab}
         onMemberUpdated={() => fetchCodes()}
         onMemberRemoved={() => fetchCodes()}
-        codeStatus={selectedCode && selectedCode.status ? { status: selectedCode.status, codeType: selectedCode.codeType, endsAt: selectedCode.endsAt } : undefined}
+        codeStatus={
+          accessProvider === 'KISI' || noDevice || loading ? undefined
+            : selectedCode ? { status: selectedCode.status, failed: Boolean(selectedCode.failed), codeType: selectedCode.codeType, endsAt: selectedCode.endsAt }
+            : { status: 'none' }   // loaded, and this member has no code on the lock
+        }
         onDeleteCode={selectedCode && accessProvider !== 'KISI' ? handleDeleteCode : undefined}
       />
 

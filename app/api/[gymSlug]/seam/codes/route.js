@@ -223,7 +223,8 @@ export async function GET(request, { params }) {
         id:           c.access_code_id,
         name:         dbName || c.name || '—',
         code:         c.code,
-        status:       c.status,       // 'set' | 'unset' | 'unknown'
+        status:       c.status,       // 'setting' | 'set' | 'unset' | 'removing' | 'unknown'
+        failed:       Boolean(c.errors?.length),   // Seam reports an error for this code (e.g. failed to set on the device)
         type:         'member',
         codeType:     c.type,         // 'ongoing' | 'time_bound'
         endsAt:       c.ends_at ?? null,

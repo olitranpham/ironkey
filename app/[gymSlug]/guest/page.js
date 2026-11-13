@@ -1291,7 +1291,7 @@ export default function GuestPage() {
             {/* The code is never shown here — it's emailed to the address on the profile */}
             <div className="w-full bg-neutral-900 rounded-xl p-4 space-y-3">
               <p className="text-sm text-neutral-300">
-                your access code was emailed to{' '}
+                your door code was emailed to{' '}
                 <span className="text-white font-semibold">{checkinResult?.sentTo}</span>.
                 check your inbox (and spam).
               </p>

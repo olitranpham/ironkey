@@ -99,7 +99,7 @@ export default function JoinSuccessPage() {
         {loading ? (
           <div className="w-full bg-neutral-900 rounded-xl p-4 flex items-center justify-center gap-2">
             <Loader2 size={14} className="text-neutral-500 animate-spin" />
-            <span className="text-xs text-neutral-500">loading your access code…</span>
+            <span className="text-xs text-neutral-500">loading your door code…</span>
           </div>
         ) : accessProvider === 'KISI' ? (
           <div className="w-full bg-neutral-900 rounded-xl p-4 text-left space-y-2">
@@ -116,7 +116,7 @@ export default function JoinSuccessPage() {
           <div className="w-full bg-neutral-900 rounded-xl p-4 text-left space-y-3">
             {/* The door code is never shown here — it's emailed to the member's address */}
             <p className="text-sm text-neutral-300">
-              your access code was emailed to <span className="text-white font-semibold">{sentTo}</span>.
+              your door code was emailed to <span className="text-white font-semibold">{sentTo}</span>.
               check your inbox (and spam).
             </p>
             <button
