@@ -962,6 +962,31 @@ export default function JoinPage() {
           </Field>
         )}
 
+        {/* How did you hear about us — every gym, optional; stored on this gym's member record */}
+        <Field label="how did you hear about us?">
+          <div className="relative">
+            <select
+              value={hearAboutUs}
+              onChange={e => setHearAboutUs(e.target.value)}
+              className={SELECT}
+            >
+              <option value="">— select one —</option>
+              <option value="google">google</option>
+              <option value="instagram">instagram</option>
+              <option value="facebook">facebook</option>
+              <option value="tiktok">tiktok</option>
+              <option value="a friend / word of mouth">a friend / word of mouth</option>
+              <option value="walked by">walked by</option>
+              <option value="other">other</option>
+            </select>
+            <div className="pointer-events-none absolute inset-y-0 right-3 flex items-center">
+              <svg className="w-4 h-4 text-neutral-500" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.17l3.71-3.94a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
+              </svg>
+            </div>
+          </div>
+        </Field>
+
         <SectionDivider label={isMinor ? "guardian's emergency contact info" : 'emergency contact info'} />
         <div className="grid grid-cols-2 gap-3">
           <Field label="name" required>
@@ -997,31 +1022,6 @@ export default function JoinPage() {
           {form.emergencyRelationship.trim() && form.emergencyRelationship.trim().length < 2 && (
             <p className="text-xs text-rose-400 mt-1">must be at least 2 characters</p>
           )}
-        </Field>
-
-        {/* How did you hear about us — every gym, optional; stored on this gym's member record */}
-        <Field label="how did you hear about us?">
-          <div className="relative">
-            <select
-              value={hearAboutUs}
-              onChange={e => setHearAboutUs(e.target.value)}
-              className={SELECT}
-            >
-              <option value="">— select one —</option>
-              <option value="google">google</option>
-              <option value="instagram">instagram</option>
-              <option value="facebook">facebook</option>
-              <option value="tiktok">tiktok</option>
-              <option value="a friend / word of mouth">a friend / word of mouth</option>
-              <option value="walked by">walked by</option>
-              <option value="other">other</option>
-            </select>
-            <div className="pointer-events-none absolute inset-y-0 right-3 flex items-center">
-              <svg className="w-4 h-4 text-neutral-500" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.17l3.71-3.94a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
-              </svg>
-            </div>
-          </div>
         </Field>
 
         <SectionDivider label="terms" />
